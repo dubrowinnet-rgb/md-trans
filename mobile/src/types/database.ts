@@ -36,6 +36,7 @@ export interface Database {
           auth_user_id?: string | null;
         };
         Update: Partial<Database['public']['Tables']['employees']['Insert']>;
+        Relationships: [];
       };
       clients: {
         Row: {
@@ -54,6 +55,7 @@ export interface Database {
           notes?: string | null;
         };
         Update: Partial<Database['public']['Tables']['clients']['Insert']>;
+        Relationships: [];
       };
       services: {
         Row: {
@@ -72,6 +74,7 @@ export interface Database {
           category?: string | null;
         };
         Update: Partial<Database['public']['Tables']['services']['Insert']>;
+        Relationships: [];
       };
       orders: {
         Row: {
@@ -99,6 +102,7 @@ export interface Database {
           photos?: string[];
         };
         Update: Partial<Database['public']['Tables']['orders']['Insert']>;
+        Relationships: [];
       };
       order_stops: {
         Row: {
@@ -118,6 +122,7 @@ export interface Database {
           is_primary?: boolean;
         };
         Update: Partial<Database['public']['Tables']['order_stops']['Insert']>;
+        Relationships: [];
       };
       order_crew: {
         Row: {
@@ -137,6 +142,7 @@ export interface Database {
           read_at?: string | null;
         };
         Update: Partial<Database['public']['Tables']['order_crew']['Insert']>;
+        Relationships: [];
       };
       order_services: {
         Row: {
@@ -150,7 +156,26 @@ export interface Database {
           qty?: number;
         };
         Update: Partial<Database['public']['Tables']['order_services']['Insert']>;
+        Relationships: [];
       };
     };
+    Views: Record<string, never>;
+    Functions: {
+      create_order: {
+        Args: {
+          p_client_id: string | null;
+          p_cargo_description: string | null;
+          p_scheduled_start: string;
+          p_scheduled_end: string;
+          p_actual_price: number | null;
+          p_comment: string | null;
+          p_stops: unknown;
+          p_crew: unknown;
+        };
+        Returns: string;
+      };
+    };
+    Enums: Record<string, never>;
+    CompositeTypes: Record<string, never>;
   };
 }

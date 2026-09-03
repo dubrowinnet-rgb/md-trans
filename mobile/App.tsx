@@ -1,10 +1,13 @@
 import { ActivityIndicator, SafeAreaView, StyleSheet } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useSession } from './src/hooks/useSession';
 import { LoginScreen } from './src/screens/LoginScreen';
-import { HomePlaceholderScreen } from './src/screens/HomePlaceholderScreen';
+import { CalendarScreen } from './src/screens/CalendarScreen';
 
-export default function App() {
+const queryClient = new QueryClient();
+
+function Root() {
   const { session, loading } = useSession();
 
   if (loading) {
@@ -15,11 +18,15 @@ export default function App() {
     );
   }
 
+  return session ? <CalendarScreen session={session} /> : <LoginScreen />;
+}
+
+export default function App() {
   return (
-    <>
-      {session ? <HomePlaceholderScreen session={session} /> : <LoginScreen />}
+    <QueryClientProvider client={queryClient}>
+      <Root />
       <StatusBar style="auto" />
-    </>
+    </QueryClientProvider>
   );
 }
 

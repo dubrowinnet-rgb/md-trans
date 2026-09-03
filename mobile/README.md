@@ -16,4 +16,21 @@ npx expo start
 ## Структура
 
 - `src/lib/supabase.ts` — инициализация клиента Supabase (Auth + Postgres + Storage).
-- `App.tsx` — временный экран проверки подключения; будет заменён экраном авторизации диспетчера.
+- `src/screens/LoginScreen.tsx` — вход диспетчера.
+- `src/screens/CalendarScreen.tsx` — календарь по сотрудникам (день/неделя).
+- `src/screens/CreateOrderModal.tsx` — создание заказа с проверкой занятости экипажа.
+
+## Известное ограничение окружения разработки
+
+Пакеты ставились через `npm install` напрямую (у среды разработки нет сети до
+`api.expo.dev`, поэтому `npx expo install` не мог проверить версии,
+совместимые с вашим SDK). После `git pull` рекомендуется один раз выполнить
+локально, где сеть есть:
+
+```bash
+npx expo install --check
+```
+
+Это подтянет версии нативных пакетов (в первую очередь
+`@react-native-community/datetimepicker`), точно совместимые с установленным
+Expo SDK.
