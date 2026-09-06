@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
+import { sendPushNotifications } from '../lib/pushNotifications';
 import type { CrewStatus, Database, EmployeeRole, OrderStatus, StopType } from '../types/database';
 
 type OrderRow = Database['public']['Tables']['orders']['Row'];
@@ -96,6 +97,27 @@ export function useConfirmCrew() {
   });
 }
 
+// Отмечает, что сотрудник открыл заказ (раздел 9.5). Вызывающая сторона
+// сама решает, когда это уместно (обычно — только если статус ещё
+// 'notified'), чтобы случайно не откатить уже подтверждённый статус.
+export function useMarkCrewRead() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ orderId, employeeId }: { orderId: string; employeeId: string }) => {
+      const { error } = await supabase
+        .from('order_crew')
+        .update({ status: 'read', read_at: new Date().toISOString() })
+        .eq('order_id', orderId)
+        .eq('employee_id', employeeId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['my-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+    },
+  });
+}
+
 export interface CreateOrderStopInput {
   type: StopType;
   address: string;
@@ -134,10 +156,41 @@ export function useCreateOrder() {
         p_crew: input.crew,
       });
       if (error) throw error;
-      return data as string;
+      const orderId = data as string;
+
+      if (input.crew.length > 0) {
+        const { data: crewEmployees } = await supabase
+          .from('employees')
+          .select('expo_push_token')
+          .in(
+            'id',
+            input.crew.map((c) => c.employee_id)
+          );
+        const tokens = (crewEmployees ?? [])
+          .map((e) => e.expo_push_token)
+          .filter((t): t is string => Boolean(t));
+        await sendPushNotifications(tokens, 'Новый заказ', 'Вам назначен новый заказ', { orderId });
+      }
+
+      return orderId;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['orders'] });
+      queryClient.invalidateQueries({ queryKey: ['busy-employees'] });
+    },
+  });
+}
+
+export function useUpdateOrderStatus() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ orderId, status }: { orderId: string; status: OrderStatus }) => {
+      const { error } = await supabase.from('orders').update({ status }).eq('id', orderId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      queryClient.invalidateQueries({ queryKey: ['my-orders'] });
       queryClient.invalidateQueries({ queryKey: ['busy-employees'] });
     },
   });

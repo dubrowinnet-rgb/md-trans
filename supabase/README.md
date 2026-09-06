@@ -8,7 +8,8 @@
 **Вариант А — SQL Editor в Dashboard (быстрее всего):**
 1. Откройте ваш проект → SQL Editor → New query.
 2. Скопируйте содержимое `migrations/0001_init_schema.sql` целиком и выполните (Run).
-3. Так же выполните `migrations/0002_create_order_function.sql` (нужна для экрана создания заказа).
+3. Так же выполните `migrations/0002_create_order_function.sql` (нужна для экрана создания заказа)
+   и `migrations/0003_push_tokens.sql` (колонка для push-токена сотрудника).
 
 **Вариант Б — Supabase CLI (если он у вас установлен локально):**
 ```bash

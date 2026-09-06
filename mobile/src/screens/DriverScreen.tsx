@@ -1,8 +1,10 @@
+import { useEffect } from 'react';
 import { ActivityIndicator, FlatList, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 import type { Session } from '@supabase/supabase-js';
 import type { Employee } from '../api/employees';
 import { useMyOrdersForDay } from '../api/orders';
 import { supabase } from '../lib/supabase';
+import { registerForPushNotifications } from '../lib/pushNotifications';
 import { DriverOrderCard } from './DriverOrderCard';
 import { formatHeaderDate } from '../utils/date';
 
@@ -10,6 +12,10 @@ export function DriverScreen({ session, employee }: { session: Session; employee
   const today = new Date();
   const ordersQuery = useMyOrdersForDay(employee.id, today);
   const orders = ordersQuery.data ?? [];
+
+  useEffect(() => {
+    registerForPushNotifications(employee.id);
+  }, [employee.id]);
 
   return (
     <SafeAreaView style={styles.container}>

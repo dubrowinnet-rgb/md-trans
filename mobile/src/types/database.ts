@@ -23,6 +23,7 @@ export interface Database {
           monthly_price: number | null;
           last_location: { lat: number; lng: number; updated_at: string } | null;
           auth_user_id: string | null;
+          expo_push_token: string | null;
           created_at: string;
         };
         Insert: {
@@ -34,6 +35,7 @@ export interface Database {
           paid_until?: string | null;
           monthly_price?: number | null;
           auth_user_id?: string | null;
+          expo_push_token?: string | null;
         };
         Update: Partial<Database['public']['Tables']['employees']['Insert']>;
         Relationships: [];

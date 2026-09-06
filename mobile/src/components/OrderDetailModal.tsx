@@ -1,15 +1,17 @@
 import { useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import type { OrderWithDetails } from '../api/orders';
+import { useUpdateOrderStatus, type OrderStatus, type OrderWithDetails } from '../api/orders';
 import { formatTime } from '../utils/date';
 
-const STATUS_LABELS: Record<string, string> = {
+const STATUS_LABELS: Record<OrderStatus, string> = {
   new: 'Новый',
   confirmed: 'Подтверждён',
   in_progress: 'В работе',
   completed: 'Завершён',
   cancelled: 'Отменён',
 };
+
+const STATUS_ORDER: OrderStatus[] = ['new', 'confirmed', 'in_progress', 'completed', 'cancelled'];
 
 const CREW_STATUS_LABELS: Record<string, string> = {
   notified: 'уведомлён',
@@ -25,6 +27,7 @@ export function OrderDetailModal({
   onClose: () => void;
 }) {
   const [showAllStops, setShowAllStops] = useState(false);
+  const updateStatus = useUpdateOrderStatus();
 
   const primaryStops = order.order_stops.filter((s) => s.is_primary);
   const extraStops = order.order_stops.filter((s) => !s.is_primary);
@@ -42,7 +45,23 @@ export function OrderDetailModal({
           </Pressable>
         </View>
 
-        <Text style={styles.status}>{STATUS_LABELS[order.status] ?? order.status}</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.statusRow}>
+          {STATUS_ORDER.map((status) => {
+            const active = order.status === status;
+            return (
+              <Pressable
+                key={status}
+                disabled={updateStatus.isPending}
+                onPress={() => updateStatus.mutate({ orderId: order.id, status })}
+                style={[styles.statusChip, active && styles.statusChipActive]}
+              >
+                <Text style={[styles.statusChipText, active && styles.statusChipTextActive]}>
+                  {STATUS_LABELS[status]}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
 
         <Section title="Клиент">
           <Text style={styles.text}>{order.clients?.name ?? 'Без клиента'}</Text>
@@ -137,10 +156,28 @@ const styles = StyleSheet.create({
     color: '#5b21b6',
     fontSize: 14,
   },
-  status: {
-    fontSize: 13,
-    color: '#6b7280',
+  statusRow: {
     marginBottom: 16,
+  },
+  statusChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    marginRight: 8,
+  },
+  statusChipActive: {
+    backgroundColor: '#5b21b6',
+    borderColor: '#5b21b6',
+  },
+  statusChipText: {
+    fontSize: 12,
+    color: '#374151',
+    fontWeight: '600',
+  },
+  statusChipTextActive: {
+    color: '#fff',
   },
   section: {
     marginBottom: 16,

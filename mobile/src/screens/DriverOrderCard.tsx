@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { OrderWithDetails } from '../api/orders';
-import { useConfirmCrew } from '../api/orders';
+import { useConfirmCrew, useMarkCrewRead } from '../api/orders';
 import { formatTime } from '../utils/date';
 
 const CREW_STATUS_LABELS: Record<string, string> = {
@@ -23,6 +23,7 @@ export function DriverOrderCard({
 }) {
   const [expanded, setExpanded] = useState(false);
   const confirmCrew = useConfirmCrew();
+  const markRead = useMarkCrewRead();
 
   const myCrew = order.order_crew.find((c) => c.employee_id === employeeId);
   const others = order.order_crew.filter((c) => c.employee_id !== employeeId);
@@ -30,9 +31,16 @@ export function DriverOrderCard({
   const pickup = primaryAddress(order, 'pickup');
   const dropoff = primaryAddress(order, 'dropoff');
 
+  const handleToggle = () => {
+    setExpanded((v) => !v);
+    if (!expanded && myCrew?.status === 'notified') {
+      markRead.mutate({ orderId: order.id, employeeId });
+    }
+  };
+
   return (
     <View style={styles.card}>
-      <Pressable onPress={() => setExpanded((v) => !v)}>
+      <Pressable onPress={handleToggle}>
         <View style={styles.headerRow}>
           <Text style={styles.time}>
             {formatTime(new Date(order.scheduled_start))}–{formatTime(new Date(order.scheduled_end))}
