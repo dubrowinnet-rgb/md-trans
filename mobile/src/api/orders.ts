@@ -56,29 +56,6 @@ export function useBusyEmployeeIds(start: Date | null, end: Date | null) {
   });
 }
 
-export function useMyOrdersForDay(employeeId: string | null, day: Date) {
-  const dayStart = new Date(day.getFullYear(), day.getMonth(), day.getDate());
-  const dayEnd = new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1);
-  const startIso = dayStart.toISOString();
-  const endIso = dayEnd.toISOString();
-
-  return useQuery({
-    queryKey: ['my-orders', employeeId, startIso, endIso],
-    enabled: Boolean(employeeId),
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('orders')
-        .select(`${ORDER_SELECT}, crew_filter:order_crew!inner(employee_id)`)
-        .eq('crew_filter.employee_id', employeeId as string)
-        .lt('scheduled_start', endIso)
-        .gt('scheduled_end', startIso)
-        .order('scheduled_start', { ascending: true });
-      if (error) throw error;
-      return data as unknown as OrderWithDetails[];
-    },
-  });
-}
-
 export function useConfirmCrew() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -91,7 +68,6 @@ export function useConfirmCrew() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['my-orders'] });
       queryClient.invalidateQueries({ queryKey: ['orders'] });
     },
   });
@@ -112,7 +88,6 @@ export function useMarkCrewRead() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['my-orders'] });
       queryClient.invalidateQueries({ queryKey: ['orders'] });
     },
   });
@@ -190,7 +165,6 @@ export function useUpdateOrderStatus() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['orders'] });
-      queryClient.invalidateQueries({ queryKey: ['my-orders'] });
       queryClient.invalidateQueries({ queryKey: ['busy-employees'] });
     },
   });

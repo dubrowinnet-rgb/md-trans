@@ -43,4 +43,4 @@ export function formatTime(date: Date) {
   return format(date, 'HH:mm');
 }
 
-export { addDays, endOfDay, isSameDay, startOfDay, startOfWeek };
+export { addDays, addMinutes, endOfDay, isSameDay, startOfDay, startOfWeek };

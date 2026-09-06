@@ -1,6 +1,12 @@
-import { useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useUpdateOrderStatus, type OrderStatus, type OrderWithDetails } from '../api/orders';
+import { useEffect, useState } from 'react';
+import { Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  useConfirmCrew,
+  useMarkCrewRead,
+  useUpdateOrderStatus,
+  type OrderStatus,
+  type OrderWithDetails,
+} from '../api/orders';
 import { formatTime } from '../utils/date';
 
 const STATUS_LABELS: Record<OrderStatus, string> = {
@@ -22,12 +28,28 @@ const CREW_STATUS_LABELS: Record<string, string> = {
 export function OrderDetailModal({
   order,
   onClose,
+  viewerEmployeeId,
 }: {
   order: OrderWithDetails;
   onClose: () => void;
+  /** Открыт сотрудником (не диспетчером): вместо смены статуса заказа —
+   * его собственное подтверждение получения (раздел 9.5) и звонок клиенту. */
+  viewerEmployeeId?: string;
 }) {
   const [showAllStops, setShowAllStops] = useState(false);
   const updateStatus = useUpdateOrderStatus();
+  const markRead = useMarkCrewRead();
+  const confirmCrew = useConfirmCrew();
+
+  const myCrew = order.order_crew.find((c) => c.employee_id === viewerEmployeeId);
+
+  useEffect(() => {
+    if (viewerEmployeeId && myCrew?.status === 'notified') {
+      markRead.mutate({ orderId: order.id, employeeId: viewerEmployeeId });
+    }
+    // Отмечаем прочтение один раз при открытии — не следим за изменением статуса дальше.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const primaryStops = order.order_stops.filter((s) => s.is_primary);
   const extraStops = order.order_stops.filter((s) => !s.is_primary);
@@ -45,27 +67,53 @@ export function OrderDetailModal({
           </Pressable>
         </View>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.statusRow}>
-          {STATUS_ORDER.map((status) => {
-            const active = order.status === status;
-            return (
-              <Pressable
-                key={status}
-                disabled={updateStatus.isPending}
-                onPress={() => updateStatus.mutate({ orderId: order.id, status })}
-                style={[styles.statusChip, active && styles.statusChipActive]}
-              >
-                <Text style={[styles.statusChipText, active && styles.statusChipTextActive]}>
-                  {STATUS_LABELS[status]}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
+        {viewerEmployeeId ? (
+          <Text style={styles.status}>{STATUS_LABELS[order.status] ?? order.status}</Text>
+        ) : (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.statusRow}>
+            {STATUS_ORDER.map((status) => {
+              const active = order.status === status;
+              return (
+                <Pressable
+                  key={status}
+                  disabled={updateStatus.isPending}
+                  onPress={() => updateStatus.mutate({ orderId: order.id, status })}
+                  style={[styles.statusChip, active && styles.statusChipActive]}
+                >
+                  <Text style={[styles.statusChipText, active && styles.statusChipTextActive]}>
+                    {STATUS_LABELS[status]}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        )}
+
+        {viewerEmployeeId && myCrew && myCrew.status !== 'confirmed' && (
+          <Pressable
+            style={styles.confirmButton}
+            onPress={() => confirmCrew.mutate({ orderId: order.id, employeeId: viewerEmployeeId })}
+            disabled={confirmCrew.isPending}
+          >
+            <Text style={styles.confirmButtonText}>Принять заказ</Text>
+          </Pressable>
+        )}
 
         <Section title="Клиент">
-          <Text style={styles.text}>{order.clients?.name ?? 'Без клиента'}</Text>
-          {order.clients?.phone && <Text style={styles.textMuted}>{order.clients.phone}</Text>}
+          <View style={styles.clientRow}>
+            <View>
+              <Text style={styles.text}>{order.clients?.name ?? 'Без клиента'}</Text>
+              {order.clients?.phone && <Text style={styles.textMuted}>{order.clients.phone}</Text>}
+            </View>
+            {order.clients?.phone && (
+              <Pressable
+                style={styles.callButton}
+                onPress={() => Linking.openURL(`tel:${order.clients?.phone}`)}
+              >
+                <Text style={styles.callButtonText}>Позвонить</Text>
+              </Pressable>
+            )}
+          </View>
           {!!order.clients?.discount_percent && (
             <Text style={styles.textMuted}>Скидка клиента: {order.clients.discount_percent}%</Text>
           )}
@@ -155,6 +203,40 @@ const styles = StyleSheet.create({
   close: {
     color: '#5b21b6',
     fontSize: 14,
+  },
+  status: {
+    fontSize: 13,
+    color: '#6b7280',
+    marginBottom: 16,
+  },
+  confirmButton: {
+    backgroundColor: '#5b21b6',
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  confirmButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  clientRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  callButton: {
+    borderWidth: 1,
+    borderColor: '#5b21b6',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  callButtonText: {
+    color: '#5b21b6',
+    fontSize: 13,
+    fontWeight: '600',
   },
   statusRow: {
     marginBottom: 16,

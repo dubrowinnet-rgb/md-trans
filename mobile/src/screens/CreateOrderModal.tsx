@@ -29,19 +29,23 @@ function combine(date: Date, time: Date) {
 export function CreateOrderModal({
   employees,
   defaultDate,
+  defaultStartTime,
   onClose,
 }: {
   employees: Employee[];
   defaultDate: Date;
+  defaultStartTime?: Date;
   onClose: () => void;
 }) {
-  const [date, setDate] = useState(defaultDate);
+  const [date, setDate] = useState(defaultStartTime ?? defaultDate);
   const [startTime, setStartTime] = useState(() => {
+    if (defaultStartTime) return defaultStartTime;
     const d = new Date(defaultDate);
     d.setHours(9, 0, 0, 0);
     return d;
   });
   const [endTime, setEndTime] = useState(() => {
+    if (defaultStartTime) return new Date(defaultStartTime.getTime() + 2 * 60 * 60 * 1000);
     const d = new Date(defaultDate);
     d.setHours(11, 0, 0, 0);
     return d;

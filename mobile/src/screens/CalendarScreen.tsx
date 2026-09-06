@@ -1,56 +1,41 @@
-import { useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { useState } from 'react';
+import { Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 import type { Session } from '@supabase/supabase-js';
 import { useEmployees } from '../api/employees';
 import { useOrdersForRange, type OrderWithDetails } from '../api/orders';
 import { supabase } from '../lib/supabase';
 import { EmployeeTabs, ALL_EMPLOYEES } from '../components/EmployeeTabs';
-import { DayColumn, HourAxis, GRID_HEIGHT } from '../components/DayColumn';
+import { CalendarNavBar } from '../components/CalendarNavBar';
+import { CalendarGrid } from '../components/CalendarGrid';
 import { CreateOrderModal } from './CreateOrderModal';
 import { OrderDetailModal } from '../components/OrderDetailModal';
 import { EmployeesScreen } from './EmployeesScreen';
-import { addDays, dayBounds, isSameDay, startOfDay, weekDays, formatHeaderDate } from '../utils/date';
-
-type ViewMode = 'day' | 'week';
+import { useCalendarNav } from '../hooks/useCalendarNav';
 
 export function CalendarScreen({ session }: { session: Session }) {
-  const [viewMode, setViewMode] = useState<ViewMode>('day');
-  const [anchorDate, setAnchorDate] = useState(() => startOfDay(new Date()));
+  const nav = useCalendarNav();
   const [activeEmployeeId, setActiveEmployeeId] = useState<string>(ALL_EMPLOYEES);
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [createSlotStart, setCreateSlotStart] = useState<Date | undefined>(undefined);
   const [employeesModalOpen, setEmployeesModalOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<OrderWithDetails | null>(null);
 
   const employeesQuery = useEmployees();
   const employees = employeesQuery.data ?? [];
 
-  const days = useMemo(
-    () => (viewMode === 'day' ? [anchorDate] : weekDays(anchorDate)),
-    [viewMode, anchorDate]
-  );
-  const rangeStart = dayBounds(days[0]).start;
-  const rangeEnd = dayBounds(days[days.length - 1]).end;
-
-  const ordersQuery = useOrdersForRange(rangeStart, rangeEnd);
+  const ordersQuery = useOrdersForRange(nav.rangeStart, nav.rangeEnd);
   const allOrders = ordersQuery.data ?? [];
   const orders =
     activeEmployeeId === ALL_EMPLOYEES
       ? allOrders
       : allOrders.filter((o) => o.order_crew.some((c) => c.employee_id === activeEmployeeId));
 
-  const columnWidth = viewMode === 'day' ? undefined : 130;
+  const columnWidth = nav.viewMode === 'day' ? 340 : 130;
 
-  const goToday = () => setAnchorDate(startOfDay(new Date()));
-  const goPrev = () => setAnchorDate((d) => addDays(d, viewMode === 'day' ? -1 : -7));
-  const goNext = () => setAnchorDate((d) => addDays(d, viewMode === 'day' ? 1 : 7));
+  const openCreateModal = (slotStart?: Date) => {
+    setCreateSlotStart(slotStart);
+    setCreateModalOpen(true);
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -71,32 +56,14 @@ export function CalendarScreen({ session }: { session: Session }) {
 
       <EmployeeTabs employees={employees} activeId={activeEmployeeId} onSelect={setActiveEmployeeId} />
 
-      <View style={styles.controls}>
-        <View style={styles.nav}>
-          <Pressable onPress={goPrev} hitSlop={8}>
-            <Text style={styles.navArrow}>‹</Text>
-          </Pressable>
-          <Pressable onPress={goToday}>
-            <Text style={styles.dateLabel}>{formatHeaderDate(anchorDate)}</Text>
-          </Pressable>
-          <Pressable onPress={goNext} hitSlop={8}>
-            <Text style={styles.navArrow}>›</Text>
-          </Pressable>
-        </View>
-        <View style={styles.modeSwitch}>
-          {(['day', 'week'] as ViewMode[]).map((mode) => (
-            <Pressable
-              key={mode}
-              onPress={() => setViewMode(mode)}
-              style={[styles.modeButton, viewMode === mode && styles.modeButtonActive]}
-            >
-              <Text style={[styles.modeText, viewMode === mode && styles.modeTextActive]}>
-                {mode === 'day' ? 'День' : 'Неделя'}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-      </View>
+      <CalendarNavBar
+        anchorDate={nav.anchorDate}
+        viewMode={nav.viewMode}
+        onPrev={nav.goPrev}
+        onNext={nav.goNext}
+        onToday={nav.goToday}
+        onSetViewMode={nav.setViewMode}
+      />
 
       {(employeesQuery.isError || ordersQuery.isError) && (
         <View style={styles.errorBanner}>
@@ -114,40 +81,25 @@ export function CalendarScreen({ session }: { session: Session }) {
         </Pressable>
       )}
 
-      {ordersQuery.isLoading || employeesQuery.isLoading ? (
-        <View style={styles.center}>
-          <ActivityIndicator />
-        </View>
-      ) : (
-        <ScrollView style={styles.grid}>
-          <View style={{ flexDirection: 'row', height: GRID_HEIGHT + 36 }}>
-            <HourAxis />
-            <ScrollView horizontal={viewMode === 'week'} showsHorizontalScrollIndicator={false}>
-              <View style={{ flexDirection: 'row' }}>
-                {days.map((date) => (
-                  <DayColumn
-                    key={date.toISOString()}
-                    date={date}
-                    orders={orders}
-                    width={columnWidth ?? 340}
-                    isToday={isSameDay(date, new Date())}
-                    onPressOrder={setSelectedOrder}
-                  />
-                ))}
-              </View>
-            </ScrollView>
-          </View>
-        </ScrollView>
-      )}
+      <CalendarGrid
+        days={nav.days}
+        orders={orders}
+        viewMode={nav.viewMode}
+        columnWidth={columnWidth}
+        isLoading={ordersQuery.isLoading || employeesQuery.isLoading}
+        onPressOrder={setSelectedOrder}
+        onPressSlot={openCreateModal}
+      />
 
-      <Pressable style={styles.fab} onPress={() => setCreateModalOpen(true)}>
+      <Pressable style={styles.fab} onPress={() => openCreateModal(undefined)}>
         <Text style={styles.fabText}>+</Text>
       </Pressable>
 
       {createModalOpen && (
         <CreateOrderModal
           employees={employees}
-          defaultDate={anchorDate}
+          defaultDate={nav.anchorDate}
+          defaultStartTime={createSlotStart}
           onClose={() => setCreateModalOpen(false)}
         />
       )}
@@ -215,59 +167,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#92400e',
     textAlign: 'center',
-  },
-  controls: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  nav: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  navArrow: {
-    fontSize: 22,
-    color: '#5b21b6',
-    paddingHorizontal: 4,
-  },
-  dateLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    textTransform: 'capitalize',
-  },
-  modeSwitch: {
-    flexDirection: 'row',
-    backgroundColor: '#f3f4f6',
-    borderRadius: 8,
-    padding: 2,
-  },
-  modeButton: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 6,
-  },
-  modeButtonActive: {
-    backgroundColor: '#fff',
-  },
-  modeText: {
-    fontSize: 12,
-    color: '#6b7280',
-  },
-  modeTextActive: {
-    color: '#111827',
-    fontWeight: '600',
-  },
-  grid: {
-    flex: 1,
-  },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
   },
   fab: {
     position: 'absolute',

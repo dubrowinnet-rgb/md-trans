@@ -1,13 +1,17 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View, type GestureResponderEvent } from 'react-native';
 import type { OrderWithDetails } from '../api/orders';
 import { OrderBlock } from './OrderBlock';
 import {
+  addMinutes,
   CALENDAR_END_HOUR,
   CALENDAR_START_HOUR,
+  dayBounds,
   formatDayLabel,
   isSameDay,
   PIXELS_PER_MINUTE,
 } from '../utils/date';
+
+const SLOT_SNAP_MINUTES = 30;
 
 export const HOURS = Array.from(
   { length: CALENDAR_END_HOUR - CALENDAR_START_HOUR },
@@ -34,15 +38,25 @@ export function DayColumn({
   orders,
   width,
   onPressOrder,
+  onPressSlot,
   isToday,
 }: {
   date: Date;
   orders: OrderWithDetails[];
   width: number;
   onPressOrder: (order: OrderWithDetails) => void;
+  onPressSlot?: (date: Date) => void;
   isToday: boolean;
 }) {
   const dayOrders = orders.filter((o) => isSameDay(new Date(o.scheduled_start), date));
+
+  const handlePressGrid = (event: GestureResponderEvent) => {
+    if (!onPressSlot) return;
+    const { locationY } = event.nativeEvent;
+    const rawMinutes = locationY / PIXELS_PER_MINUTE;
+    const snappedMinutes = Math.round(rawMinutes / SLOT_SNAP_MINUTES) * SLOT_SNAP_MINUTES;
+    onPressSlot(addMinutes(dayBounds(date).start, snappedMinutes));
+  };
 
   return (
     <View style={[styles.column, { width }]}>
@@ -51,14 +65,14 @@ export function DayColumn({
           {formatDayLabel(date)}
         </Text>
       </View>
-      <View style={{ height: GRID_HEIGHT }}>
+      <Pressable style={{ height: GRID_HEIGHT }} onPress={handlePressGrid}>
         {HOURS.map((hour, i) => (
           <View key={hour} style={[styles.gridLine, { top: i * 60 * PIXELS_PER_MINUTE }]} />
         ))}
         {dayOrders.map((order) => (
           <OrderBlock key={order.id} order={order} onPress={onPressOrder} />
         ))}
-      </View>
+      </Pressable>
     </View>
   );
 }

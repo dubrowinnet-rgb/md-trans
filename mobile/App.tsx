@@ -5,7 +5,7 @@ import { useSession } from './src/hooks/useSession';
 import { useCurrentEmployee } from './src/api/employees';
 import { LoginScreen } from './src/screens/LoginScreen';
 import { CalendarScreen } from './src/screens/CalendarScreen';
-import { DriverScreen } from './src/screens/DriverScreen';
+import { EmployeeCalendarScreen } from './src/screens/EmployeeCalendarScreen';
 
 const queryClient = new QueryClient();
 
@@ -26,7 +26,7 @@ function Root() {
   // Пользователь с записью в employees (по auth_user_id) — водитель/грузчик,
   // остальные авторизованные пользователи — диспетчеры.
   if (employeeQuery.data) {
-    return <DriverScreen session={session} employee={employeeQuery.data} />;
+    return <EmployeeCalendarScreen session={session} employee={employeeQuery.data} />;
   }
 
   return <CalendarScreen session={session} />;
