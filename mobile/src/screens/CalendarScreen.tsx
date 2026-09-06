@@ -12,10 +12,11 @@ import type { Session } from '@supabase/supabase-js';
 import { useEmployees } from '../api/employees';
 import { useOrdersForRange, type OrderWithDetails } from '../api/orders';
 import { supabase } from '../lib/supabase';
-import { EmployeeTabs } from '../components/EmployeeTabs';
+import { EmployeeTabs, ALL_EMPLOYEES } from '../components/EmployeeTabs';
 import { DayColumn, HourAxis, GRID_HEIGHT } from '../components/DayColumn';
 import { CreateOrderModal } from './CreateOrderModal';
 import { OrderDetailModal } from '../components/OrderDetailModal';
+import { EmployeesScreen } from './EmployeesScreen';
 import { addDays, dayBounds, isSameDay, startOfDay, weekDays, formatHeaderDate } from '../utils/date';
 
 type ViewMode = 'day' | 'week';
@@ -23,13 +24,13 @@ type ViewMode = 'day' | 'week';
 export function CalendarScreen({ session }: { session: Session }) {
   const [viewMode, setViewMode] = useState<ViewMode>('day');
   const [anchorDate, setAnchorDate] = useState(() => startOfDay(new Date()));
-  const [activeEmployeeId, setActiveEmployeeId] = useState<string | null>(null);
+  const [activeEmployeeId, setActiveEmployeeId] = useState<string>(ALL_EMPLOYEES);
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [employeesModalOpen, setEmployeesModalOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<OrderWithDetails | null>(null);
 
   const employeesQuery = useEmployees();
   const employees = employeesQuery.data ?? [];
-  const activeEmployee = employees.find((e) => e.id === activeEmployeeId) ?? employees[0] ?? null;
 
   const days = useMemo(
     () => (viewMode === 'day' ? [anchorDate] : weekDays(anchorDate)),
@@ -40,9 +41,10 @@ export function CalendarScreen({ session }: { session: Session }) {
 
   const ordersQuery = useOrdersForRange(rangeStart, rangeEnd);
   const allOrders = ordersQuery.data ?? [];
-  const orders = activeEmployee
-    ? allOrders.filter((o) => o.order_crew.some((c) => c.employee_id === activeEmployee.id))
-    : allOrders;
+  const orders =
+    activeEmployeeId === ALL_EMPLOYEES
+      ? allOrders
+      : allOrders.filter((o) => o.order_crew.some((c) => c.employee_id === activeEmployeeId));
 
   const columnWidth = viewMode === 'day' ? undefined : 130;
 
@@ -57,12 +59,17 @@ export function CalendarScreen({ session }: { session: Session }) {
           <Text style={styles.title}>Грузоперевозки</Text>
           <Text style={styles.subtitle}>{session.user.email}</Text>
         </View>
-        <Pressable onPress={() => supabase.auth.signOut()}>
-          <Text style={styles.signOut}>Выйти</Text>
-        </Pressable>
+        <View style={styles.topBarActions}>
+          <Pressable onPress={() => setEmployeesModalOpen(true)}>
+            <Text style={styles.link}>Сотрудники</Text>
+          </Pressable>
+          <Pressable onPress={() => supabase.auth.signOut()}>
+            <Text style={styles.signOut}>Выйти</Text>
+          </Pressable>
+        </View>
       </View>
 
-      <EmployeeTabs employees={employees} activeId={activeEmployee?.id ?? null} onSelect={setActiveEmployeeId} />
+      <EmployeeTabs employees={employees} activeId={activeEmployeeId} onSelect={setActiveEmployeeId} />
 
       <View style={styles.controls}>
         <View style={styles.nav}>
@@ -91,15 +98,25 @@ export function CalendarScreen({ session }: { session: Session }) {
         </View>
       </View>
 
+      {(employeesQuery.isError || ordersQuery.isError) && (
+        <View style={styles.errorBanner}>
+          <Text style={styles.errorText}>
+            Ошибка загрузки данных: {(employeesQuery.error ?? ordersQuery.error)?.message}
+          </Text>
+        </View>
+      )}
+
+      {employees.length === 0 && !employeesQuery.isLoading && !employeesQuery.isError && (
+        <Pressable style={styles.noticeBanner} onPress={() => setEmployeesModalOpen(true)}>
+          <Text style={styles.noticeText}>
+            Нет ни одного сотрудника — нажмите, чтобы добавить водителя или грузчика
+          </Text>
+        </Pressable>
+      )}
+
       {ordersQuery.isLoading || employeesQuery.isLoading ? (
         <View style={styles.center}>
           <ActivityIndicator />
-        </View>
-      ) : employees.length === 0 ? (
-        <View style={styles.center}>
-          <Text style={styles.emptyText}>
-            Нет ни одного сотрудника. Добавьте водителей/грузчиков в таблицу employees.
-          </Text>
         </View>
       ) : (
         <ScrollView style={styles.grid}>
@@ -138,6 +155,8 @@ export function CalendarScreen({ session }: { session: Session }) {
       {selectedOrder && (
         <OrderDetailModal order={selectedOrder} onClose={() => setSelectedOrder(null)} />
       )}
+
+      {employeesModalOpen && <EmployeesScreen onClose={() => setEmployeesModalOpen(false)} />}
     </SafeAreaView>
   );
 }
@@ -163,9 +182,39 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#6b7280',
   },
+  topBarActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  link: {
+    color: '#5b21b6',
+    fontSize: 13,
+    fontWeight: '600',
+  },
   signOut: {
     color: '#c0392b',
     fontSize: 13,
+  },
+  errorBanner: {
+    backgroundColor: '#fee2e2',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  errorText: {
+    fontSize: 12,
+    color: '#991b1b',
+    textAlign: 'center',
+  },
+  noticeBanner: {
+    backgroundColor: '#fef3c7',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  noticeText: {
+    fontSize: 12,
+    color: '#92400e',
+    textAlign: 'center',
   },
   controls: {
     flexDirection: 'row',
@@ -219,10 +268,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,
-  },
-  emptyText: {
-    textAlign: 'center',
-    color: '#6b7280',
   },
   fab: {
     position: 'absolute',

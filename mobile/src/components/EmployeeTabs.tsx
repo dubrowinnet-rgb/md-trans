@@ -1,13 +1,15 @@
 import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
 import type { Employee } from '../api/employees';
 
+export const ALL_EMPLOYEES = 'all';
+
 export function EmployeeTabs({
   employees,
   activeId,
   onSelect,
 }: {
   employees: Employee[];
-  activeId: string | null;
+  activeId: string;
   onSelect: (id: string) => void;
 }) {
   return (
@@ -17,6 +19,12 @@ export function EmployeeTabs({
       style={styles.container}
       contentContainerStyle={styles.content}
     >
+      <Pressable
+        onPress={() => onSelect(ALL_EMPLOYEES)}
+        style={[styles.tab, activeId === ALL_EMPLOYEES && styles.tabActive]}
+      >
+        <Text style={[styles.tabText, activeId === ALL_EMPLOYEES && styles.tabTextActive]}>Все</Text>
+      </Pressable>
       {employees.map((employee) => {
         const active = employee.id === activeId;
         return (
@@ -40,11 +48,13 @@ export function EmployeeTabs({
 
 const styles = StyleSheet.create({
   container: {
+    flexGrow: 0,
+    height: 52,
     backgroundColor: '#5b21b6',
   },
   content: {
     paddingHorizontal: 8,
-    paddingVertical: 8,
+    alignItems: 'center',
     gap: 8,
   },
   tab: {

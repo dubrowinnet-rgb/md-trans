@@ -189,6 +189,9 @@ export function CreateOrderModal({
                   value={clientSearch}
                   onChangeText={setClientSearch}
                 />
+                {clientsQuery.isError && (
+                  <Text style={styles.error}>Ошибка загрузки клиентов: {clientsQuery.error.message}</Text>
+                )}
                 {clientsQuery.data?.map((client) => (
                   <Pressable
                     key={client.id}
@@ -276,6 +279,10 @@ export function CreateOrderModal({
 
           <Section title="Водитель">
             {busyQuery.isLoading && <ActivityIndicator size="small" />}
+            {busyQuery.isError && (
+              <Text style={styles.error}>Ошибка проверки занятости: {busyQuery.error.message}</Text>
+            )}
+            {drivers.length === 0 && <Text style={styles.textMuted}>Нет ни одного водителя</Text>}
             {drivers.map((driver) => {
               const busy = busyIds.has(driver.id);
               const selected = driverId === driver.id;
@@ -294,6 +301,7 @@ export function CreateOrderModal({
           </Section>
 
           <Section title="Грузчики">
+            {loaders.length === 0 && <Text style={styles.textMuted}>Нет ни одного грузчика</Text>}
             {loaders.map((loader) => {
               const busy = busyIds.has(loader.id);
               const selected = loaderIds.includes(loader.id);

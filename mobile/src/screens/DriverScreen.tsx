@@ -33,7 +33,11 @@ export function DriverScreen({ session, employee }: { session: Session; employee
 
       <Text style={styles.dateLabel}>Заказы на {formatHeaderDate(today)}</Text>
 
-      {ordersQuery.isLoading ? (
+      {ordersQuery.isError ? (
+        <View style={styles.center}>
+          <Text style={styles.emptyText}>Ошибка загрузки заказов: {ordersQuery.error.message}</Text>
+        </View>
+      ) : ordersQuery.isLoading ? (
         <View style={styles.center}>
           <ActivityIndicator />
         </View>
