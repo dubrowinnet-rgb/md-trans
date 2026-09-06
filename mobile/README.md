@@ -16,9 +16,15 @@ npx expo start
 ## Структура
 
 - `src/lib/supabase.ts` — инициализация клиента Supabase (Auth + Postgres + Storage).
-- `src/screens/LoginScreen.tsx` — вход диспетчера.
-- `src/screens/CalendarScreen.tsx` — календарь по сотрудникам (день/неделя).
+- `src/screens/LoginScreen.tsx` — вход (общий для диспетчера и сотрудников).
+- `src/screens/CalendarScreen.tsx` — календарь диспетчера по сотрудникам (день/неделя).
 - `src/screens/CreateOrderModal.tsx` — создание заказа с проверкой занятости экипажа.
+- `src/screens/DriverScreen.tsx` — список заказов на день для водителя/грузчика.
+
+`App.tsx` решает, какой экран показать после входа: если у вошедшего
+пользователя есть строка в `employees` с его `auth_user_id` — открывается
+`DriverScreen`, иначе — календарь диспетчера. См. `supabase/README.md`
+про то, как связать тестового сотрудника с логином.
 
 ## Известное ограничение окружения разработки
 
