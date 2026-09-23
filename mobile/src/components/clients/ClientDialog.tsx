@@ -1,26 +1,35 @@
 import { useState } from 'react';
-import { Platform, StyleSheet, View } from 'react-native';
-import { Button, Dialog, HelperText, Portal, TextInput } from 'react-native-paper';
-import { useCreateClient, useUpdateClient, type Client } from '../../api/clients';
+import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
+import { Button, Dialog, Divider, HelperText, Portal, Text, TextInput } from 'react-native-paper';
+import { useClientOrderStats, useCreateClient, useUpdateClient, type Client } from '../../api/clients';
 import { pickPhoneContact, type PickedContact } from '../../lib/phoneContacts';
 
 // Карточка клиента: создание и правка. Для нового клиента имя и телефон
-// можно взять из записной книжки телефона.
+// можно взять из записной книжки телефона. canViewContacts/canViewStats
+// сужают карточку для диспетчера с ограниченными правами (раздел «права
+// доступа»): у нового клиента телефон вводит тот же человек, поэтому его
+// скрывают только при просмотре уже существующего.
 export function ClientDialog({
   client,
   initial,
   notice,
+  canViewContacts = true,
+  canViewStats = true,
   onClose,
   onSaved,
 }: {
   client: Client | null;
   initial?: PickedContact | null;
   notice?: string | null;
+  canViewContacts?: boolean;
+  canViewStats?: boolean;
   onClose: () => void;
   onSaved?: (client: Client) => void;
 }) {
   const createClient = useCreateClient();
   const updateClient = useUpdateClient();
+  const showContacts = canViewContacts || !client;
+  const statsQuery = useClientOrderStats(canViewStats && client ? client.id : undefined);
   const [name, setName] = useState(client?.name ?? initial?.name ?? '');
   const [phone, setPhone] = useState(client?.phone ?? initial?.phone ?? '');
   const [discountText, setDiscountText] = useState(client?.discount_percent ? String(client.discount_percent) : '');
@@ -77,14 +86,16 @@ export function ClientDialog({
               </Button>
             )}
             <TextInput mode="outlined" label="Имя" accessibilityLabel="Имя" value={name} onChangeText={setName} />
-            <TextInput
-              mode="outlined"
-              label="Телефон"
-              accessibilityLabel="Телефон"
-              value={phone}
-              onChangeText={setPhone}
-              keyboardType="phone-pad"
-            />
+            {showContacts && (
+              <TextInput
+                mode="outlined"
+                label="Телефон"
+                accessibilityLabel="Телефон"
+                value={phone}
+                onChangeText={setPhone}
+                keyboardType="phone-pad"
+              />
+            )}
             <TextInput
               mode="outlined"
               label="Персональная скидка"
@@ -102,6 +113,24 @@ export function ClientDialog({
               onChangeText={setNotes}
               multiline
             />
+
+            {canViewStats && client && (
+              <>
+                <Divider style={styles.divider} />
+                <Text variant="labelLarge">История заказов</Text>
+                {statsQuery.isLoading ? (
+                  <ActivityIndicator size="small" />
+                ) : statsQuery.data ? (
+                  <Text variant="bodyMedium">
+                    {`Всего заказов: ${statsQuery.data.totalOrders}, завершено: ${statsQuery.data.completedOrders}, сумма по завершённым: ${statsQuery.data.totalAmount} ₽`}
+                  </Text>
+                ) : (
+                  <Text variant="bodySmall" style={styles.muted}>
+                    {`Не удалось загрузить историю: ${statsQuery.error?.message ?? ''}`}
+                  </Text>
+                )}
+              </>
+            )}
             {error && <HelperText type="error">{error}</HelperText>}
           </View>
         </Dialog.ScrollArea>
@@ -127,5 +156,11 @@ const styles = StyleSheet.create({
   },
   contacts: {
     alignSelf: 'flex-start',
+  },
+  divider: {
+    marginVertical: 4,
+  },
+  muted: {
+    opacity: 0.6,
   },
 });

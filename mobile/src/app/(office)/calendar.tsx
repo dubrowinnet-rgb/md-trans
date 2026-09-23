@@ -5,6 +5,8 @@ import { Appbar, Banner, FAB, ProgressBar } from 'react-native-paper';
 import { useEmployees } from '../../api/employees';
 import { useOrdersForRange, type OrderWithDetails } from '../../api/orders';
 import { supabase } from '../../lib/supabase';
+import { useSession } from '../../providers/SessionProvider';
+import { canManageOrders } from '../../lib/permissions';
 import { useCalendarNav } from '../../hooks/useCalendarNav';
 import { PagedCalendar } from '../../components/calendar/PagedCalendar';
 import { CalendarToolbar } from '../../components/calendar/CalendarToolbar';
@@ -13,6 +15,8 @@ import { formatHeaderDate } from '../../utils/date';
 
 export default function DispatcherCalendarScreen() {
   const nav = useCalendarNav();
+  const { employee } = useSession();
+  const canManage = canManageOrders(employee);
   const [activeEmployeeId, setActiveEmployeeId] = useState<string>(ALL_EMPLOYEES);
 
   const employeesQuery = useEmployees();
@@ -30,6 +34,7 @@ export default function DispatcherCalendarScreen() {
 
   const openNewOrder = useCallback(
     (start?: Date) => {
+      if (!canManage) return;
       const preset = activeEmployeeId === ALL_EMPLOYEES ? undefined : activeEmployeeId;
       router.push({
         pathname: '/order/new',
@@ -39,7 +44,7 @@ export default function DispatcherCalendarScreen() {
         },
       });
     },
-    [activeEmployeeId]
+    [activeEmployeeId, canManage]
   );
   const openOrder = useCallback((order: OrderWithDetails) => router.push(`/order/${order.id}`), []);
 
@@ -60,7 +65,9 @@ export default function DispatcherCalendarScreen() {
       <Banner
         visible={noEmployees}
         icon="account-plus-outline"
-        actions={[{ label: 'К сотрудникам', onPress: () => router.push('/employees') }]}
+        actions={
+          employee?.role === 'admin' ? [{ label: 'К команде', onPress: () => router.push('/team') }] : undefined
+        }
       >
         Нет ни одного сотрудника. Добавьте водителя или грузчика, чтобы назначать их на заказы.
       </Banner>
@@ -75,11 +82,13 @@ export default function DispatcherCalendarScreen() {
         onAnchorChange={nav.setAnchor}
         orders={orders}
         onPressOrder={openOrder}
-        onPressSlot={openNewOrder}
+        onPressSlot={canManage ? openNewOrder : undefined}
         scrollToNowSignal={nav.nowSignal}
       />
 
-      <FAB icon="plus" style={styles.fab} onPress={() => openNewOrder()} accessibilityLabel="Новый заказ" />
+      {canManage && (
+        <FAB icon="plus" style={styles.fab} onPress={() => openNewOrder()} accessibilityLabel="Новый заказ" />
+      )}
     </View>
   );
 }

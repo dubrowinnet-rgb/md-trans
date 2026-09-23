@@ -168,6 +168,24 @@ export function useCreateOrder() {
   });
 }
 
+// Удаление заказа (раздел «удалять заказы») — раньше в приложении был
+// только перевод в статус «отменён», настоящего удаления не было.
+// Проверка прав — в самой RPC (миграция 0005), здесь для UI важен только
+// вызов.
+export function useDeleteOrder() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (orderId: string) => {
+      const { error } = await supabase.rpc('delete_order', { p_order_id: orderId });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      queryClient.invalidateQueries({ queryKey: ['busy-employees'] });
+    },
+  });
+}
+
 export function useUpdateOrderStatus() {
   const queryClient = useQueryClient();
   return useMutation({

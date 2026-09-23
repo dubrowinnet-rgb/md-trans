@@ -1,33 +1,54 @@
 import { useEffect, useRef, useState } from 'react';
 import { Linking, ScrollView, StyleSheet, View } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
-import { ActivityIndicator, Button, Chip, Divider, HelperText, List, Text } from 'react-native-paper';
+import { router, useLocalSearchParams } from 'expo-router';
+import {
+  ActivityIndicator,
+  Button,
+  Chip,
+  Dialog,
+  Divider,
+  HelperText,
+  List,
+  Portal,
+  Text,
+} from 'react-native-paper';
 import {
   useConfirmCrew,
+  useDeleteOrder,
   useMarkCrewRead,
   useOrder,
   useUpdateOrderStatus,
   type OrderStatus,
 } from '../../api/orders';
 import { useSession } from '../../providers/SessionProvider';
+import { canManageOrders, canViewContactsAndAmounts } from '../../lib/permissions';
 import { yandexMapsRouteUrl } from '../../lib/yandexMaps';
 import { CREW_STATUS_LABELS, ORDER_STATUS_COLORS, ORDER_STATUS_LABELS } from '../../theme';
 import { formatDayLabel, formatTime } from '../../utils/date';
 
 const STATUS_ORDER: OrderStatus[] = ['new', 'confirmed', 'in_progress', 'completed', 'cancelled'];
 
-// Карточка заказа. Диспетчер меняет статус; водитель/грузчик при открытии
-// отмечается как «открыл заказ» и может нажать «Принять заказ» (раздел 9.5 ТЗ).
+// Карточка заказа. Диспетчер/администратор с правом can_manage_orders
+// меняет статус и может удалить заказ; водитель/грузчик при открытии
+// отмечается как «открыл заказ» и может нажать «Принять заказ» (раздел
+// 9.5 ТЗ). Телефон клиента и сумма скрыты, если у вошедшего выключено
+// can_view_contacts_and_amounts — независимо от роли.
 export default function OrderScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { employee } = useSession();
+  const isCrew = employee?.role === 'driver' || employee?.role === 'loader';
+  const canManage = canManageOrders(employee);
+  const canViewContacts = canViewContactsAndAmounts(employee);
+
   const orderQuery = useOrder(id);
   const order = orderQuery.data;
 
   const updateStatus = useUpdateOrderStatus();
   const markRead = useMarkCrewRead();
   const confirmCrew = useConfirmCrew();
+  const deleteOrder = useDeleteOrder();
   const [showExtraStops, setShowExtraStops] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const myCrew = employee ? order?.order_crew.find((c) => c.employee_id === employee.id) : undefined;
 
@@ -35,12 +56,23 @@ export default function OrderScreen() {
   // откатить уже принятый заказ обратно в «открыл».
   const markedRead = useRef(false);
   useEffect(() => {
-    if (!order || !employee || markedRead.current) return;
+    if (!order || !employee || !isCrew || markedRead.current) return;
     if (myCrew?.status === 'notified') {
       markedRead.current = true;
       markRead.mutate({ orderId: order.id, employeeId: employee.id });
     }
-  }, [order, employee, myCrew, markRead]);
+  }, [order, employee, isCrew, myCrew, markRead]);
+
+  const handleDelete = async () => {
+    if (!order) return;
+    try {
+      await deleteOrder.mutateAsync(order.id);
+      setConfirmDelete(false);
+      router.back();
+    } catch {
+      setConfirmDelete(false);
+    }
+  };
 
   if (orderQuery.isLoading) return <ActivityIndicator style={styles.loader} />;
   if (!order) {
@@ -56,7 +88,7 @@ export default function OrderScreen() {
   const sortedStops = [...order.order_stops].sort((a, b) => a.order_index - b.order_index);
   const primaryStops = sortedStops.filter((s) => s.is_primary);
   const extraStops = sortedStops.filter((s) => !s.is_primary);
-  const clientPhone = order.clients?.phone;
+  const clientPhone = canViewContacts ? order.clients?.phone : null;
 
   return (
     <ScrollView contentContainerStyle={styles.content}>
@@ -65,7 +97,7 @@ export default function OrderScreen() {
         {formatDayLabel(start)}, {formatTime(start)}–{formatTime(end)}
       </Text>
 
-      {employee ? (
+      {isCrew ? (
         <>
           <Chip
             style={[styles.statusChip, { backgroundColor: ORDER_STATUS_COLORS[order.status].bg }]}
@@ -80,7 +112,7 @@ export default function OrderScreen() {
               style={styles.action}
               loading={confirmCrew.isPending}
               disabled={confirmCrew.isPending}
-              onPress={() => confirmCrew.mutate({ orderId: order.id, employeeId: employee.id })}
+              onPress={() => employee && confirmCrew.mutate({ orderId: order.id, employeeId: employee.id })}
             >
               Принять заказ
             </Button>
@@ -99,7 +131,7 @@ export default function OrderScreen() {
               compact
               selected={order.status === status}
               showSelectedOverlay
-              disabled={updateStatus.isPending}
+              disabled={!canManage || updateStatus.isPending}
               style={order.status === status && { backgroundColor: ORDER_STATUS_COLORS[status].bg }}
               onPress={() => updateStatus.mutate({ orderId: order.id, status })}
             >
@@ -108,8 +140,10 @@ export default function OrderScreen() {
           ))}
         </View>
       )}
-      {(updateStatus.error ?? confirmCrew.error) && (
-        <HelperText type="error">{(updateStatus.error ?? confirmCrew.error)?.message}</HelperText>
+      {(updateStatus.error ?? confirmCrew.error ?? deleteOrder.error) && (
+        <HelperText type="error">
+          {(updateStatus.error ?? confirmCrew.error ?? deleteOrder.error)?.message}
+        </HelperText>
       )}
 
       {clientPhone ? (
@@ -195,14 +229,48 @@ export default function OrderScreen() {
           />
         ))}
         <List.Item title={order.cargo_description || '—'} titleNumberOfLines={4} description="Груз" />
-        <List.Item
-          title={order.actual_price != null ? `${order.actual_price} ₽` : '—'}
-          description="Сумма"
-        />
+        {canViewContacts && (
+          <List.Item
+            title={order.actual_price != null ? `${order.actual_price} ₽` : '—'}
+            description="Сумма"
+          />
+        )}
         {order.comment ? (
           <List.Item title={order.comment} titleNumberOfLines={6} description="Комментарий" />
         ) : null}
       </List.Section>
+
+      {canManage && !isCrew && (
+        <Button
+          mode="outlined"
+          icon="delete-outline"
+          textColor="#b91c1c"
+          style={styles.deleteButton}
+          onPress={() => setConfirmDelete(true)}
+        >
+          Удалить заказ
+        </Button>
+      )}
+
+      <Portal>
+        <Dialog visible={confirmDelete} onDismiss={() => setConfirmDelete(false)}>
+          <Dialog.Title>Удалить заказ?</Dialog.Title>
+          <Dialog.Content>
+            <Text variant="bodyMedium">Это действие нельзя отменить.</Text>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setConfirmDelete(false)}>Отмена</Button>
+            <Button
+              textColor="#b91c1c"
+              onPress={handleDelete}
+              loading={deleteOrder.isPending}
+              disabled={deleteOrder.isPending}
+            >
+              Удалить
+            </Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
     </ScrollView>
   );
 }
@@ -239,13 +307,17 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginTop: 8,
   },
+  moreStops: {
+    alignSelf: 'flex-start',
+    marginLeft: 8,
+  },
   serviceBar: {
     width: 4,
     marginLeft: 16,
     borderRadius: 2,
   },
-  moreStops: {
-    alignSelf: 'flex-start',
-    marginLeft: 8,
+  deleteButton: {
+    marginTop: 16,
+    borderColor: '#b91c1c',
   },
 });

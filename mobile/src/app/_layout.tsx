@@ -1,12 +1,14 @@
 import { useEffect } from 'react';
+import { StyleSheet, View } from 'react-native';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { PaperProvider } from 'react-native-paper';
+import { Button, PaperProvider, Text } from 'react-native-paper';
 import { registerTranslation, ru } from 'react-native-paper-dates';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { SessionProvider, useSession } from '../providers/SessionProvider';
+import { supabase } from '../lib/supabase';
 import { theme } from '../theme';
 
 SplashScreen.preventAutoHideAsync();
@@ -29,8 +31,11 @@ export default function RootLayout() {
   );
 }
 
-// Роль определяется так же, как раньше: есть строка в employees с
-// auth_user_id вошедшего пользователя — это водитель/грузчик, иначе диспетчер.
+// Роль входа теперь всегда читается из employees.role (миграция 0005):
+// админ и диспетчер делят экраны (office), водитель и грузчик — (employee).
+// Вошедший без строки в employees больше не считается диспетчером по
+// умолчанию — доступа у него нет, только выйти и попросить администратора
+// завести аккаунт.
 function RootNavigator() {
   const { session, employee, isLoading } = useSession();
 
@@ -40,8 +45,11 @@ function RootNavigator() {
 
   if (isLoading) return null;
 
-  const isEmployee = Boolean(session && employee);
-  const isDispatcher = Boolean(session && !employee);
+  const isOffice = Boolean(session && (employee?.role === 'admin' || employee?.role === 'dispatcher'));
+  const isCrew = Boolean(session && (employee?.role === 'driver' || employee?.role === 'loader'));
+  const noAccess = Boolean(session && !employee);
+
+  if (noAccess) return <NoAccessScreen />;
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
@@ -49,14 +57,14 @@ function RootNavigator() {
       <Stack.Protected guard={!session}>
         <Stack.Screen name="login" />
       </Stack.Protected>
-      <Stack.Protected guard={isDispatcher}>
-        <Stack.Screen name="(dispatcher)" />
+      <Stack.Protected guard={isOffice}>
+        <Stack.Screen name="(office)" />
         <Stack.Screen
           name="order/new"
           options={{ presentation: 'modal', headerShown: true, title: 'Новый заказ' }}
         />
       </Stack.Protected>
-      <Stack.Protected guard={isEmployee}>
+      <Stack.Protected guard={isCrew}>
         <Stack.Screen name="(employee)" />
       </Stack.Protected>
       <Stack.Protected guard={Boolean(session)}>
@@ -68,3 +76,36 @@ function RootNavigator() {
     </Stack>
   );
 }
+
+function NoAccessScreen() {
+  return (
+    <SafeAreaView style={styles.safe}>
+      <View style={styles.content}>
+        <Text variant="titleMedium" style={styles.text}>
+          У этого аккаунта нет доступа к приложению.
+        </Text>
+        <Text variant="bodyMedium" style={styles.text}>
+          Попросите администратора завести для вас логин на экране «Команда».
+        </Text>
+        <Button mode="outlined" onPress={() => supabase.auth.signOut()}>
+          Выйти
+        </Button>
+      </View>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  safe: {
+    flex: 1,
+  },
+  content: {
+    flex: 1,
+    justifyContent: 'center',
+    padding: 24,
+    gap: 16,
+  },
+  text: {
+    textAlign: 'center',
+  },
+});

@@ -49,6 +49,30 @@ export function useCreateClient() {
   });
 }
 
+// Простая статистика по клиенту (раздел «смотреть историю и статистику по
+// клиентам»): число заказов и сумма по тем, где она указана. Публикуется
+// только при can_view_client_stats — см. ClientDialog.
+export function useClientOrderStats(clientId: string | undefined) {
+  return useQuery({
+    queryKey: ['client-stats', clientId],
+    enabled: Boolean(clientId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('orders')
+        .select('status, actual_price')
+        .eq('client_id', clientId as string);
+      if (error) throw error;
+      const rows = data as { status: string; actual_price: number | null }[];
+      const completed = rows.filter((r) => r.status === 'completed');
+      return {
+        totalOrders: rows.length,
+        completedOrders: completed.length,
+        totalAmount: completed.reduce((sum, r) => sum + (r.actual_price ?? 0), 0),
+      };
+    },
+  });
+}
+
 export function useUpdateClient() {
   const queryClient = useQueryClient();
   return useMutation({

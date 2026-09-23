@@ -3,14 +3,15 @@ import { KeyboardAvoidingView, Platform, StyleSheet } from 'react-native';
 import { Button, HelperText, Text, TextInput } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
+import { loginInputToEmail } from '../lib/accountLogin';
 
 export default function LoginScreen() {
-  const [email, setEmail] = useState('');
+  const [login, setLogin] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const canSubmit = email.trim().length > 0 && password.length > 0 && !submitting;
+  const canSubmit = login.trim().length > 0 && password.length > 0 && !submitting;
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
@@ -18,7 +19,7 @@ export default function LoginScreen() {
     setError(null);
 
     const { error: signInError } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
+      email: loginInputToEmail(login),
       password,
     });
 
@@ -37,17 +38,18 @@ export default function LoginScreen() {
         </Text>
         <TextInput
           mode="outlined"
-          label="Email"
-          value={email}
-          onChangeText={setEmail}
+          label="Логин"
+          accessibilityLabel="Логин"
+          value={login}
+          onChangeText={setLogin}
           autoCapitalize="none"
-          autoComplete="email"
-          keyboardType="email-address"
+          autoComplete="username"
           disabled={submitting}
         />
         <TextInput
           mode="outlined"
           label="Пароль"
+          accessibilityLabel="Пароль"
           value={password}
           onChangeText={setPassword}
           secureTextEntry

@@ -5,7 +5,11 @@ import { useCurrentEmployee, type Employee } from '../api/employees';
 
 interface SessionState {
   session: Session | null;
-  /** Строка employees, связанная с вошедшим пользователем. null — это диспетчер. */
+  /**
+   * Строка employees вошедшего пользователя — роль (admin/dispatcher/driver/
+   * loader) и права берутся из неё (см. lib/permissions.ts). null — у
+   * аккаунта нет доступа (см. app/_layout.tsx).
+   */
   employee: Employee | null;
   isLoading: boolean;
 }

@@ -1,9 +1,16 @@
 import { Tabs } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from 'react-native-paper';
+import { useSession } from '../../providers/SessionProvider';
 
-export default function DispatcherLayout() {
+// Общие вкладки диспетчера и администратора. «Команда» видна только
+// администратору — заводить логины и права остальных может только он
+// (href: null убирает вкладку из таб-бара и из навигации).
+export default function OfficeLayout() {
   const theme = useTheme();
+  const { employee } = useSession();
+  const isAdmin = employee?.role === 'admin';
+
   return (
     <Tabs
       screenOptions={{
@@ -30,9 +37,10 @@ export default function DispatcherLayout() {
         }}
       />
       <Tabs.Screen
-        name="employees"
+        name="team"
         options={{
-          title: 'Сотрудники',
+          title: 'Команда',
+          href: isAdmin ? undefined : null,
           tabBarIcon: ({ color, size }) => (
             <MaterialCommunityIcons name="account-group" color={color} size={size} />
           ),

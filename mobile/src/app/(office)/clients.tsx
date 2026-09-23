@@ -4,6 +4,8 @@ import { ActivityIndicator, Appbar, Divider, FAB, HelperText, List, Searchbar, T
 import { useClients, type Client } from '../../api/clients';
 import { ClientDialog } from '../../components/clients/ClientDialog';
 import { useNewClientFromContacts } from '../../hooks/useNewClientFromContacts';
+import { useSession } from '../../providers/SessionProvider';
+import { canViewClientStats, canViewContactsAndAmounts } from '../../lib/permissions';
 
 // База клиентов (раздел 5 ТЗ): поиск, карточка с телефоном и персональной скидкой.
 export default function ClientsScreen() {
@@ -11,6 +13,9 @@ export default function ClientsScreen() {
   const clientsQuery = useClients(search);
   const [editing, setEditing] = useState<Client | null>(null);
   const newClient = useNewClientFromContacts();
+  const { employee } = useSession();
+  const canViewContacts = canViewContactsAndAmounts(employee);
+  const canViewStats = canViewClientStats(employee);
 
   return (
     <View style={styles.container}>
@@ -40,7 +45,10 @@ export default function ClientsScreen() {
           renderItem={({ item }) => (
             <List.Item
               title={item.name}
-              description={[item.phone, item.discount_percent ? `скидка ${item.discount_percent}%` : null]
+              description={[
+                canViewContacts ? item.phone : null,
+                item.discount_percent ? `скидка ${item.discount_percent}%` : null,
+              ]
                 .filter(Boolean)
                 .join(' · ') || undefined}
               left={(props) => <List.Icon {...props} icon="account-outline" />}
@@ -56,7 +64,14 @@ export default function ClientsScreen() {
         loading={newClient.picking}
         onPress={newClient.start}
       />
-      {editing && <ClientDialog client={editing} onClose={() => setEditing(null)} />}
+      {editing && (
+        <ClientDialog
+          client={editing}
+          canViewContacts={canViewContacts}
+          canViewStats={canViewStats}
+          onClose={() => setEditing(null)}
+        />
+      )}
       {newClient.draft && (
         <ClientDialog client={null} initial={newClient.draft} notice={newClient.notice} onClose={newClient.close} />
       )}

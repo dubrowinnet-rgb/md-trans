@@ -1,5 +1,5 @@
 import { MD3LightTheme, type MD3Theme } from 'react-native-paper';
-import type { CrewStatus, OrderStatus } from './types/database';
+import type { AccountRole, CrewStatus, OrderStatus } from './types/database';
 
 export const theme: MD3Theme = {
   ...MD3LightTheme,
@@ -34,4 +34,18 @@ export const CREW_STATUS_LABELS: Record<CrewStatus, string> = {
   notified: 'уведомлён',
   read: 'открыл заказ',
   confirmed: 'принял заказ',
+};
+
+export const ACCOUNT_ROLE_LABELS: Record<AccountRole, string> = {
+  admin: 'Администратор',
+  dispatcher: 'Диспетчер',
+  driver: 'Водитель',
+  loader: 'Грузчик',
+};
+
+export const ACCOUNT_ROLE_ICONS: Record<AccountRole, string> = {
+  admin: 'shield-crown-outline',
+  dispatcher: 'headset',
+  driver: 'truck',
+  loader: 'account-hard-hat',
 };

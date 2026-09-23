@@ -22,6 +22,8 @@ import { useServices } from '../../api/services';
 import { ServicePicker, formatServiceMeta } from '../../components/form/ServicePicker';
 import { DateTimeField } from '../../components/form/DateTimeField';
 import { FormSection } from '../../components/form/FormSection';
+import { useSession } from '../../providers/SessionProvider';
+import { canManageOrders, canViewContactsAndAmounts } from '../../lib/permissions';
 
 interface ExtraStop {
   key: string;
@@ -88,6 +90,10 @@ export default function NewOrderScreen() {
     if (preset.role === 'driver') setDriverId(preset.id);
     else setLoaderIds([preset.id]);
   }, [employeeId, employees]);
+
+  const { employee } = useSession();
+  const canManage = canManageOrders(employee);
+  const canViewContacts = canViewContactsAndAmounts(employee);
 
   const clientsQuery = useClients(clientSearch);
   const busyQuery = useBusyEmployeeIds(scheduledStart, scheduledEnd);
@@ -170,6 +176,14 @@ export default function NewOrderScreen() {
     }
   };
 
+  if (!canManage) {
+    return (
+      <View style={styles.noAccess}>
+        <Text variant="bodyMedium">Недостаточно прав для создания заказа.</Text>
+      </View>
+    );
+  }
+
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
@@ -208,7 +222,11 @@ export default function NewOrderScreen() {
                 <List.Item
                   key={client.id}
                   title={client.name}
-                  description={client.discount_percent ? `Скидка ${client.discount_percent}%` : client.phone ?? undefined}
+                  description={
+                    client.discount_percent
+                      ? `Скидка ${client.discount_percent}%`
+                      : (canViewContacts ? client.phone : null) ?? undefined
+                  }
                   left={(props) => <List.Icon {...props} icon="account-outline" />}
                   onPress={() => setSelectedClient(client)}
                 />
@@ -433,5 +451,11 @@ const styles = StyleSheet.create({
   },
   submit: {
     marginTop: 8,
+  },
+  noAccess: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
   },
 });

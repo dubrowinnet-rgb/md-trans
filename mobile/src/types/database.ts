@@ -3,7 +3,11 @@
 // когда появится сетевой доступ к проекту; до тех пор поддерживаем руками
 // синхронно со схемой.
 
+// Роль сотрудника в экипаже заказа (order_crew) — всегда одна из двух,
+// в отличие от роли входа (AccountRole), которая шире.
 export type EmployeeRole = 'driver' | 'loader';
+// Роль входа в приложение: у каждой — свой набор экранов (см. app/_layout.tsx).
+export type AccountRole = 'admin' | 'dispatcher' | 'driver' | 'loader';
 export type AccountStatus = 'active' | 'pending_payment' | 'suspended';
 export type OrderStatus = 'new' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled';
 export type StopType = 'pickup' | 'dropoff';
@@ -15,27 +19,35 @@ export interface Database {
       employees: {
         Row: {
           id: string;
-          role: EmployeeRole;
+          role: AccountRole;
           name: string;
           phone: string | null;
+          login: string | null;
           account_status: AccountStatus;
           paid_until: string | null;
           monthly_price: number | null;
           last_location: { lat: number; lng: number; updated_at: string } | null;
           auth_user_id: string | null;
           expo_push_token: string | null;
+          can_manage_orders: boolean;
+          can_view_client_stats: boolean;
+          can_view_contacts_and_amounts: boolean;
           created_at: string;
         };
         Insert: {
           id?: string;
-          role: EmployeeRole;
+          role: AccountRole;
           name: string;
           phone?: string | null;
+          login?: string | null;
           account_status?: AccountStatus;
           paid_until?: string | null;
           monthly_price?: number | null;
           auth_user_id?: string | null;
           expo_push_token?: string | null;
+          can_manage_orders?: boolean;
+          can_view_client_stats?: boolean;
+          can_view_contacts_and_amounts?: boolean;
         };
         Update: Partial<Database['public']['Tables']['employees']['Insert']>;
         Relationships: [];
@@ -178,6 +190,10 @@ export interface Database {
           p_services?: unknown;
         };
         Returns: string;
+      };
+      delete_order: {
+        Args: { p_order_id: string };
+        Returns: undefined;
       };
     };
     Enums: Record<string, never>;
