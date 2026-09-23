@@ -8,16 +8,18 @@ type ClientRow = Database['public']['Tables']['clients']['Row'];
 type StopRow = Database['public']['Tables']['order_stops']['Row'];
 type CrewRow = Database['public']['Tables']['order_crew']['Row'];
 type ServiceRow = Database['public']['Tables']['services']['Row'];
+type VehicleRow = Database['public']['Tables']['vehicles']['Row'];
 
 export interface OrderWithDetails extends OrderRow {
   clients: Pick<ClientRow, 'id' | 'name' | 'phone' | 'discount_percent'> | null;
   order_stops: StopRow[];
   order_crew: (CrewRow & { employees: { id: string; name: string; role: EmployeeRole } | null })[];
   order_services: { qty: number; services: Pick<ServiceRow, 'id' | 'name' | 'color'> | null }[];
+  vehicles: Pick<VehicleRow, 'id' | 'name' | 'plate'> | null;
 }
 
 const ORDER_SELECT =
-  '*, clients(id, name, phone, discount_percent), order_stops(*), order_crew(*, employees(id, name, role)), order_services(qty, services(id, name, color))';
+  '*, clients(id, name, phone, discount_percent), order_stops(*), order_crew(*, employees(id, name, role)), order_services(qty, services(id, name, color)), vehicles(id, name, plate)';
 
 export function useOrdersForRange(rangeStart: Date, rangeEnd: Date) {
   const startIso = rangeStart.toISOString();
@@ -125,6 +127,7 @@ export interface CreateOrderInput {
   stops: CreateOrderStopInput[];
   crew: CreateOrderCrewInput[];
   services: CreateOrderServiceInput[];
+  vehicle_id?: string | null;
 }
 
 export function useCreateOrder() {
@@ -141,6 +144,7 @@ export function useCreateOrder() {
         p_stops: input.stops,
         p_crew: input.crew,
         p_services: input.services,
+        p_vehicle_id: input.vehicle_id ?? null,
       });
       if (error) throw error;
       const orderId = data as string;

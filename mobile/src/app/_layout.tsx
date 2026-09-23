@@ -72,6 +72,10 @@ function RootNavigator() {
           name="order/[id]"
           options={{ presentation: 'modal', headerShown: true, title: 'Заказ' }}
         />
+        <Stack.Screen
+          name="my-schedule"
+          options={{ presentation: 'modal', headerShown: true, title: 'Мой график' }}
+        />
       </Stack.Protected>
     </Stack>
   );

@@ -20,6 +20,7 @@ import {
   useOrder,
   useUpdateOrderScheduleAndPrice,
   useUpdateOrderStatus,
+  type CrewStatus,
   type OrderStatus,
 } from '../../api/orders';
 import { useSession } from '../../providers/SessionProvider';
@@ -38,6 +39,11 @@ const STATUS_ORDER: OrderStatus[] = ['new', 'confirmed', 'in_progress', 'complet
 
 function combine(date: Date, time: Date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate(), time.getHours(), time.getMinutes());
+}
+
+function crewRoleLabel(crew: { isDriver: boolean; isLoader: boolean }) {
+  if (crew.isDriver && crew.isLoader) return 'Водитель и грузчик';
+  return crew.isDriver ? 'Водитель' : 'Грузчик';
 }
 
 // Карточка заказа. Права зависят от роли (раздел «права и доступы»):
@@ -72,6 +78,10 @@ export default function OrderScreen() {
   const [editEnd, setEditEnd] = useState<Date | null>(null);
   const [editPriceText, setEditPriceText] = useState('');
 
+  // Водитель, совмещающий функции грузчика, даёт две строки order_crew на
+  // этот заказ (role='driver' и role='loader') — но useConfirmCrew и
+  // useMarkCrewRead обновляют статус у обеих сразу (фильтр только по
+  // order_id+employee_id), так что для статуса неважно, какую из них найдёт .find().
   const myCrew = employee ? order?.order_crew.find((c) => c.employee_id === employee.id) : undefined;
 
   // Отмечаем прочтение один раз и только из статуса «уведомлён», чтобы не
@@ -136,6 +146,27 @@ export default function OrderScreen() {
   const extraStops = sortedStops.filter((s) => !s.is_primary);
   const clientPhone = canViewClientPhone(employee, order) ? order.clients?.phone : null;
   const showAmount = canViewOrderAmount(employee);
+
+  // Сводим возможные две строки order_crew одного сотрудника (водитель,
+  // совмещающий функции грузчика) в одну запись для списка.
+  const mergedCrew: { employeeId: string; name: string; isDriver: boolean; isLoader: boolean; status: CrewStatus }[] =
+    [];
+  for (const c of order.order_crew) {
+    const existing = mergedCrew.find((m) => m.employeeId === c.employee_id);
+    if (existing) {
+      if (c.role === 'driver') existing.isDriver = true;
+      else existing.isLoader = true;
+      existing.status = c.status;
+    } else {
+      mergedCrew.push({
+        employeeId: c.employee_id,
+        name: c.employees?.name ?? 'Сотрудник',
+        isDriver: c.role === 'driver',
+        isLoader: c.role === 'loader',
+        status: c.status,
+      });
+    }
+  }
 
   return (
     <ScrollView contentContainerStyle={styles.content}>
@@ -281,18 +312,25 @@ export default function OrderScreen() {
 
       <List.Section title="Экипаж">
         {order.order_crew.length === 0 && <List.Item title="Никто не назначен" />}
-        {order.order_crew.map((crew) => (
-          <List.Item
-            key={crew.employee_id}
-            title={crew.employees?.name ?? 'Сотрудник'}
-            description={`${crew.role === 'driver' ? 'Водитель' : 'Грузчик'} · ${CREW_STATUS_LABELS[crew.status]}`}
-            left={(props) => (
-              <List.Icon {...props} icon={crew.role === 'driver' ? 'truck' : 'account-hard-hat'} />
+        {/* Водитель, совмещающий функции грузчика, даёт две строки order_crew
+            (role='driver' и role='loader') с одинаковым employee_id — сводим
+            их в одну строку, иначе список показал бы человека дважды. */}
+        {mergedCrew.map((crew) => (
+          <View key={crew.employeeId}>
+            <List.Item
+              title={crew.name}
+              description={`${crewRoleLabel(crew)} · ${CREW_STATUS_LABELS[crew.status]}`}
+              left={(props) => <List.Icon {...props} icon={crew.isDriver ? 'truck' : 'account-hard-hat'} />}
+              right={(props) =>
+                crew.status === 'confirmed' ? <List.Icon {...props} icon="check-circle" color="#22c55e" /> : null
+              }
+            />
+            {crew.isDriver && order.vehicles && (
+              <Text variant="bodySmall" style={styles.vehiclePlate}>
+                {order.vehicles.plate}
+              </Text>
             )}
-            right={(props) =>
-              crew.status === 'confirmed' ? <List.Icon {...props} icon="check-circle" color="#22c55e" /> : null
-            }
-          />
+          </View>
         ))}
       </List.Section>
       <Divider />
@@ -406,6 +444,12 @@ const styles = StyleSheet.create({
     width: 4,
     marginLeft: 16,
     borderRadius: 2,
+  },
+  vehiclePlate: {
+    marginLeft: 56,
+    marginTop: -8,
+    marginBottom: 4,
+    opacity: 0.6,
   },
   deleteButton: {
     marginTop: 16,

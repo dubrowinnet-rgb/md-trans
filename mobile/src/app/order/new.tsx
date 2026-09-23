@@ -19,6 +19,8 @@ import { ClientDialog } from '../../components/clients/ClientDialog';
 import { useNewClientFromContacts } from '../../hooks/useNewClientFromContacts';
 import { useBusyEmployeeIds, useCreateOrder, type CreateOrderStopInput } from '../../api/orders';
 import { useServices } from '../../api/services';
+import { useVehicles } from '../../api/vehicles';
+import { useDaysOffOn, toDateKey } from '../../api/schedule';
 import { ServicePicker, formatServiceMeta } from '../../components/form/ServicePicker';
 import { DateTimeField } from '../../components/form/DateTimeField';
 import { FormSection } from '../../components/form/FormSection';
@@ -39,6 +41,32 @@ function atHour(base: Date, hour: number) {
   const d = new Date(base);
   d.setHours(hour, 0, 0, 0);
   return d;
+}
+
+// Доступность исполнителя на выбранное время (раздел «рабочий график»):
+// сперва выходной (красная точка), потом другой заказ (жёлтая), иначе
+// свободен (зелёная) — этот же порядок используется для сортировки списка.
+type AvailabilityTier = 'available' | 'busy' | 'dayoff';
+
+const TIER_ORDER: Record<AvailabilityTier, number> = { available: 0, busy: 1, dayoff: 2 };
+const TIER_COLOR: Record<AvailabilityTier, string> = { available: '#22c55e', busy: '#f59e0b', dayoff: '#ef4444' };
+const TIER_SUFFIX: Record<AvailabilityTier, string> = { available: '', busy: ' · другой заказ', dayoff: ' · выходной' };
+
+function availabilityTier(id: string, busyIds: Set<string>, dayOffIds: Set<string>): AvailabilityTier {
+  if (dayOffIds.has(id)) return 'dayoff';
+  if (busyIds.has(id)) return 'busy';
+  return 'available';
+}
+
+function sortByAvailability<T extends { id: string }>(list: T[], busyIds: Set<string>, dayOffIds: Set<string>) {
+  return [...list].sort(
+    (a, b) =>
+      TIER_ORDER[availabilityTier(a.id, busyIds, dayOffIds)] - TIER_ORDER[availabilityTier(b.id, busyIds, dayOffIds)]
+  );
+}
+
+function dotIcon(color: string) {
+  return () => <View style={[styles.dot, { backgroundColor: color }]} />;
 }
 
 // Создание заказа: клиент, точки маршрута (2 основные + дополнительные),
@@ -64,6 +92,11 @@ export default function NewOrderScreen() {
   const [cargoDescription, setCargoDescription] = useState('');
   const [driverId, setDriverId] = useState<string | null>(null);
   const [loaderIds, setLoaderIds] = useState<string[]>([]);
+  const [vehicleId, setVehicleId] = useState<string | null>(null);
+  // Машина, подставленная за водителем по умолчанию: как и с суммой
+  // (autoPrice ниже) — если диспетчер не менял её руками, следующая смена
+  // водителя подставит его машину заново.
+  const autoVehicleId = useRef<string | null>(null);
   const [priceText, setPriceText] = useState('');
   const [serviceIds, setServiceIds] = useState<string[]>([]);
   const [servicePickerOpen, setServicePickerOpen] = useState(false);
@@ -79,6 +112,32 @@ export default function NewOrderScreen() {
   const employees = useEmployees().data ?? [];
   const drivers = employees.filter((e) => e.role === 'driver');
   const loaders = employees.filter((e) => e.role === 'loader');
+  const vehiclesQuery = useVehicles();
+
+  // Водитель на заказе по умолчанию значится и в списке грузчиков — он же
+  // часто и есть напарник («совмещает функции», раздел «рабочий график»).
+  // Диспетчер может убрать его оттуда отдельной галочкой. Раздел
+  // «Грузчики» ниже рисует его первым в списке кандидатов, даже если его
+  // роль в системе — «водитель», а не «грузчик».
+  const selectedDriver = drivers.find((d) => d.id === driverId) ?? null;
+  const loaderCandidates = selectedDriver ? [selectedDriver, ...loaders] : loaders;
+
+  // При выборе водителя подставляем его в список грузчиков и его машину по
+  // умолчанию — машину не трогаем, если диспетчер уже выбрал другую руками.
+  const selectDriver = (id: string | null) => {
+    setLoaderIds((prev) => {
+      let next = prev;
+      if (driverId && next.includes(driverId)) next = next.filter((x) => x !== driverId);
+      if (id && !next.includes(id)) next = [...next, id];
+      return next;
+    });
+    const fallbackVehicle = drivers.find((d) => d.id === id)?.default_vehicle_id ?? null;
+    if (vehicleId === null || vehicleId === autoVehicleId.current) {
+      autoVehicleId.current = fallbackVehicle;
+      setVehicleId(fallbackVehicle);
+    }
+    setDriverId(id);
+  };
 
   // Заказ создан из колонки/вкладки сотрудника — сразу назначаем его.
   const presetApplied = useRef(false);
@@ -87,7 +146,7 @@ export default function NewOrderScreen() {
     const preset = employees.find((e) => e.id === employeeId);
     if (!preset) return;
     presetApplied.current = true;
-    if (preset.role === 'driver') setDriverId(preset.id);
+    if (preset.role === 'driver') selectDriver(preset.id);
     else setLoaderIds([preset.id]);
   }, [employeeId, employees]);
 
@@ -98,6 +157,8 @@ export default function NewOrderScreen() {
   const clientsQuery = useClients(clientSearch);
   const busyQuery = useBusyEmployeeIds(scheduledStart, scheduledEnd);
   const busyIds = busyQuery.data ?? new Set<string>();
+  const dayOffQuery = useDaysOffOn(toDateKey(scheduledStart));
+  const dayOffIds = dayOffQuery.data ?? new Set<string>();
   const createOrder = useCreateOrder();
   const servicesQuery = useServices();
   const services = servicesQuery.data ?? [];
@@ -169,6 +230,7 @@ export default function NewOrderScreen() {
         stops,
         crew,
         services: serviceIds.map((id) => ({ service_id: id, qty: 1 })),
+        vehicle_id: vehicleId,
       });
       router.back();
     } catch (err) {
@@ -337,45 +399,73 @@ export default function NewOrderScreen() {
         </FormSection>
 
         <FormSection title="Водитель">
-          {busyQuery.isLoading && <ActivityIndicator size="small" />}
+          {(busyQuery.isLoading || dayOffQuery.isLoading) && <ActivityIndicator size="small" />}
           {busyQuery.isError && (
             <HelperText type="error">{`Ошибка проверки занятости: ${busyQuery.error.message}`}</HelperText>
           )}
           {drivers.length === 0 && <Text variant="bodySmall">Нет ни одного водителя</Text>}
+          <Text variant="bodySmall" style={styles.muted}>
+            Точка у имени: зелёная — свободен, жёлтая — другой заказ, красная — выходной.
+          </Text>
           <View style={styles.chips}>
-            {drivers.map((driver) => {
-              const busy = busyIds.has(driver.id);
+            {sortByAvailability(drivers, busyIds, dayOffIds).map((driver) => {
+              const tier = availabilityTier(driver.id, busyIds, dayOffIds);
               return (
                 <Chip
                   key={driver.id}
-                  icon={busy ? 'clock-alert-outline' : 'truck'}
+                  icon={dotIcon(TIER_COLOR[tier])}
                   selected={driverId === driver.id}
                   showSelectedOverlay
-                  disabled={busy}
-                  onPress={() => setDriverId(driverId === driver.id ? null : driver.id)}
+                  onPress={() => selectDriver(driverId === driver.id ? null : driver.id)}
                 >
-                  {busy ? `${driver.name} · занят` : driver.name}
+                  {`${driver.name}${TIER_SUFFIX[tier]}`}
                 </Chip>
               );
             })}
           </View>
+          {driverId && (
+            <>
+              <Text variant="labelMedium" style={styles.subLabel}>
+                Машина
+              </Text>
+              {vehiclesQuery.data?.length === 0 ? (
+                <Text variant="bodySmall" style={styles.muted}>
+                  Автопарк пуст — добавьте машину на вкладке «Автопарк»
+                </Text>
+              ) : (
+                <View style={styles.chips}>
+                  {(vehiclesQuery.data ?? []).map((vehicle) => (
+                    <Chip
+                      key={vehicle.id}
+                      selected={vehicleId === vehicle.id}
+                      showSelectedOverlay
+                      onPress={() => setVehicleId(vehicleId === vehicle.id ? null : vehicle.id)}
+                    >
+                      {`${vehicle.name} · ${vehicle.plate}`}
+                    </Chip>
+                  ))}
+                </View>
+              )}
+            </>
+          )}
         </FormSection>
 
         <FormSection title="Грузчики">
-          {loaders.length === 0 && <Text variant="bodySmall">Нет ни одного грузчика</Text>}
+          {loaderCandidates.length === 0 && <Text variant="bodySmall">Нет ни одного грузчика</Text>}
           <View style={styles.chips}>
-            {loaders.map((loader) => {
-              const busy = busyIds.has(loader.id);
+            {sortByAvailability(loaderCandidates, busyIds, dayOffIds).map((person) => {
+              const tier = availabilityTier(person.id, busyIds, dayOffIds);
+              const isDriver = person.id === driverId;
               return (
                 <Chip
-                  key={loader.id}
-                  icon={busy ? 'clock-alert-outline' : 'account-hard-hat'}
-                  selected={loaderIds.includes(loader.id)}
+                  key={person.id}
+                  icon={dotIcon(TIER_COLOR[tier])}
+                  selected={loaderIds.includes(person.id)}
                   showSelectedOverlay
-                  disabled={busy}
-                  onPress={() => toggleLoader(loader.id)}
+                  disabled={tier === 'busy'}
+                  onPress={() => toggleLoader(person.id)}
                 >
-                  {busy ? `${loader.name} · занят` : loader.name}
+                  {`${person.name}${isDriver ? ' (водитель)' : ''}${TIER_SUFFIX[tier]}`}
                 </Chip>
               );
             })}
@@ -448,6 +538,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
+  },
+  subLabel: {
+    marginTop: 8,
+    marginBottom: 2,
+  },
+  dot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
   },
   submit: {
     marginTop: 8,

@@ -32,6 +32,8 @@ export interface Database {
           can_manage_orders: boolean;
           can_view_client_stats: boolean;
           can_view_contacts_and_amounts: boolean;
+          can_manage_own_schedule: boolean;
+          default_vehicle_id: string | null;
           created_at: string;
         };
         Insert: {
@@ -48,6 +50,8 @@ export interface Database {
           can_manage_orders?: boolean;
           can_view_client_stats?: boolean;
           can_view_contacts_and_amounts?: boolean;
+          can_manage_own_schedule?: boolean;
+          default_vehicle_id?: string | null;
         };
         Update: Partial<Database['public']['Tables']['employees']['Insert']>;
         Relationships: [];
@@ -104,6 +108,7 @@ export interface Database {
           comment: string | null;
           photos: string[];
           created_by: string | null;
+          vehicle_id: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -118,6 +123,7 @@ export interface Database {
           comment?: string | null;
           photos?: string[];
           created_by?: string | null;
+          vehicle_id?: string | null;
         };
         Update: Partial<Database['public']['Tables']['orders']['Insert']>;
         Relationships: [];
@@ -176,6 +182,46 @@ export interface Database {
         Update: Partial<Database['public']['Tables']['order_services']['Insert']>;
         Relationships: [];
       };
+      vehicles: {
+        Row: {
+          id: string;
+          name: string;
+          plate: string;
+          capacity_kg: number | null;
+          body_dimensions: string | null;
+          europallet_count: number | null;
+          top_loading: boolean;
+          side_loading: boolean;
+          moscow_center_pass: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          plate: string;
+          capacity_kg?: number | null;
+          body_dimensions?: string | null;
+          europallet_count?: number | null;
+          top_loading?: boolean;
+          side_loading?: boolean;
+          moscow_center_pass?: boolean;
+        };
+        Update: Partial<Database['public']['Tables']['vehicles']['Insert']>;
+        Relationships: [];
+      };
+      employee_days_off: {
+        Row: {
+          employee_id: string;
+          day: string;
+          created_at: string;
+        };
+        Insert: {
+          employee_id: string;
+          day: string;
+        };
+        Update: Partial<Database['public']['Tables']['employee_days_off']['Insert']>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -190,6 +236,7 @@ export interface Database {
           p_stops: unknown;
           p_crew: unknown;
           p_services?: unknown;
+          p_vehicle_id?: string | null;
         };
         Returns: string;
       };

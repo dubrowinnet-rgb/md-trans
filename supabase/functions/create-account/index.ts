@@ -86,6 +86,7 @@ Deno.serve(async (req) => {
   const phone = body.phone ? String(body.phone).trim() : null;
   const role = String(body.role ?? '');
   const permissions = (body.permissions as Record<string, unknown>) ?? {};
+  const defaultVehicleId = body.default_vehicle_id ? String(body.default_vehicle_id) : null;
 
   if (!LOGIN_RE.test(login)) {
     return fail(400, 'Логин — 3–32 символа: латинские буквы, цифры, точка, дефис или подчёркивание', headers);
@@ -121,6 +122,8 @@ Deno.serve(async (req) => {
       can_manage_orders: isAdminRole ? true : Boolean(permissions.can_manage_orders ?? true),
       can_view_client_stats: isAdminRole ? true : Boolean(permissions.can_view_client_stats ?? true),
       can_view_contacts_and_amounts: isAdminRole ? true : Boolean(permissions.can_view_contacts_and_amounts ?? true),
+      can_manage_own_schedule: isAdminRole ? true : Boolean(permissions.can_manage_own_schedule ?? false),
+      default_vehicle_id: role === 'driver' ? defaultVehicleId : null,
     })
     .select()
     .single();

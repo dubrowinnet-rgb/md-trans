@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { Button, Dialog, Divider, HelperText, Portal, SegmentedButtons, Switch, Text, TextInput } from 'react-native-paper';
+import { Button, Chip, Dialog, Divider, HelperText, Portal, SegmentedButtons, Switch, Text, TextInput } from 'react-native-paper';
 import { useCreateAccount, useUpdateAccount, type Account, type AccountPermissions } from '../../api/accounts';
+import { useVehicles } from '../../api/vehicles';
 import type { AccountRole } from '../../types/database';
 import { ACCOUNT_ROLE_LABELS } from '../../theme';
 
@@ -19,10 +20,30 @@ const ROLE_OPTIONS: { value: AccountRole; label: string }[] = [
 // сумму, оно не выключается галочкой, см. lib/permissions.ts), грузчику —
 // только просмотр. Админ может донастроить это на конкретном аккаунте.
 const ROLE_DEFAULT_PERMISSIONS: Record<AccountRole, AccountPermissions> = {
-  admin: { can_manage_orders: true, can_view_client_stats: true, can_view_contacts_and_amounts: true },
-  dispatcher: { can_manage_orders: true, can_view_client_stats: true, can_view_contacts_and_amounts: true },
-  driver: { can_manage_orders: false, can_view_client_stats: false, can_view_contacts_and_amounts: true },
-  loader: { can_manage_orders: false, can_view_client_stats: false, can_view_contacts_and_amounts: false },
+  admin: {
+    can_manage_orders: true,
+    can_view_client_stats: true,
+    can_view_contacts_and_amounts: true,
+    can_manage_own_schedule: true,
+  },
+  dispatcher: {
+    can_manage_orders: true,
+    can_view_client_stats: true,
+    can_view_contacts_and_amounts: true,
+    can_manage_own_schedule: false,
+  },
+  driver: {
+    can_manage_orders: false,
+    can_view_client_stats: false,
+    can_view_contacts_and_amounts: true,
+    can_manage_own_schedule: false,
+  },
+  loader: {
+    can_manage_orders: false,
+    can_view_client_stats: false,
+    can_view_contacts_and_amounts: false,
+    can_manage_own_schedule: false,
+  },
 };
 
 // Один диалог на создание (account === null, спрашивает логин и пароль —
@@ -44,10 +65,13 @@ export function AccountDialog({ account, onClose }: { account: Account | null; o
           can_manage_orders: account.can_manage_orders,
           can_view_client_stats: account.can_view_client_stats,
           can_view_contacts_and_amounts: account.can_view_contacts_and_amounts,
+          can_manage_own_schedule: account.can_manage_own_schedule,
         }
       : ROLE_DEFAULT_PERMISSIONS[role]
   );
+  const [defaultVehicleId, setDefaultVehicleId] = useState<string | null>(account?.default_vehicle_id ?? null);
   const [error, setError] = useState<string | null>(null);
+  const vehiclesQuery = useVehicles();
 
   const togglePermission = (key: keyof AccountPermissions) =>
     setPermissions((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -65,8 +89,12 @@ export function AccountDialog({ account, onClose }: { account: Account | null; o
   const handleSave = async () => {
     setError(null);
     try {
+      // Авто по умолчанию имеет смысл только у водителя — при другой роли
+      // всегда отправляем null, чтобы очистить поле, если админ, скажем,
+      // переводит бывшего водителя в диспетчеры.
+      const vehicleForRole = role === 'driver' ? defaultVehicleId : null;
       if (account) {
-        await updateAccount.mutateAsync({ id: account.id, role, permissions });
+        await updateAccount.mutateAsync({ id: account.id, role, permissions, default_vehicle_id: vehicleForRole });
       } else {
         if (!name.trim()) throw new Error('Укажите имя');
         await createAccount.mutateAsync({
@@ -76,6 +104,7 @@ export function AccountDialog({ account, onClose }: { account: Account | null; o
           phone: phone.trim() || undefined,
           role,
           permissions,
+          default_vehicle_id: vehicleForRole,
         });
       }
       onClose();
@@ -125,6 +154,31 @@ export function AccountDialog({ account, onClose }: { account: Account | null; o
             <SegmentedButtons value={role} onValueChange={handleRoleChange} buttons={ROLE_OPTIONS.slice(0, 2)} />
             <SegmentedButtons value={role} onValueChange={handleRoleChange} buttons={ROLE_OPTIONS.slice(2)} />
 
+            {role === 'driver' && (
+              <>
+                <Divider style={styles.divider} />
+                <Text variant="labelLarge">Авто по умолчанию</Text>
+                <Text variant="bodySmall" style={styles.muted}>
+                  Диспетчер сможет назначить другое авто на конкретный заказ.
+                </Text>
+                <View style={styles.chipRow}>
+                  <Chip selected={defaultVehicleId === null} onPress={() => setDefaultVehicleId(null)} style={styles.chip}>
+                    Не назначено
+                  </Chip>
+                  {(vehiclesQuery.data ?? []).map((vehicle) => (
+                    <Chip
+                      key={vehicle.id}
+                      selected={defaultVehicleId === vehicle.id}
+                      onPress={() => setDefaultVehicleId(vehicle.id)}
+                      style={styles.chip}
+                    >
+                      {`${vehicle.name} · ${vehicle.plate}`}
+                    </Chip>
+                  ))}
+                </View>
+              </>
+            )}
+
             {role === 'admin' ? (
               <Text variant="bodySmall" style={styles.muted}>
                 У администратора всегда полный доступ.
@@ -160,6 +214,13 @@ export function AccountDialog({ account, onClose }: { account: Account | null; o
                   value={permissions.can_view_contacts_and_amounts}
                   onChange={() => togglePermission('can_view_contacts_and_amounts')}
                 />
+                {(role === 'driver' || role === 'loader') && (
+                  <PermissionRow
+                    label="Может сам ставить себе выходные"
+                    value={permissions.can_manage_own_schedule}
+                    onChange={() => togglePermission('can_manage_own_schedule')}
+                  />
+                )}
               </>
             )}
             {error && <HelperText type="error">{error}</HelperText>}
@@ -204,6 +265,14 @@ const styles = StyleSheet.create({
   },
   divider: {
     marginVertical: 4,
+  },
+  chipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  chip: {
+    marginBottom: 4,
   },
   permissionRow: {
     flexDirection: 'row',

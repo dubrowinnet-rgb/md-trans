@@ -9,6 +9,7 @@ export interface AccountPermissions {
   can_manage_orders: boolean;
   can_view_client_stats: boolean;
   can_view_contacts_and_amounts: boolean;
+  can_manage_own_schedule: boolean;
 }
 
 // Все аккаунты (админы, диспетчеры, водители, грузчики) — для экрана
@@ -35,6 +36,7 @@ export interface CreateAccountInput {
   phone?: string;
   role: AccountRole;
   permissions: AccountPermissions;
+  default_vehicle_id?: string | null;
 }
 
 // Заводит логин и пароль через Edge Function (supabase/functions/create-account)
@@ -78,14 +80,16 @@ export function useUpdateAccount() {
       id,
       role,
       permissions,
+      default_vehicle_id,
     }: {
       id: string;
       role: AccountRole;
       permissions: AccountPermissions;
+      default_vehicle_id?: string | null;
     }) => {
       const { error } = await supabase
         .from('employees')
-        .update({ role, ...permissions })
+        .update({ role, ...permissions, ...(default_vehicle_id !== undefined ? { default_vehicle_id } : {}) })
         .eq('id', id);
       if (error) throw error;
     },

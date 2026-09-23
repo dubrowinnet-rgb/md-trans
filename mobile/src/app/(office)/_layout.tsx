@@ -37,6 +37,24 @@ export default function OfficeLayout() {
         }}
       />
       <Tabs.Screen
+        name="fleet"
+        options={{
+          title: 'Автопарк',
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons name="truck-outline" color={color} size={size} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="schedule"
+        options={{
+          title: 'График',
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons name="calendar-remove-outline" color={color} size={size} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="team"
         options={{
           title: 'Команда',
