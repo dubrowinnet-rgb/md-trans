@@ -75,6 +75,13 @@ supabase functions deploy create-account
 Больше ничего настраивать не нужно: `SUPABASE_URL`, `SUPABASE_ANON_KEY` и
 `SUPABASE_SERVICE_ROLE_KEY` функция получает от платформы автоматически.
 
+Для веб-кабинета (`web/`) нужна ещё одна функция — `send-push`: через неё
+кабинет шлёт push бригаде (из браузера напрямую в Expo отправить нельзя).
+
+```bash
+supabase functions deploy send-push
+```
+
 ## Что создаётся
 
 7 таблиц одного тенанта (без `org_id` — мультитенантность добавится отдельной
