@@ -1,12 +1,7 @@
-import { StyleSheet } from 'react-native';
-import { Text, TouchableRipple } from 'react-native-paper';
+import { Pressable, StyleSheet, Text } from 'react-native';
 import type { OrderWithDetails } from '../../api/orders';
-import { ORDER_STATUS_COLORS } from '../../theme';
-import { formatTime, minutesFromCalendarStart, PIXELS_PER_MINUTE } from '../../utils/date';
-
-function primaryAddress(order: OrderWithDetails, type: 'pickup' | 'dropoff') {
-  return order.order_stops.find((s) => s.is_primary && s.type === type)?.address;
-}
+import { formatTime, minutesFromDayStart, PIXELS_PER_MINUTE, GRID_HEIGHT } from '../../utils/date';
+import { orderColor } from './orderLayout';
 
 function crewConfirmed(order: OrderWithDetails) {
   if (order.order_crew.length === 0) return null;
@@ -14,64 +9,85 @@ function crewConfirmed(order: OrderWithDetails) {
   return `${confirmed}/${order.order_crew.length} приняли`;
 }
 
+// Карточка заказа в сетке, как в Bumpix: «время, клиент, услуга, (адрес)» белым
+// текстом на цвете услуги.
 export function OrderBlock({
   order,
+  lane,
+  lanes,
+  columnWidth,
+  now,
+  compact,
   onPress,
 }: {
   order: OrderWithDetails;
+  lane: number;
+  lanes: number;
+  columnWidth: number;
+  now: Date;
+  compact: boolean;
   onPress: (order: OrderWithDetails) => void;
 }) {
   const start = new Date(order.scheduled_start);
   const end = new Date(order.scheduled_end);
-  const top = minutesFromCalendarStart(start) * PIXELS_PER_MINUTE;
+  const top = minutesFromDayStart(start) * PIXELS_PER_MINUTE;
   const durationMinutes = (end.getTime() - start.getTime()) / 60000;
-  const height = Math.max(durationMinutes * PIXELS_PER_MINUTE, 34);
-  const colors = ORDER_STATUS_COLORS[order.status] ?? ORDER_STATUS_COLORS.new;
-  const pickup = primaryAddress(order, 'pickup');
+  const height = Math.min(Math.max(durationMinutes * PIXELS_PER_MINUTE, 22), GRID_HEIGHT - top);
+  const laneWidth = columnWidth / lanes;
+  const pickup = order.order_stops.find((s) => s.is_primary && s.type === 'pickup')?.address;
+  const service = order.order_services[0]?.services?.name;
   const confirmation = crewConfirmed(order);
+  const cancelled = order.status === 'cancelled';
 
   return (
-    <TouchableRipple
+    <Pressable
       onPress={() => onPress(order)}
-      borderless
       style={[
         styles.block,
-        { top, height, backgroundColor: colors.bg, borderLeftColor: colors.border },
+        {
+          top,
+          height,
+          left: lane * laneWidth + 1,
+          width: laneWidth - 2,
+          backgroundColor: orderColor(order, now),
+          opacity: cancelled ? 0.45 : 1,
+        },
       ]}
     >
-      <>
-        <Text variant="labelSmall" style={styles.bold} numberOfLines={1}>
-          {formatTime(start)}–{formatTime(end)}
-        </Text>
-        <Text variant="labelSmall" style={styles.bold} numberOfLines={1}>
-          {order.clients?.name ?? 'Без клиента'}
-        </Text>
-        {pickup && (
-          <Text variant="bodySmall" numberOfLines={1}>
-            {pickup}
-          </Text>
-        )}
-        {confirmation && (
-          <Text variant="bodySmall" numberOfLines={1}>
-            {confirmation}
-          </Text>
-        )}
-      </>
-    </TouchableRipple>
+      <Text style={[styles.text, compact && styles.compact]}>
+        {formatTime(start)} - {formatTime(end)},{' '}
+        <Text style={styles.bold}>{order.clients?.name ?? 'Без клиента'}</Text>
+        {service ? `, ${service}` : ''}
+        {pickup ? `, (${pickup})` : ''}
+        {cancelled ? ' · отменён' : ''}
+      </Text>
+      {confirmation && !compact && <Text style={[styles.text, styles.confirmation]}>{confirmation}</Text>}
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   block: {
     position: 'absolute',
-    left: 2,
-    right: 2,
-    borderLeftWidth: 3,
-    borderRadius: 6,
-    padding: 4,
+    borderRadius: 2,
+    paddingHorizontal: 3,
+    paddingVertical: 2,
     overflow: 'hidden',
+  },
+  text: {
+    color: '#ffffff',
+    fontSize: 11,
+    lineHeight: 14,
+  },
+  compact: {
+    fontSize: 9,
+    lineHeight: 11,
   },
   bold: {
     fontWeight: '700',
+  },
+  confirmation: {
+    marginTop: 2,
+    opacity: 0.9,
   },
 });

@@ -1,15 +1,15 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
-import { Appbar, Banner, FAB } from 'react-native-paper';
+import { Appbar, Banner, FAB, ProgressBar } from 'react-native-paper';
 import { useEmployees } from '../../api/employees';
-import { useOrdersForRange } from '../../api/orders';
+import { useOrdersForRange, type OrderWithDetails } from '../../api/orders';
 import { supabase } from '../../lib/supabase';
 import { useCalendarNav } from '../../hooks/useCalendarNav';
-import { CalendarGrid } from '../../components/calendar/CalendarGrid';
+import { PagedCalendar } from '../../components/calendar/PagedCalendar';
 import { CalendarToolbar } from '../../components/calendar/CalendarToolbar';
 import { ALL_EMPLOYEES, EmployeeFilter } from '../../components/calendar/EmployeeFilter';
-import { dayColumns, employeeColumns } from '../../components/calendar/columns';
+import { formatHeaderDate } from '../../utils/date';
 
 export default function DispatcherCalendarScreen() {
   const nav = useCalendarNav();
@@ -28,41 +28,31 @@ export default function DispatcherCalendarScreen() {
   const loadError = employeesQuery.error ?? ordersQuery.error;
   const noEmployees = employees.length === 0 && !employeesQuery.isLoading && !employeesQuery.isError;
 
-  // «День» + «Все» — колонка на каждого сотрудника; иначе колонка на каждый день.
-  const byEmployee = nav.viewMode === 'day' && activeEmployeeId === ALL_EMPLOYEES && employees.length > 0;
-  const columns = byEmployee
-    ? employeeColumns(nav.anchorDate, employees, allOrders)
-    : dayColumns(nav.days, orders);
-
-  const openNewOrder = (start?: Date, employeeId?: string) => {
-    const preset = employeeId ?? (activeEmployeeId === ALL_EMPLOYEES ? undefined : activeEmployeeId);
-    router.push({
-      pathname: '/order/new',
-      params: {
-        ...(start ? { start: start.toISOString() } : {}),
-        ...(preset ? { employeeId: preset } : {}),
-      },
-    });
-  };
+  const openNewOrder = useCallback(
+    (start?: Date) => {
+      const preset = activeEmployeeId === ALL_EMPLOYEES ? undefined : activeEmployeeId;
+      router.push({
+        pathname: '/order/new',
+        params: {
+          ...(start ? { start: start.toISOString() } : {}),
+          ...(preset ? { employeeId: preset } : {}),
+        },
+      });
+    },
+    [activeEmployeeId]
+  );
+  const openOrder = useCallback((order: OrderWithDetails) => router.push(`/order/${order.id}`), []);
 
   return (
     <View style={styles.container}>
       <Appbar.Header>
-        <Appbar.Content title="Календарь" />
+        <Appbar.Content title={formatHeaderDate(nav.anchor)} titleStyle={styles.title} />
         <Appbar.Action icon="calendar-today" onPress={nav.goToday} accessibilityLabel="Сегодня" />
         <Appbar.Action icon="logout" onPress={() => supabase.auth.signOut()} accessibilityLabel="Выйти" />
       </Appbar.Header>
 
       <EmployeeFilter employees={employees} activeId={activeEmployeeId} onSelect={setActiveEmployeeId} />
-
-      <CalendarToolbar
-        anchorDate={nav.anchorDate}
-        viewMode={nav.viewMode}
-        onPrev={nav.goPrev}
-        onNext={nav.goNext}
-        onToday={nav.goToday}
-        onSetViewMode={nav.setViewMode}
-      />
+      <CalendarToolbar mode={nav.mode} onPrev={nav.goPrev} onNext={nav.goNext} onSetMode={nav.setMode} />
 
       <Banner visible={Boolean(loadError)} icon="alert-circle-outline">
         {`Ошибка загрузки данных: ${loadError?.message ?? ''}`}
@@ -74,12 +64,19 @@ export default function DispatcherCalendarScreen() {
       >
         Нет ни одного сотрудника. Добавьте водителя или грузчика, чтобы назначать их на заказы.
       </Banner>
+      {/* Обёртка с фиксированной высотой: в браузере ProgressBar растягивается на 100%. */}
+      <View style={styles.progress}>
+        <ProgressBar indeterminate visible={ordersQuery.isFetching} />
+      </View>
 
-      <CalendarGrid
-        columns={columns}
-        isLoading={ordersQuery.isLoading || employeesQuery.isLoading}
-        onPressOrder={(order) => router.push(`/order/${order.id}`)}
-        onPressSlot={(start, column) => openNewOrder(start, column.employeeId)}
+      <PagedCalendar
+        mode={nav.mode}
+        anchor={nav.anchor}
+        onAnchorChange={nav.setAnchor}
+        orders={orders}
+        onPressOrder={openOrder}
+        onPressSlot={openNewOrder}
+        scrollToNowSignal={nav.nowSignal}
       />
 
       <FAB icon="plus" style={styles.fab} onPress={() => openNewOrder()} accessibilityLabel="Новый заказ" />
@@ -90,6 +87,12 @@ export default function DispatcherCalendarScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  progress: {
+    height: 4,
+  },
+  title: {
+    textTransform: 'capitalize',
   },
   fab: {
     position: 'absolute',

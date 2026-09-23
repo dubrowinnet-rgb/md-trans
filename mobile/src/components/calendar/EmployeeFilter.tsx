@@ -45,6 +45,7 @@ export function EmployeeFilter({
 const styles = StyleSheet.create({
   container: {
     flexGrow: 0,
+    flexShrink: 0,
   },
   content: {
     paddingHorizontal: 12,

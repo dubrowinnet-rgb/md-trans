@@ -1,8 +1,8 @@
 import {
   addDays,
   addMinutes,
+  differenceInCalendarDays,
   differenceInMinutes,
-  eachDayOfInterval,
   endOfDay,
   format,
   isSameDay,
@@ -11,24 +11,13 @@ import {
 } from 'date-fns';
 import { ru } from 'date-fns/locale';
 
-export const CALENDAR_START_HOUR = 7;
-export const CALENDAR_END_HOUR = 21;
+// Сетка календаря — целые сутки, чтобы линия текущего времени была видна всегда.
 export const PIXELS_PER_MINUTE = 1.2;
+export const HOUR_HEIGHT = 60 * PIXELS_PER_MINUTE;
+export const GRID_HEIGHT = 24 * HOUR_HEIGHT;
 
-export function weekDays(anchor: Date): Date[] {
-  const start = startOfWeek(anchor, { weekStartsOn: 1 });
-  return eachDayOfInterval({ start, end: addDays(start, 6) });
-}
-
-export function dayBounds(date: Date) {
-  const start = addMinutes(startOfDay(date), CALENDAR_START_HOUR * 60);
-  const end = addMinutes(startOfDay(date), CALENDAR_END_HOUR * 60);
-  return { start, end };
-}
-
-export function minutesFromCalendarStart(date: Date) {
-  const { start } = dayBounds(date);
-  return differenceInMinutes(date, start);
+export function minutesFromDayStart(date: Date) {
+  return differenceInMinutes(date, startOfDay(date));
 }
 
 export function formatDayLabel(date: Date) {
@@ -43,4 +32,20 @@ export function formatTime(date: Date) {
   return format(date, 'HH:mm');
 }
 
-export { addDays, addMinutes, endOfDay, isSameDay, startOfDay, startOfWeek };
+export function formatShortMonth(date: Date) {
+  return format(date, 'LLL', { locale: ru }).replace('.', '');
+}
+
+export function formatWeekday(date: Date) {
+  return format(date, 'EEEEEE', { locale: ru });
+}
+
+export {
+  addDays,
+  addMinutes,
+  differenceInCalendarDays,
+  endOfDay,
+  isSameDay,
+  startOfDay,
+  startOfWeek,
+};

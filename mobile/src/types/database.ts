@@ -66,6 +66,7 @@ export interface Database {
           base_duration_minutes: number | null;
           base_price: number | null;
           category: string | null;
+          color: string;
           created_at: string;
         };
         Insert: {
@@ -74,6 +75,7 @@ export interface Database {
           base_duration_minutes?: number | null;
           base_price?: number | null;
           category?: string | null;
+          color?: string;
         };
         Update: Partial<Database['public']['Tables']['services']['Insert']>;
         Relationships: [];
@@ -173,6 +175,7 @@ export interface Database {
           p_comment: string | null;
           p_stops: unknown;
           p_crew: unknown;
+          p_services?: unknown;
         };
         Returns: string;
       };

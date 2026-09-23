@@ -1,22 +1,48 @@
-import { useMemo, useState } from 'react';
-import { addDays, dayBounds, startOfDay, weekDays } from '../utils/date';
+import { useCallback, useMemo, useState } from 'react';
+import { addDays, startOfDay, startOfWeek } from '../utils/date';
 
-export type ViewMode = 'day' | 'week';
+export type DaysMode = 1 | 3 | 7;
 
+// Сколько страниц календарь держит отрисованными слева и справа от текущей.
+export const PAGES_AROUND = 2;
+
+export function alignToMode(date: Date, mode: DaysMode) {
+  return mode === 7 ? startOfWeek(date, { weekStartsOn: 1 }) : startOfDay(date);
+}
+
+// Состояние календаря: режим 1/3/7 дней и первый видимый день страницы.
+// Заказы грузим на все отрисованные страницы, чтобы листание не ждало сети.
 export function useCalendarNav() {
-  const [viewMode, setViewMode] = useState<ViewMode>('day');
-  const [anchorDate, setAnchorDate] = useState(() => startOfDay(new Date()));
+  const [mode, setModeState] = useState<DaysMode>(3);
+  const [anchor, setAnchor] = useState(() => startOfDay(new Date()));
+  // Счётчик запросов «прокрутить к текущему времени» (кнопка «Сегодня»).
+  const [nowSignal, setNowSignal] = useState(0);
 
-  const days = useMemo(
-    () => (viewMode === 'day' ? [anchorDate] : weekDays(anchorDate)),
-    [viewMode, anchorDate]
+  const { rangeStart, rangeEnd } = useMemo(
+    () => ({
+      rangeStart: addDays(anchor, -PAGES_AROUND * mode),
+      rangeEnd: addDays(anchor, (PAGES_AROUND + 1) * mode),
+    }),
+    [anchor, mode]
   );
-  const rangeStart = dayBounds(days[0]).start;
-  const rangeEnd = dayBounds(days[days.length - 1]).end;
 
-  const goToday = () => setAnchorDate(startOfDay(new Date()));
-  const goPrev = () => setAnchorDate((d) => addDays(d, viewMode === 'day' ? -1 : -7));
-  const goNext = () => setAnchorDate((d) => addDays(d, viewMode === 'day' ? 1 : 7));
+  // Если на экране был сегодняшний день, после смены режима он остаётся на экране.
+  const setMode = useCallback(
+    (next: DaysMode) => {
+      const today = startOfDay(new Date());
+      const showsToday = today >= anchor && today < addDays(anchor, mode);
+      setModeState(next);
+      setAnchor(alignToMode(showsToday ? today : anchor, next));
+    },
+    [anchor, mode]
+  );
 
-  return { viewMode, setViewMode, anchorDate, days, rangeStart, rangeEnd, goToday, goPrev, goNext };
+  const goPrev = useCallback(() => setAnchor((a) => addDays(a, -mode)), [mode]);
+  const goNext = useCallback(() => setAnchor((a) => addDays(a, mode)), [mode]);
+  const goToday = useCallback(() => {
+    setAnchor(alignToMode(new Date(), mode));
+    setNowSignal((n) => n + 1);
+  }, [mode]);
+
+  return { mode, setMode, anchor, setAnchor, rangeStart, rangeEnd, goPrev, goNext, goToday, nowSignal };
 }

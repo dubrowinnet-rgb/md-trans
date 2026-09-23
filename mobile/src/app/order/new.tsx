@@ -16,6 +16,8 @@ import {
 import { useEmployees } from '../../api/employees';
 import { useClients, useCreateClient, type Client } from '../../api/clients';
 import { useBusyEmployeeIds, useCreateOrder, type CreateOrderStopInput } from '../../api/orders';
+import { useServices } from '../../api/services';
+import { ServicePicker, formatServiceMeta } from '../../components/form/ServicePicker';
 import { DateTimeField } from '../../components/form/DateTimeField';
 import { FormSection } from '../../components/form/FormSection';
 
@@ -60,6 +62,11 @@ export default function NewOrderScreen() {
   const [driverId, setDriverId] = useState<string | null>(null);
   const [loaderIds, setLoaderIds] = useState<string[]>([]);
   const [priceText, setPriceText] = useState('');
+  const [serviceIds, setServiceIds] = useState<string[]>([]);
+  const [servicePickerOpen, setServicePickerOpen] = useState(false);
+  // Сумма, которую мы сами подставили из услуг: её можно перезаписать при смене
+  // услуг, а сумму, вписанную диспетчером вручную, — нет.
+  const autoPrice = useRef('');
   const [comment, setComment] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -86,6 +93,26 @@ export default function NewOrderScreen() {
   const busyQuery = useBusyEmployeeIds(scheduledStart, scheduledEnd);
   const busyIds = busyQuery.data ?? new Set<string>();
   const createOrder = useCreateOrder();
+  const servicesQuery = useServices();
+  const services = servicesQuery.data ?? [];
+  const selectedServices = serviceIds
+    .map((id) => services.find((s) => s.id === id))
+    .filter((s): s is NonNullable<typeof s> => Boolean(s));
+
+  // Как в Bumpix: выбранные услуги задают длительность и подставляют сумму.
+  const applyServices = (ids: string[]) => {
+    setServiceIds(ids);
+    setServicePickerOpen(false);
+    const picked = ids.map((id) => services.find((s) => s.id === id)).filter(Boolean);
+    const minutes = picked.reduce((sum, s) => sum + (s?.base_duration_minutes ?? 0), 0);
+    const price = picked.reduce((sum, s) => sum + Number(s?.base_price ?? 0), 0);
+    if (minutes > 0) setEndTime(new Date(startTime.getTime() + minutes * 60000));
+    if (priceText.trim() === '' || priceText === autoPrice.current) {
+      const next = price > 0 ? String(price) : '';
+      autoPrice.current = next;
+      setPriceText(next);
+    }
+  };
 
   const toggleLoader = (id: string) =>
     setLoaderIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -110,6 +137,7 @@ export default function NewOrderScreen() {
 
   const timeValid = scheduledEnd > scheduledStart;
   const canSubmit =
+    selectedClient !== null &&
     pickupAddress.trim().length > 0 &&
     dropoffAddress.trim().length > 0 &&
     timeValid &&
@@ -117,6 +145,10 @@ export default function NewOrderScreen() {
 
   const handleSubmit = async () => {
     setFormError(null);
+    if (!selectedClient) {
+      setFormError('Выберите или добавьте клиента: заказ без клиента создать нельзя.');
+      return;
+    }
     if (!canSubmit) {
       setFormError('Заполните адреса загрузки и выгрузки и проверьте, что окончание позже начала.');
       return;
@@ -137,7 +169,7 @@ export default function NewOrderScreen() {
 
     try {
       await createOrder.mutateAsync({
-        client_id: selectedClient?.id ?? null,
+        client_id: selectedClient.id,
         cargo_description: cargoDescription,
         scheduled_start: scheduledStart,
         scheduled_end: scheduledEnd,
@@ -145,6 +177,7 @@ export default function NewOrderScreen() {
         comment,
         stops,
         crew,
+        services: serviceIds.map((id) => ({ service_id: id, qty: 1 })),
       });
       router.back();
     } catch (err) {
@@ -164,7 +197,7 @@ export default function NewOrderScreen() {
           {!timeValid && <HelperText type="error">Окончание должно быть позже начала</HelperText>}
         </FormSection>
 
-        <FormSection title="Клиент">
+        <FormSection title="Клиент *">
           {selectedClient ? (
             <Surface style={styles.selected} elevation={1}>
               <List.Item
@@ -179,6 +212,9 @@ export default function NewOrderScreen() {
             </Surface>
           ) : (
             <>
+              <Text variant="bodySmall" style={styles.muted}>
+                Заказ без клиента создать нельзя: выберите клиента или добавьте нового.
+              </Text>
               <Searchbar placeholder="Поиск клиента по имени" value={clientSearch} onChangeText={setClientSearch} />
               {clientsQuery.isError && (
                 <HelperText type="error">{`Ошибка загрузки клиентов: ${clientsQuery.error.message}`}</HelperText>
@@ -212,6 +248,37 @@ export default function NewOrderScreen() {
                 Добавить клиента
               </Button>
             </>
+          )}
+        </FormSection>
+
+        <FormSection title="Услуги">
+          {selectedServices.map((service) => (
+            <View key={service.id} style={styles.serviceRow}>
+              <View style={[styles.serviceBar, { backgroundColor: service.color }]} />
+              <View style={styles.flex}>
+                <Text variant="bodyLarge">{service.name}</Text>
+                <Text variant="bodySmall" style={styles.muted}>
+                  {formatServiceMeta(service)}
+                </Text>
+              </View>
+            </View>
+          ))}
+          <Button
+            mode="outlined"
+            icon={selectedServices.length ? 'pencil' : 'plus'}
+            onPress={() => setServicePickerOpen(true)}
+          >
+            {selectedServices.length ? 'Изменить услуги' : 'Выбрать услуги'}
+          </Button>
+          {servicePickerOpen && (
+            <ServicePicker
+              visible
+              services={services}
+              selectedIds={serviceIds}
+              loadError={servicesQuery.error?.message}
+              onDismiss={() => setServicePickerOpen(false)}
+              onSave={applyServices}
+            />
           )}
         </FormSection>
 
@@ -341,7 +408,7 @@ export default function NewOrderScreen() {
           mode="contained"
           onPress={handleSubmit}
           loading={createOrder.isPending}
-          disabled={!canSubmit}
+          disabled={createOrder.isPending}
           style={styles.submit}
         >
           Создать заказ
@@ -366,6 +433,19 @@ const styles = StyleSheet.create({
   },
   selected: {
     borderRadius: 12,
+  },
+  serviceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  serviceBar: {
+    width: 4,
+    alignSelf: 'stretch',
+    borderRadius: 2,
+  },
+  muted: {
+    opacity: 0.6,
   },
   chips: {
     flexDirection: 'row',

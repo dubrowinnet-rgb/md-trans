@@ -1,13 +1,14 @@
+import { useCallback } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
-import { Appbar, Banner } from 'react-native-paper';
-import { useOrdersForRange } from '../../api/orders';
+import { Appbar, Banner, ProgressBar, Text } from 'react-native-paper';
+import { useOrdersForRange, type OrderWithDetails } from '../../api/orders';
 import { supabase } from '../../lib/supabase';
 import { useSession } from '../../providers/SessionProvider';
 import { useCalendarNav } from '../../hooks/useCalendarNav';
-import { CalendarGrid } from '../../components/calendar/CalendarGrid';
+import { PagedCalendar } from '../../components/calendar/PagedCalendar';
 import { CalendarToolbar } from '../../components/calendar/CalendarToolbar';
-import { dayColumns } from '../../components/calendar/columns';
+import { formatHeaderDate } from '../../utils/date';
 
 // Календарь водителя/грузчика: та же сетка, только собственные заказы и без создания.
 export default function EmployeeCalendarScreen() {
@@ -18,34 +19,42 @@ export default function EmployeeCalendarScreen() {
   const orders = (ordersQuery.data ?? []).filter((o) =>
     o.order_crew.some((c) => c.employee_id === employee?.id)
   );
+  const openOrder = useCallback((order: OrderWithDetails) => router.push(`/order/${order.id}`), []);
 
   return (
     <View style={styles.container}>
       <Appbar.Header>
         <Appbar.Content
-          title={employee?.name ?? ''}
-          subtitle={employee?.role === 'driver' ? 'Водитель' : 'Грузчик'}
+          title={
+            <View>
+              <Text variant="titleMedium">{employee?.name ?? ''}</Text>
+              <Text variant="bodySmall" style={styles.subtitle}>
+                {`${employee?.role === 'driver' ? 'Водитель' : 'Грузчик'} · ${formatHeaderDate(nav.anchor)}`}
+              </Text>
+            </View>
+          }
         />
+        <Appbar.Action icon="calendar-today" onPress={nav.goToday} accessibilityLabel="Сегодня" />
         <Appbar.Action icon="logout" onPress={() => supabase.auth.signOut()} accessibilityLabel="Выйти" />
       </Appbar.Header>
 
-      <CalendarToolbar
-        anchorDate={nav.anchorDate}
-        viewMode={nav.viewMode}
-        onPrev={nav.goPrev}
-        onNext={nav.goNext}
-        onToday={nav.goToday}
-        onSetViewMode={nav.setViewMode}
-      />
+      <CalendarToolbar mode={nav.mode} onPrev={nav.goPrev} onNext={nav.goNext} onSetMode={nav.setMode} />
 
       <Banner visible={ordersQuery.isError} icon="alert-circle-outline">
         {`Ошибка загрузки заказов: ${ordersQuery.error?.message ?? ''}`}
       </Banner>
+      {/* Обёртка с фиксированной высотой: в браузере ProgressBar растягивается на 100%. */}
+      <View style={styles.progress}>
+        <ProgressBar indeterminate visible={ordersQuery.isFetching} />
+      </View>
 
-      <CalendarGrid
-        columns={dayColumns(nav.days, orders)}
-        isLoading={ordersQuery.isLoading}
-        onPressOrder={(order) => router.push(`/order/${order.id}`)}
+      <PagedCalendar
+        mode={nav.mode}
+        anchor={nav.anchor}
+        onAnchorChange={nav.setAnchor}
+        orders={orders}
+        onPressOrder={openOrder}
+        scrollToNowSignal={nav.nowSignal}
       />
     </View>
   );
@@ -54,5 +63,11 @@ export default function EmployeeCalendarScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  progress: {
+    height: 4,
+  },
+  subtitle: {
+    opacity: 0.7,
   },
 });

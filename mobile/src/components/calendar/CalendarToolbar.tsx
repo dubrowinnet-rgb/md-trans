@@ -1,42 +1,33 @@
 import { StyleSheet, View } from 'react-native';
-import { IconButton, SegmentedButtons, Text } from 'react-native-paper';
-import type { ViewMode } from '../../hooks/useCalendarNav';
-import { formatDayLabel, formatHeaderDate } from '../../utils/date';
+import { IconButton, SegmentedButtons } from 'react-native-paper';
+import type { DaysMode } from '../../hooks/useCalendarNav';
 
 export function CalendarToolbar({
-  anchorDate,
-  viewMode,
+  mode,
   onPrev,
   onNext,
-  onToday,
-  onSetViewMode,
+  onSetMode,
 }: {
-  anchorDate: Date;
-  viewMode: ViewMode;
+  mode: DaysMode;
   onPrev: () => void;
   onNext: () => void;
-  onToday: () => void;
-  onSetViewMode: (mode: ViewMode) => void;
+  onSetMode: (mode: DaysMode) => void;
 }) {
   return (
     <View style={styles.row}>
-      <View style={styles.nav}>
-        <IconButton icon="chevron-left" size={20} onPress={onPrev} accessibilityLabel="Назад" />
-        <Text variant="titleSmall" style={styles.date} onPress={onToday}>
-          {viewMode === 'day' ? formatDayLabel(anchorDate) : formatHeaderDate(anchorDate)}
-        </Text>
-        <IconButton icon="chevron-right" size={20} onPress={onNext} accessibilityLabel="Вперёд" />
-      </View>
+      <IconButton icon="chevron-left" size={22} onPress={onPrev} accessibilityLabel="Назад" />
       <SegmentedButtons
         style={styles.modes}
         density="small"
-        value={viewMode}
-        onValueChange={(value) => onSetViewMode(value as ViewMode)}
+        value={String(mode)}
+        onValueChange={(value) => onSetMode(Number(value) as DaysMode)}
         buttons={[
-          { value: 'day', label: 'День' },
-          { value: 'week', label: 'Неделя' },
+          { value: '1', label: '1 день' },
+          { value: '3', label: '3 дня' },
+          { value: '7', label: '7 дней' },
         ]}
       />
+      <IconButton icon="chevron-right" size={22} onPress={onNext} accessibilityLabel="Вперёд" />
     </View>
   );
 }
@@ -46,17 +37,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 4,
-    paddingRight: 12,
-  },
-  nav: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  date: {
-    textTransform: 'capitalize',
   },
   modes: {
-    width: 180,
+    flex: 1,
   },
 });

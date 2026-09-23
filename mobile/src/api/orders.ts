@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { sendPushNotifications } from '../lib/pushNotifications';
 import type { CrewStatus, Database, EmployeeRole, OrderStatus, StopType } from '../types/database';
@@ -7,15 +7,17 @@ type OrderRow = Database['public']['Tables']['orders']['Row'];
 type ClientRow = Database['public']['Tables']['clients']['Row'];
 type StopRow = Database['public']['Tables']['order_stops']['Row'];
 type CrewRow = Database['public']['Tables']['order_crew']['Row'];
+type ServiceRow = Database['public']['Tables']['services']['Row'];
 
 export interface OrderWithDetails extends OrderRow {
   clients: Pick<ClientRow, 'id' | 'name' | 'phone' | 'discount_percent'> | null;
   order_stops: StopRow[];
   order_crew: (CrewRow & { employees: { id: string; name: string; role: EmployeeRole } | null })[];
+  order_services: { qty: number; services: Pick<ServiceRow, 'id' | 'name' | 'color'> | null }[];
 }
 
 const ORDER_SELECT =
-  '*, clients(id, name, phone, discount_percent), order_stops(*), order_crew(*, employees(id, name, role))';
+  '*, clients(id, name, phone, discount_percent), order_stops(*), order_crew(*, employees(id, name, role)), order_services(qty, services(id, name, color))';
 
 export function useOrdersForRange(rangeStart: Date, rangeEnd: Date) {
   const startIso = rangeStart.toISOString();
@@ -33,6 +35,9 @@ export function useOrdersForRange(rangeStart: Date, rangeEnd: Date) {
       if (error) throw error;
       return data as unknown as OrderWithDetails[];
     },
+    // При листании календаря диапазон меняется — держим прошлые данные, пока
+    // грузятся новые, чтобы сетка не мигала и не сбрасывала прокрутку.
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -105,8 +110,13 @@ export interface CreateOrderCrewInput {
   role: EmployeeRole;
 }
 
+export interface CreateOrderServiceInput {
+  service_id: string;
+  qty: number;
+}
+
 export interface CreateOrderInput {
-  client_id: string | null;
+  client_id: string;
   cargo_description: string;
   scheduled_start: Date;
   scheduled_end: Date;
@@ -114,6 +124,7 @@ export interface CreateOrderInput {
   comment: string;
   stops: CreateOrderStopInput[];
   crew: CreateOrderCrewInput[];
+  services: CreateOrderServiceInput[];
 }
 
 export function useCreateOrder() {
@@ -129,6 +140,7 @@ export function useCreateOrder() {
         p_comment: input.comment || null,
         p_stops: input.stops,
         p_crew: input.crew,
+        p_services: input.services,
       });
       if (error) throw error;
       const orderId = data as string;

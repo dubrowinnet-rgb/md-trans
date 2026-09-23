@@ -184,6 +184,16 @@ export default function OrderScreen() {
       <Divider />
 
       <List.Section title="Детали">
+        {order.order_services.map((item, index) => (
+          <List.Item
+            key={item.services?.id ?? index}
+            title={item.services?.name ?? 'Услуга'}
+            description={item.qty > 1 ? `Услуга · ${item.qty} шт.` : 'Услуга'}
+            left={() => (
+              <View style={[styles.serviceBar, { backgroundColor: item.services?.color ?? '#8E24AA' }]} />
+            )}
+          />
+        ))}
         <List.Item title={order.cargo_description || '—'} titleNumberOfLines={4} description="Груз" />
         <List.Item
           title={order.actual_price != null ? `${order.actual_price} ₽` : '—'}
@@ -228,6 +238,11 @@ const styles = StyleSheet.create({
   route: {
     marginHorizontal: 16,
     marginTop: 8,
+  },
+  serviceBar: {
+    width: 4,
+    marginLeft: 16,
+    borderRadius: 2,
   },
   moreStops: {
     alignSelf: 'flex-start',
