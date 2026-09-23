@@ -33,7 +33,13 @@
           "imageWidth": 76
         }
       ],
-      "expo-notifications"
+      "expo-notifications",
+      [
+        "expo-contacts",
+        {
+          "contactsPermission": "Приложение открывает контакты, чтобы добавить клиента из записной книжки."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

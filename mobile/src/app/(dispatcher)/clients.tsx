@@ -1,27 +1,16 @@
 import { useState } from 'react';
 import { FlatList, StyleSheet, View } from 'react-native';
-import {
-  ActivityIndicator,
-  Appbar,
-  Button,
-  Dialog,
-  Divider,
-  FAB,
-  HelperText,
-  List,
-  Portal,
-  Searchbar,
-  Text,
-  TextInput,
-} from 'react-native-paper';
-import { useClients, useCreateClient, useUpdateClient, type Client } from '../../api/clients';
+import { ActivityIndicator, Appbar, Divider, FAB, HelperText, List, Searchbar, Text } from 'react-native-paper';
+import { useClients, type Client } from '../../api/clients';
+import { ClientDialog } from '../../components/clients/ClientDialog';
+import { useNewClientFromContacts } from '../../hooks/useNewClientFromContacts';
 
 // База клиентов (раздел 5 ТЗ): поиск, карточка с телефоном и персональной скидкой.
 export default function ClientsScreen() {
   const [search, setSearch] = useState('');
   const clientsQuery = useClients(search);
-  // null — диалог закрыт, 'new' — новый клиент, иначе редактируемый клиент.
-  const [editing, setEditing] = useState<Client | 'new' | null>(null);
+  const [editing, setEditing] = useState<Client | null>(null);
+  const newClient = useNewClientFromContacts();
 
   return (
     <View style={styles.container}>
@@ -60,88 +49,18 @@ export default function ClientsScreen() {
           )}
         />
       )}
-      <FAB icon="account-plus" label="Добавить" style={styles.fab} onPress={() => setEditing('new')} />
-      {editing && (
-        <ClientDialog client={editing === 'new' ? null : editing} onClose={() => setEditing(null)} />
+      <FAB
+        icon="account-plus"
+        label="Добавить"
+        style={styles.fab}
+        loading={newClient.picking}
+        onPress={newClient.start}
+      />
+      {editing && <ClientDialog client={editing} onClose={() => setEditing(null)} />}
+      {newClient.draft && (
+        <ClientDialog client={null} initial={newClient.draft} notice={newClient.notice} onClose={newClient.close} />
       )}
     </View>
-  );
-}
-
-function ClientDialog({ client, onClose }: { client: Client | null; onClose: () => void }) {
-  const createClient = useCreateClient();
-  const updateClient = useUpdateClient();
-  const [name, setName] = useState(client?.name ?? '');
-  const [phone, setPhone] = useState(client?.phone ?? '');
-  const [discountText, setDiscountText] = useState(client?.discount_percent ? String(client.discount_percent) : '');
-  const [notes, setNotes] = useState(client?.notes ?? '');
-  const [error, setError] = useState<string | null>(null);
-  const saving = createClient.isPending || updateClient.isPending;
-
-  const handleSave = async () => {
-    setError(null);
-    if (!name.trim()) {
-      setError('Укажите имя клиента');
-      return;
-    }
-    const discount = discountText.trim() ? Number(discountText.trim().replace(',', '.')) : 0;
-    if (!Number.isFinite(discount) || discount < 0 || discount > 100) {
-      setError('Скидка — число от 0 до 100');
-      return;
-    }
-    const input = { name: name.trim(), phone: phone.trim(), discount_percent: discount, notes: notes.trim() };
-    try {
-      if (client) await updateClient.mutateAsync({ id: client.id, ...input });
-      else await createClient.mutateAsync(input);
-      onClose();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Не удалось сохранить клиента');
-    }
-  };
-
-  return (
-    <Portal>
-      <Dialog visible onDismiss={onClose}>
-        <Dialog.Title>{client ? 'Клиент' : 'Новый клиент'}</Dialog.Title>
-        <Dialog.ScrollArea style={styles.dialogArea}>
-          <View style={styles.dialogContent}>
-            <TextInput mode="outlined" label="Имя" accessibilityLabel="Имя" value={name} onChangeText={setName} />
-            <TextInput
-              mode="outlined"
-              label="Телефон"
-              accessibilityLabel="Телефон"
-              value={phone}
-              onChangeText={setPhone}
-              keyboardType="phone-pad"
-            />
-            <TextInput
-              mode="outlined"
-              label="Персональная скидка"
-              accessibilityLabel="Персональная скидка"
-              value={discountText}
-              onChangeText={setDiscountText}
-              keyboardType="numeric"
-              right={<TextInput.Affix text="%" />}
-            />
-            <TextInput
-              mode="outlined"
-              label="Заметки"
-              accessibilityLabel="Заметки"
-              value={notes}
-              onChangeText={setNotes}
-              multiline
-            />
-            {error && <HelperText type="error">{error}</HelperText>}
-          </View>
-        </Dialog.ScrollArea>
-        <Dialog.Actions>
-          <Button onPress={onClose}>Отмена</Button>
-          <Button mode="contained" onPress={handleSave} loading={saving} disabled={saving}>
-            Сохранить
-          </Button>
-        </Dialog.Actions>
-      </Dialog>
-    </Portal>
   );
 }
 
@@ -167,13 +86,5 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 16,
     bottom: 16,
-  },
-  dialogArea: {
-    paddingHorizontal: 0,
-  },
-  dialogContent: {
-    gap: 12,
-    paddingHorizontal: 24,
-    paddingVertical: 8,
   },
 });

@@ -14,7 +14,9 @@ import {
   TextInput,
 } from 'react-native-paper';
 import { useEmployees } from '../../api/employees';
-import { useClients, useCreateClient, type Client } from '../../api/clients';
+import { useClients, type Client } from '../../api/clients';
+import { ClientDialog } from '../../components/clients/ClientDialog';
+import { useNewClientFromContacts } from '../../hooks/useNewClientFromContacts';
 import { useBusyEmployeeIds, useCreateOrder, type CreateOrderStopInput } from '../../api/orders';
 import { useServices } from '../../api/services';
 import { ServicePicker, formatServiceMeta } from '../../components/form/ServicePicker';
@@ -51,8 +53,7 @@ export default function NewOrderScreen() {
 
   const [clientSearch, setClientSearch] = useState('');
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
-  const [newClientName, setNewClientName] = useState('');
-  const [newClientPhone, setNewClientPhone] = useState('');
+  const newClient = useNewClientFromContacts();
 
   const [pickupAddress, setPickupAddress] = useState('');
   const [dropoffAddress, setDropoffAddress] = useState('');
@@ -89,7 +90,6 @@ export default function NewOrderScreen() {
   }, [employeeId, employees]);
 
   const clientsQuery = useClients(clientSearch);
-  const createClient = useCreateClient();
   const busyQuery = useBusyEmployeeIds(scheduledStart, scheduledEnd);
   const busyIds = busyQuery.data ?? new Set<string>();
   const createOrder = useCreateOrder();
@@ -119,21 +119,6 @@ export default function NewOrderScreen() {
 
   const addExtraStop = (type: 'pickup' | 'dropoff') =>
     setExtraStops((prev) => [...prev, { key: `${Date.now()}`, type, address: '' }]);
-
-  const handleCreateClient = async () => {
-    if (!newClientName.trim()) return;
-    try {
-      const client = await createClient.mutateAsync({
-        name: newClientName.trim(),
-        phone: newClientPhone.trim() || undefined,
-      });
-      setSelectedClient(client);
-      setNewClientName('');
-      setNewClientPhone('');
-    } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'Не удалось добавить клиента');
-    }
-  };
 
   const timeValid = scheduledEnd > scheduledStart;
   const canSubmit =
@@ -228,28 +213,22 @@ export default function NewOrderScreen() {
                   onPress={() => setSelectedClient(client)}
                 />
               ))}
-              <Text variant="labelMedium">Новый клиент</Text>
-              <TextInput mode="outlined" dense label="Имя" value={newClientName} onChangeText={setNewClientName} />
-              <TextInput
-                mode="outlined"
-                dense
-                label="Телефон"
-                value={newClientPhone}
-                onChangeText={setNewClientPhone}
-                keyboardType="phone-pad"
-              />
-              <Button
-                mode="outlined"
-                icon="account-plus"
-                onPress={handleCreateClient}
-                loading={createClient.isPending}
-                disabled={!newClientName.trim() || createClient.isPending}
-              >
+              <Button mode="outlined" icon="account-plus" onPress={newClient.start} loading={newClient.picking}>
                 Добавить клиента
               </Button>
             </>
           )}
         </FormSection>
+
+        {newClient.draft && (
+          <ClientDialog
+            client={null}
+            initial={newClient.draft}
+            notice={newClient.notice}
+            onClose={newClient.close}
+            onSaved={setSelectedClient}
+          />
+        )}
 
         <FormSection title="Услуги">
           {selectedServices.map((service) => (
