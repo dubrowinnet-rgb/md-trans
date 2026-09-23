@@ -103,6 +103,7 @@ export interface Database {
           actual_price: number | null;
           comment: string | null;
           photos: string[];
+          created_by: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -116,6 +117,7 @@ export interface Database {
           actual_price?: number | null;
           comment?: string | null;
           photos?: string[];
+          created_by?: string | null;
         };
         Update: Partial<Database['public']['Tables']['orders']['Insert']>;
         Relationships: [];

@@ -12,10 +12,17 @@ const ROLE_OPTIONS: { value: AccountRole; label: string }[] = [
   { value: 'loader', label: ACCOUNT_ROLE_LABELS.loader },
 ];
 
-const DEFAULT_PERMISSIONS: AccountPermissions = {
-  can_manage_orders: true,
-  can_view_client_stats: true,
-  can_view_contacts_and_amounts: true,
+// Права по умолчанию при создании нового аккаунта — по роли (раздел
+// «права и доступы»): администратору и диспетчеру полный доступ,
+// водителю — видимость контактов и сумм, но без полного управления
+// заказами (у него своё, более узкое право — редактировать время и
+// сумму, оно не выключается галочкой, см. lib/permissions.ts), грузчику —
+// только просмотр. Админ может донастроить это на конкретном аккаунте.
+const ROLE_DEFAULT_PERMISSIONS: Record<AccountRole, AccountPermissions> = {
+  admin: { can_manage_orders: true, can_view_client_stats: true, can_view_contacts_and_amounts: true },
+  dispatcher: { can_manage_orders: true, can_view_client_stats: true, can_view_contacts_and_amounts: true },
+  driver: { can_manage_orders: false, can_view_client_stats: false, can_view_contacts_and_amounts: true },
+  loader: { can_manage_orders: false, can_view_client_stats: false, can_view_contacts_and_amounts: false },
 };
 
 // Один диалог на создание (account === null, спрашивает логин и пароль —
@@ -38,12 +45,22 @@ export function AccountDialog({ account, onClose }: { account: Account | null; o
           can_view_client_stats: account.can_view_client_stats,
           can_view_contacts_and_amounts: account.can_view_contacts_and_amounts,
         }
-      : DEFAULT_PERMISSIONS
+      : ROLE_DEFAULT_PERMISSIONS[role]
   );
   const [error, setError] = useState<string | null>(null);
 
   const togglePermission = (key: keyof AccountPermissions) =>
     setPermissions((prev) => ({ ...prev, [key]: !prev[key] }));
+
+  // Смена роли в форме создания подставляет права по умолчанию для новой
+  // роли — иначе, скажем, у только что выбранного грузчика остались бы
+  // права диспетчера. При правке существующего аккаунта права не трогаем:
+  // администратор мог их уже осознанно донастроить.
+  const handleRoleChange = (value: string) => {
+    const nextRole = value as AccountRole;
+    setRole(nextRole);
+    if (!account) setPermissions(ROLE_DEFAULT_PERMISSIONS[nextRole]);
+  };
 
   const handleSave = async () => {
     setError(null);
@@ -105,16 +122,8 @@ export function AccountDialog({ account, onClose }: { account: Account | null; o
             )}
 
             <Text variant="labelLarge">Роль</Text>
-            <SegmentedButtons
-              value={role}
-              onValueChange={(value) => setRole(value as AccountRole)}
-              buttons={ROLE_OPTIONS.slice(0, 2)}
-            />
-            <SegmentedButtons
-              value={role}
-              onValueChange={(value) => setRole(value as AccountRole)}
-              buttons={ROLE_OPTIONS.slice(2)}
-            />
+            <SegmentedButtons value={role} onValueChange={handleRoleChange} buttons={ROLE_OPTIONS.slice(0, 2)} />
+            <SegmentedButtons value={role} onValueChange={handleRoleChange} buttons={ROLE_OPTIONS.slice(2)} />
 
             {role === 'admin' ? (
               <Text variant="bodySmall" style={styles.muted}>
@@ -124,6 +133,18 @@ export function AccountDialog({ account, onClose }: { account: Account | null; o
               <>
                 <Divider style={styles.divider} />
                 <Text variant="labelLarge">Права доступа</Text>
+                {role === 'driver' && (
+                  <Text variant="bodySmall" style={styles.muted}>
+                    Без «Создавать, редактировать и удалять заказы» водитель всё равно может
+                    поменять время и сумму своего заказа — остальное только смотрит.
+                  </Text>
+                )}
+                {role === 'loader' && (
+                  <Text variant="bodySmall" style={styles.muted}>
+                    Грузчик всегда только смотрит заказ и не видит сумму. Телефон клиента видит,
+                    если в бригаде заказа нет водителя, либо всегда — если включить ниже.
+                  </Text>
+                )}
                 <PermissionRow
                   label="Создавать, редактировать и удалять заказы"
                   value={permissions.can_manage_orders}
@@ -135,7 +156,7 @@ export function AccountDialog({ account, onClose }: { account: Account | null; o
                   onChange={() => togglePermission('can_view_client_stats')}
                 />
                 <PermissionRow
-                  label="Видеть контакты и суммы заказов"
+                  label={role === 'loader' ? 'Видеть телефон клиента всегда' : 'Видеть контакты и суммы заказов'}
                   value={permissions.can_view_contacts_and_amounts}
                   onChange={() => togglePermission('can_view_contacts_and_amounts')}
                 />

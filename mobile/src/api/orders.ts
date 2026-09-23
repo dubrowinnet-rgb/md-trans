@@ -186,6 +186,41 @@ export function useDeleteOrder() {
   });
 }
 
+// Узкое обновление для водителя без can_manage_orders (раздел «права» —
+// водитель редактирует только время и сумму заказа). Какие именно колонки
+// можно менять, проверяет и триггер в БД (миграция 0006) — здесь просто
+// вызов, без своей проверки прав.
+export function useUpdateOrderScheduleAndPrice() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      orderId,
+      scheduledStart,
+      scheduledEnd,
+      actualPrice,
+    }: {
+      orderId: string;
+      scheduledStart: Date;
+      scheduledEnd: Date;
+      actualPrice: number | null;
+    }) => {
+      const { error } = await supabase
+        .from('orders')
+        .update({
+          scheduled_start: scheduledStart.toISOString(),
+          scheduled_end: scheduledEnd.toISOString(),
+          actual_price: actualPrice,
+        })
+        .eq('id', orderId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      queryClient.invalidateQueries({ queryKey: ['busy-employees'] });
+    },
+  });
+}
+
 export function useUpdateOrderStatus() {
   const queryClient = useQueryClient();
   return useMutation({

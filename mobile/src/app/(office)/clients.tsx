@@ -5,7 +5,7 @@ import { useClients, type Client } from '../../api/clients';
 import { ClientDialog } from '../../components/clients/ClientDialog';
 import { useNewClientFromContacts } from '../../hooks/useNewClientFromContacts';
 import { useSession } from '../../providers/SessionProvider';
-import { canViewClientStats, canViewContactsAndAmounts } from '../../lib/permissions';
+import { canViewClientPhone, canViewClientStats } from '../../lib/permissions';
 
 // База клиентов (раздел 5 ТЗ): поиск, карточка с телефоном и персональной скидкой.
 export default function ClientsScreen() {
@@ -14,7 +14,7 @@ export default function ClientsScreen() {
   const [editing, setEditing] = useState<Client | null>(null);
   const newClient = useNewClientFromContacts();
   const { employee } = useSession();
-  const canViewContacts = canViewContactsAndAmounts(employee);
+  const canViewContacts = canViewClientPhone(employee);
   const canViewStats = canViewClientStats(employee);
 
   return (

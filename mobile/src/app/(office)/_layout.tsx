@@ -46,6 +46,16 @@ export default function OfficeLayout() {
           ),
         }}
       />
+      <Tabs.Screen
+        name="stats"
+        options={{
+          title: 'Статистика',
+          href: isAdmin ? undefined : null,
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons name="chart-box-outline" color={color} size={size} />
+          ),
+        }}
+      />
     </Tabs>
   );
 }

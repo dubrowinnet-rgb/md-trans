@@ -23,7 +23,7 @@ import { ServicePicker, formatServiceMeta } from '../../components/form/ServiceP
 import { DateTimeField } from '../../components/form/DateTimeField';
 import { FormSection } from '../../components/form/FormSection';
 import { useSession } from '../../providers/SessionProvider';
-import { canManageOrders, canViewContactsAndAmounts } from '../../lib/permissions';
+import { canManageOrders, canViewClientPhone } from '../../lib/permissions';
 
 interface ExtraStop {
   key: string;
@@ -93,7 +93,7 @@ export default function NewOrderScreen() {
 
   const { employee } = useSession();
   const canManage = canManageOrders(employee);
-  const canViewContacts = canViewContactsAndAmounts(employee);
+  const canViewContacts = canViewClientPhone(employee);
 
   const clientsQuery = useClients(clientSearch);
   const busyQuery = useBusyEmployeeIds(scheduledStart, scheduledEnd);
