@@ -24,6 +24,7 @@ import {
 import { DatePickerInput } from '@mantine/dates';
 import { TimeField } from '@/components/common/TimeField';
 import { notifications } from '@mantine/notifications';
+import { errorMessage } from '@/lib/errors';
 import { IconPlus, IconUserPlus, IconX } from '@tabler/icons-react';
 import {
   orderToInput,
@@ -227,7 +228,7 @@ export function OrderFormModal({
         onSaved(id);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Не удалось сохранить заказ');
+      setError(errorMessage(err, 'Не удалось сохранить заказ'));
     }
   };
 

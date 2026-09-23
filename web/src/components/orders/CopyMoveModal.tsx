@@ -5,6 +5,7 @@ import { Alert, Button, Checkbox, Group, Modal, Stack, Text, Title } from '@mant
 import { DatePickerInput } from '@mantine/dates';
 import { TimeField } from '@/components/common/TimeField';
 import { notifications } from '@mantine/notifications';
+import { errorMessage } from '@/lib/errors';
 import { useCopyOrder, useMoveOrder, type OrderWithDetails } from '@/api/orders';
 import { combineDateTime, dayjs, toDateKey } from '@/lib/dates';
 
@@ -46,7 +47,7 @@ export function CopyMoveModal({
         onDone(order.id);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Не удалось сохранить');
+      setError(errorMessage(err, 'Не удалось сохранить'));
     }
   };
 

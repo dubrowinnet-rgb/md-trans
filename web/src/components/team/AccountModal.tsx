@@ -17,6 +17,7 @@ import {
   Title,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
+import { errorMessage } from '@/lib/errors';
 import {
   ROLE_DEFAULT_PERMISSIONS,
   useCreateAccount,
@@ -104,7 +105,7 @@ export function AccountModal({ account, onClose }: { account: Account | null; on
       notifications.show({ message: 'Аккаунт сохранён', color: 'green' });
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Не удалось сохранить');
+      setError(errorMessage(err, 'Не удалось сохранить'));
     }
   };
 

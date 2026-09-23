@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Alert, Button, Checkbox, Group, Modal, NumberInput, SimpleGrid, Stack, TextInput, Title } from '@mantine/core';
 import { modals } from '@mantine/modals';
 import { notifications } from '@mantine/notifications';
+import { errorMessage } from '@/lib/errors';
 import { useCreateVehicle, useDeleteVehicle, useUpdateVehicle, type Vehicle } from '@/api/vehicles';
 
 // Машина автопарка: название и гос номер обязательны, остальное — по желанию.
@@ -40,7 +41,7 @@ export function VehicleModal({ vehicle, onClose }: { vehicle: Vehicle | null; on
       notifications.show({ message: 'Машина сохранена', color: 'green' });
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Не удалось сохранить');
+      setError(errorMessage(err, 'Не удалось сохранить'));
     }
   };
 

@@ -1,6 +1,7 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { notifyEmployees } from '@/lib/push';
+import { friendlyOrderError } from '@/lib/errors';
 import type { Database, EmployeeRole, OrderStatus, StopType } from '@/types/database';
 
 type OrderRow = Database['public']['Tables']['orders']['Row'];
@@ -148,7 +149,7 @@ async function createOrder(input: OrderInput) {
     p_services: input.service_ids.map((id) => ({ service_id: id, qty: 1 })),
     p_vehicle_id: input.vehicle_id,
   });
-  if (error) throw error;
+  if (error) throw await friendlyOrderError(error);
   const orderId = data as string;
   await notifyEmployees(
     input.crew.map((c) => c.employee_id),
@@ -175,86 +176,94 @@ export function useCreateOrder() {
 export function useUpdateOrder() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, input, previous }: { id: string; input: OrderInput; previous: OrderWithDetails }) => {
-      const { error: orderError } = await supabase
-        .from('orders')
-        .update({
-          client_id: input.client_id,
-          cargo_description: input.cargo_description || null,
-          scheduled_start: input.scheduled_start.toISOString(),
-          scheduled_end: input.scheduled_end.toISOString(),
-          actual_price: input.actual_price,
-          comment: input.comment || null,
-          vehicle_id: input.vehicle_id,
-        })
-        .eq('id', id);
-      if (orderError) throw orderError;
-
-      const { error: delStopsError } = await supabase.from('order_stops').delete().eq('order_id', id);
-      if (delStopsError) throw delStopsError;
-      if (input.stops.length > 0) {
-        const { error } = await supabase.from('order_stops').insert(input.stops.map((s) => ({ ...s, order_id: id })));
-        if (error) throw error;
-      }
-
-      const { error: delServicesError } = await supabase.from('order_services').delete().eq('order_id', id);
-      if (delServicesError) throw delServicesError;
-      if (input.service_ids.length > 0) {
-        const { error } = await supabase
-          .from('order_services')
-          .insert(input.service_ids.map((service_id) => ({ order_id: id, service_id, qty: 1 })));
-        if (error) throw error;
-      }
-
-      const key = (c: { employee_id: string; role: string }) => `${c.employee_id}:${c.role}`;
-      const nextKeys = new Set(input.crew.map(key));
-      const prevKeys = new Set(previous.order_crew.map(key));
-      for (const c of previous.order_crew) {
-        if (nextKeys.has(key(c))) continue;
-        const { error } = await supabase
-          .from('order_crew')
-          .delete()
-          .eq('order_id', id)
-          .eq('employee_id', c.employee_id)
-          .eq('role', c.role);
-        if (error) throw error;
-      }
-      const added = input.crew.filter((c) => !prevKeys.has(key(c)));
-      if (added.length > 0) {
-        const { error } = await supabase.from('order_crew').insert(
-          added.map((c) => ({
-            order_id: id,
-            employee_id: c.employee_id,
-            role: c.role,
-            status: 'notified' as const,
-            notified_at: new Date().toISOString(),
-          }))
-        );
-        if (error) throw error;
-      }
-
-      const newIds = [...new Set(added.map((c) => c.employee_id))];
-      const alreadyThere = new Set(previous.order_crew.map((c) => c.employee_id));
-      await notifyEmployees(
-        newIds.filter((e) => !alreadyThere.has(e)),
-        'Новый заказ',
-        'Вам назначен новый заказ',
-        { orderId: id }
-      );
-      const timeChanged =
-        new Date(previous.scheduled_start).getTime() !== input.scheduled_start.getTime() ||
-        new Date(previous.scheduled_end).getTime() !== input.scheduled_end.getTime();
-      if (timeChanged) {
-        await notifyEmployees(
-          input.crew.map((c) => c.employee_id).filter((e) => alreadyThere.has(e)),
-          'Заказ перенесён',
-          'Время заказа изменилось — откройте заказ',
-          { orderId: id }
-        );
+    mutationFn: async (vars: { id: string; input: OrderInput; previous: OrderWithDetails }) => {
+      try {
+        await updateOrder(vars);
+      } catch (err) {
+        throw await friendlyOrderError(err);
       }
     },
     onSuccess: () => invalidateOrders(queryClient),
   });
+}
+
+async function updateOrder({ id, input, previous }: { id: string; input: OrderInput; previous: OrderWithDetails }) {
+  const { error: orderError } = await supabase
+    .from('orders')
+    .update({
+      client_id: input.client_id,
+      cargo_description: input.cargo_description || null,
+      scheduled_start: input.scheduled_start.toISOString(),
+      scheduled_end: input.scheduled_end.toISOString(),
+      actual_price: input.actual_price,
+      comment: input.comment || null,
+      vehicle_id: input.vehicle_id,
+    })
+    .eq('id', id);
+  if (orderError) throw orderError;
+
+  const { error: delStopsError } = await supabase.from('order_stops').delete().eq('order_id', id);
+  if (delStopsError) throw delStopsError;
+  if (input.stops.length > 0) {
+    const { error } = await supabase.from('order_stops').insert(input.stops.map((s) => ({ ...s, order_id: id })));
+    if (error) throw error;
+  }
+
+  const { error: delServicesError } = await supabase.from('order_services').delete().eq('order_id', id);
+  if (delServicesError) throw delServicesError;
+  if (input.service_ids.length > 0) {
+    const { error } = await supabase
+      .from('order_services')
+      .insert(input.service_ids.map((service_id) => ({ order_id: id, service_id, qty: 1 })));
+    if (error) throw error;
+  }
+
+  const key = (c: { employee_id: string; role: string }) => `${c.employee_id}:${c.role}`;
+  const nextKeys = new Set(input.crew.map(key));
+  const prevKeys = new Set(previous.order_crew.map(key));
+  for (const c of previous.order_crew) {
+    if (nextKeys.has(key(c))) continue;
+    const { error } = await supabase
+      .from('order_crew')
+      .delete()
+      .eq('order_id', id)
+      .eq('employee_id', c.employee_id)
+      .eq('role', c.role);
+    if (error) throw error;
+  }
+  const added = input.crew.filter((c) => !prevKeys.has(key(c)));
+  if (added.length > 0) {
+    const { error } = await supabase.from('order_crew').insert(
+      added.map((c) => ({
+        order_id: id,
+        employee_id: c.employee_id,
+        role: c.role,
+        status: 'notified' as const,
+        notified_at: new Date().toISOString(),
+      }))
+    );
+    if (error) throw error;
+  }
+
+  const newIds = [...new Set(added.map((c) => c.employee_id))];
+  const alreadyThere = new Set(previous.order_crew.map((c) => c.employee_id));
+  await notifyEmployees(
+    newIds.filter((e) => !alreadyThere.has(e)),
+    'Новый заказ',
+    'Вам назначен новый заказ',
+    { orderId: id }
+  );
+  const timeChanged =
+    new Date(previous.scheduled_start).getTime() !== input.scheduled_start.getTime() ||
+    new Date(previous.scheduled_end).getTime() !== input.scheduled_end.getTime();
+  if (timeChanged) {
+    await notifyEmployees(
+      input.crew.map((c) => c.employee_id).filter((e) => alreadyThere.has(e)),
+      'Заказ перенесён',
+      'Время заказа изменилось — откройте заказ',
+      { orderId: id }
+    );
+  }
 }
 
 // Перенос заказа на другое время (перетаскивание в календаре) — меняются
@@ -267,7 +276,7 @@ export function useMoveOrder() {
         .from('orders')
         .update({ scheduled_start: start.toISOString(), scheduled_end: end.toISOString() })
         .eq('id', order.id);
-      if (error) throw error;
+      if (error) throw await friendlyOrderError(error);
       await notifyEmployees(
         order.order_crew.map((c) => c.employee_id),
         'Заказ перенесён',

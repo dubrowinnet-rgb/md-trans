@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Alert, Button, Group, Modal, NumberInput, Stack, TextInput, Textarea, Title } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
+import { errorMessage } from '@/lib/errors';
 import { useCreateClient, useUpdateClient, type Client } from '@/api/clients';
 
 // Создание и правка клиента (имя, телефон, скидка, заметки).
@@ -45,7 +46,7 @@ export function ClientFormModal({
       notifications.show({ message: 'Клиент сохранён', color: 'green' });
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Не удалось сохранить клиента');
+      setError(errorMessage(err, 'Не удалось сохранить клиента'));
     }
   };
 
