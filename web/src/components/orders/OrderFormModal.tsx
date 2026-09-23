@@ -39,12 +39,12 @@ import { useEmployees, type Employee } from '@/api/employees';
 import { useClient, useClientSearch, type Client } from '@/api/clients';
 import { useServices } from '@/api/services';
 import { useVehicles } from '@/api/vehicles';
-import { useDaysOffOn } from '@/api/schedule';
+import { useScheduleDaysOn, type ScheduleDay } from '@/api/schedule';
 import { combineDateTime, dayjs, toDateKey } from '@/lib/dates';
 import { useSession } from '@/providers/SessionProvider';
 import { canViewClientPhone } from '@/lib/permissions';
 import { ClientFormModal } from '@/components/clients/ClientFormModal';
-import { AvailabilityDot, availabilityTier, sortByAvailability, TIER_SUFFIX } from './availability';
+import { AvailabilityDot, evaluateAvailability, sortByAvailability, type Availability } from './availability';
 
 export interface OrderFormPreset {
   start?: Date;
@@ -129,7 +129,15 @@ export function OrderFormModal({
   const scheduledEnd = useMemo(() => combineDateTime(dateKey, endTime), [dateKey, endTime]);
   const timeValid = scheduledEnd > scheduledStart;
   const busyIds = useBusyEmployeeIds(scheduledStart, scheduledEnd, order?.id).data ?? new Set<string>();
-  const dayOffIds = useDaysOffOn(dateKey).data ?? new Set<string>();
+  const scheduleOn = useScheduleDaysOn(dateKey).data;
+  const availability = useMemo(() => {
+    const map = new Map<string, Availability>();
+    for (const e of employees) {
+      map.set(e.id, evaluateAvailability(e, busyIds, scheduleOn ?? new Map<string, ScheduleDay>(), scheduledStart, scheduledEnd));
+    }
+    return map;
+  }, [employees, busyIds, scheduleOn, scheduledStart, scheduledEnd]);
+  const availabilityOf = (id: string) => availability.get(id) ?? { tier: 'available' as const, suffix: '' };
 
   // Сотрудник из колонки/фильтра календаря — сразу в бригаду.
   const presetApplied = useRef(false);
@@ -391,7 +399,7 @@ export function OrderFormModal({
         <Grid.Col span={5}>
           <Stack gap="sm">
             <Text size="xs" c="dimmed">
-              Точка у имени: зелёная — свободен, жёлтая — занят другим заказом, красная — выходной.
+              Точка у имени: зелёная — свободен, жёлтая — занят другим заказом, красная — выходной или вне часов работы.
             </Text>
             <Paper withBorder p="sm">
               <Text fw={600} size="sm" mb={6}>
@@ -403,8 +411,8 @@ export function OrderFormModal({
                 </Text>
               )}
               <Stack gap={2}>
-                {sortByAvailability(drivers, busyIds, dayOffIds).map((d) => {
-                  const tier = availabilityTier(d.id, busyIds, dayOffIds);
+                {sortByAvailability(drivers, availability).map((d) => {
+                  const { tier, suffix } = availabilityOf(d.id);
                   const selected = driverId === d.id;
                   return (
                     <UnstyledButton
@@ -422,7 +430,7 @@ export function OrderFormModal({
                         <Text size="sm" fw={selected ? 600 : 400}>
                           {d.name}
                           <Text span size="xs" c="dimmed">
-                            {TIER_SUFFIX[tier]}
+                            {suffix}
                           </Text>
                         </Text>
                       </Group>
@@ -454,8 +462,8 @@ export function OrderFormModal({
                 </Text>
               )}
               <Stack gap={6}>
-                {sortByAvailability(loaderCandidates, busyIds, dayOffIds).map((p) => {
-                  const tier = availabilityTier(p.id, busyIds, dayOffIds);
+                {sortByAvailability(loaderCandidates, availability).map((p) => {
+                  const { tier, suffix } = availabilityOf(p.id);
                   const checked = loaderIds.includes(p.id);
                   return (
                     <Checkbox
@@ -463,7 +471,7 @@ export function OrderFormModal({
                       checked={checked}
                       // Грузчик не может быть на двух заказах одновременно —
                       // это запрещает и база; выходной — только подсказка.
-                      disabled={tier === 'busy' && !checked}
+                      disabled={busyIds.has(p.id) && !checked}
                       onChange={() =>
                         setLoaderIds((prev) => (checked ? prev.filter((x) => x !== p.id) : [...prev, p.id]))
                       }
@@ -474,7 +482,7 @@ export function OrderFormModal({
                             {p.name}
                             {p.id === driverId ? ' (водитель)' : ''}
                             <Text span size="xs" c="dimmed">
-                              {TIER_SUFFIX[tier]}
+                              {suffix}
                             </Text>
                           </Text>
                         </Group>

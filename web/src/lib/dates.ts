@@ -6,7 +6,7 @@ dayjs.locale('ru');
 export { dayjs };
 
 // YYYY-MM-DD по локальной дате (не UTC — иначе вечером можно съехать на
-// соседний день). Тот же формат, что у Mantine-пикеров и employee_days_off.
+// соседний день). Тот же формат, что у Mantine-пикеров и employee_schedule_days.
 export function toDateKey(date: Date) {
   return dayjs(date).format('YYYY-MM-DD');
 }
