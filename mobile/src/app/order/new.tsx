@@ -13,14 +13,21 @@ import {
   Text,
   TextInput,
 } from 'react-native-paper';
-import { useEmployees } from '../../api/employees';
+import { useEmployees, type Employee } from '../../api/employees';
 import { useClients, type Client } from '../../api/clients';
 import { ClientDialog } from '../../components/clients/ClientDialog';
 import { useNewClientFromContacts } from '../../hooks/useNewClientFromContacts';
-import { useBusyEmployeeIds, useCreateOrder, type CreateOrderStopInput } from '../../api/orders';
+import { useBusyEmployeeIds, useCreateOrder, useOrder, type CreateOrderStopInput } from '../../api/orders';
 import { useServices } from '../../api/services';
 import { useVehicles } from '../../api/vehicles';
-import { useDaysOffOn, toDateKey } from '../../api/schedule';
+import {
+  effectiveScheduleStatus,
+  formatTimeShort,
+  isWorkingAt,
+  toDateKey,
+  useScheduleDaysOn,
+  type ScheduleDay,
+} from '../../api/schedule';
 import { ServicePicker, formatServiceMeta } from '../../components/form/ServicePicker';
 import { DateTimeField } from '../../components/form/DateTimeField';
 import { FormSection } from '../../components/form/FormSection';
@@ -44,24 +51,36 @@ function atHour(base: Date, hour: number) {
 }
 
 // Доступность исполнителя на выбранное время (раздел «рабочий график»):
-// сперва выходной (красная точка), потом другой заказ (жёлтая), иначе
-// свободен (зелёная) — этот же порядок используется для сортировки списка.
+// сперва выходной/не по графику (красная точка), потом другой заказ
+// (жёлтая), иначе свободен (зелёная) — этот же порядок используется для
+// сортировки списка. Выходной день или часы вне графика — из
+// employee_schedule_days с учётом режима сотрудника (schedule_mode); это
+// подсказка, не жёсткий запрет (см. isWorkingAt).
 type AvailabilityTier = 'available' | 'busy' | 'dayoff';
 
 const TIER_ORDER: Record<AvailabilityTier, number> = { available: 0, busy: 1, dayoff: 2 };
 const TIER_COLOR: Record<AvailabilityTier, string> = { available: '#22c55e', busy: '#f59e0b', dayoff: '#ef4444' };
-const TIER_SUFFIX: Record<AvailabilityTier, string> = { available: '', busy: ' · другой заказ', dayoff: ' · выходной' };
 
-function availabilityTier(id: string, busyIds: Set<string>, dayOffIds: Set<string>): AvailabilityTier {
-  if (dayOffIds.has(id)) return 'dayoff';
-  if (busyIds.has(id)) return 'busy';
-  return 'available';
+function evaluateAvailability(
+  employee: Employee,
+  busyIds: Set<string>,
+  scheduleOn: Map<string, ScheduleDay>,
+  orderStart: Date,
+  orderEnd: Date
+): { tier: AvailabilityTier; suffix: string } {
+  const row = scheduleOn.get(employee.id);
+  const status = effectiveScheduleStatus(employee.schedule_mode, row);
+  if (status === 'off') return { tier: 'dayoff', suffix: ' · выходной' };
+  if (row?.start_time && row?.end_time && !isWorkingAt(employee.schedule_mode, row, orderStart, orderEnd)) {
+    return { tier: 'dayoff', suffix: ` · работает ${formatTimeShort(row.start_time)}–${formatTimeShort(row.end_time)}` };
+  }
+  if (busyIds.has(employee.id)) return { tier: 'busy', suffix: ' · другой заказ' };
+  return { tier: 'available', suffix: '' };
 }
 
-function sortByAvailability<T extends { id: string }>(list: T[], busyIds: Set<string>, dayOffIds: Set<string>) {
+function sortByAvailability<T extends { id: string }>(list: T[], availability: Map<string, { tier: AvailabilityTier }>) {
   return [...list].sort(
-    (a, b) =>
-      TIER_ORDER[availabilityTier(a.id, busyIds, dayOffIds)] - TIER_ORDER[availabilityTier(b.id, busyIds, dayOffIds)]
+    (a, b) => TIER_ORDER[availability.get(a.id)?.tier ?? 'available'] - TIER_ORDER[availability.get(b.id)?.tier ?? 'available']
   );
 }
 
@@ -72,7 +91,11 @@ function dotIcon(color: string) {
 // Создание заказа: клиент, точки маршрута (2 основные + дополнительные),
 // экипаж с проверкой занятости по времени, сумма вручную (разделы 4 и 9.1 ТЗ).
 export default function NewOrderScreen() {
-  const { start, employeeId } = useLocalSearchParams<{ start?: string; employeeId?: string }>();
+  const { start, employeeId, duplicateFrom } = useLocalSearchParams<{
+    start?: string;
+    employeeId?: string;
+    duplicateFrom?: string;
+  }>();
   const slotStart = start ? new Date(start) : null;
 
   const [date, setDate] = useState(() => slotStart ?? new Date());
@@ -150,6 +173,45 @@ export default function NewOrderScreen() {
     else setLoaderIds([preset.id]);
   }, [employeeId, employees]);
 
+  // «Копировать» заказ (раздел «график» — «записи копировать и переносить,
+  // это касается и заказов»): форма новой заявки, предзаполненная данными
+  // исходного заказа — дата и время тоже, диспетчер просто поправит их.
+  const sourceOrderQuery = useOrder(duplicateFrom);
+  const duplicateApplied = useRef(false);
+  useEffect(() => {
+    const src = sourceOrderQuery.data;
+    if (duplicateApplied.current || !duplicateFrom || !src) return;
+    duplicateApplied.current = true;
+
+    setDate(new Date(src.scheduled_start));
+    setStartTime(new Date(src.scheduled_start));
+    setEndTime(new Date(src.scheduled_end));
+
+    if (src.clients) setSelectedClient({ ...src.clients, notes: null, created_at: '' });
+
+    const stops = [...src.order_stops].sort((a, b) => a.order_index - b.order_index);
+    const primary = stops.filter((s) => s.is_primary);
+    const extra = stops.filter((s) => !s.is_primary);
+    setPickupAddress(primary.find((s) => s.type === 'pickup')?.address ?? '');
+    setDropoffAddress(primary.find((s) => s.type === 'dropoff')?.address ?? '');
+    setExtraStops(extra.map((s) => ({ key: s.id, type: s.type, address: s.address })));
+
+    setCargoDescription(src.cargo_description ?? '');
+
+    const srcDriver = src.order_crew.find((c) => c.role === 'driver');
+    if (srcDriver) selectDriver(srcDriver.employee_id);
+    setLoaderIds(src.order_crew.filter((c) => c.role === 'loader').map((c) => c.employee_id));
+    // Машина исходного заказа — уже осознанный выбор, не машина водителя по
+    // умолчанию, поэтому не считаем её "авто" (не заменится при смене водителя).
+    setVehicleId(src.vehicle_id);
+    autoVehicleId.current = null;
+
+    setServiceIds(src.order_services.map((s) => s.services?.id).filter((id): id is string => Boolean(id)));
+    autoPrice.current = '';
+    setPriceText(src.actual_price != null ? String(src.actual_price) : '');
+    setComment(src.comment ?? '');
+  }, [duplicateFrom, sourceOrderQuery.data]);
+
   const { employee } = useSession();
   const canManage = canManageOrders(employee);
   const canViewContacts = canViewClientPhone(employee);
@@ -157,8 +219,11 @@ export default function NewOrderScreen() {
   const clientsQuery = useClients(clientSearch);
   const busyQuery = useBusyEmployeeIds(scheduledStart, scheduledEnd);
   const busyIds = busyQuery.data ?? new Set<string>();
-  const dayOffQuery = useDaysOffOn(toDateKey(scheduledStart));
-  const dayOffIds = dayOffQuery.data ?? new Set<string>();
+  const scheduleOnQuery = useScheduleDaysOn(toDateKey(scheduledStart));
+  const scheduleOn = scheduleOnQuery.data ?? new Map<string, ScheduleDay>();
+  const availability = new Map(
+    employees.map((e) => [e.id, evaluateAvailability(e, busyIds, scheduleOn, scheduledStart, scheduledEnd)])
+  );
   const createOrder = useCreateOrder();
   const servicesQuery = useServices();
   const services = servicesQuery.data ?? [];
@@ -249,6 +314,11 @@ export default function NewOrderScreen() {
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        {duplicateFrom && (
+          <HelperText type="info" visible>
+            {sourceOrderQuery.isLoading ? 'Загружаем исходный заказ…' : 'Копия заказа — проверьте дату и данные перед сохранением.'}
+          </HelperText>
+        )}
         <FormSection title="Дата и время">
           <DateTimeField label="Дата" value={date} mode="date" onChange={setDate} />
           <View style={styles.row}>
@@ -399,17 +469,17 @@ export default function NewOrderScreen() {
         </FormSection>
 
         <FormSection title="Водитель">
-          {(busyQuery.isLoading || dayOffQuery.isLoading) && <ActivityIndicator size="small" />}
+          {(busyQuery.isLoading || scheduleOnQuery.isLoading) && <ActivityIndicator size="small" />}
           {busyQuery.isError && (
             <HelperText type="error">{`Ошибка проверки занятости: ${busyQuery.error.message}`}</HelperText>
           )}
           {drivers.length === 0 && <Text variant="bodySmall">Нет ни одного водителя</Text>}
           <Text variant="bodySmall" style={styles.muted}>
-            Точка у имени: зелёная — свободен, жёлтая — другой заказ, красная — выходной.
+            Точка у имени: зелёная — свободен, жёлтая — другой заказ, красная — выходной или не по графику.
           </Text>
           <View style={styles.chips}>
-            {sortByAvailability(drivers, busyIds, dayOffIds).map((driver) => {
-              const tier = availabilityTier(driver.id, busyIds, dayOffIds);
+            {sortByAvailability(drivers, availability).map((driver) => {
+              const { tier, suffix } = availability.get(driver.id) ?? { tier: 'available' as const, suffix: '' };
               return (
                 <Chip
                   key={driver.id}
@@ -418,7 +488,7 @@ export default function NewOrderScreen() {
                   showSelectedOverlay
                   onPress={() => selectDriver(driverId === driver.id ? null : driver.id)}
                 >
-                  {`${driver.name}${TIER_SUFFIX[tier]}`}
+                  {`${driver.name}${suffix}`}
                 </Chip>
               );
             })}
@@ -453,8 +523,8 @@ export default function NewOrderScreen() {
         <FormSection title="Грузчики">
           {loaderCandidates.length === 0 && <Text variant="bodySmall">Нет ни одного грузчика</Text>}
           <View style={styles.chips}>
-            {sortByAvailability(loaderCandidates, busyIds, dayOffIds).map((person) => {
-              const tier = availabilityTier(person.id, busyIds, dayOffIds);
+            {sortByAvailability(loaderCandidates, availability).map((person) => {
+              const { tier, suffix } = availability.get(person.id) ?? { tier: 'available' as const, suffix: '' };
               const isDriver = person.id === driverId;
               return (
                 <Chip
@@ -465,7 +535,7 @@ export default function NewOrderScreen() {
                   disabled={tier === 'busy'}
                   onPress={() => toggleLoader(person.id)}
                 >
-                  {`${person.name}${isDriver ? ' (водитель)' : ''}${TIER_SUFFIX[tier]}`}
+                  {`${person.name}${isDriver ? ' (водитель)' : ''}${suffix}`}
                 </Chip>
               );
             })}

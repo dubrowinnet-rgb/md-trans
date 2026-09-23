@@ -238,10 +238,19 @@ export default function OrderScreen() {
         <Text variant="bodySmall">Скидка клиента: {order.clients.discount_percent}%</Text>
       ) : null}
 
-      {canEditSchedulePrice && myCrew && editDate && editStart && editEnd && (
+      {/* Раньше этот блок показывался только бригаде (водителю на своём
+          заказе) — у диспетчера/админа не было способа перенести заказ,
+          хотя RLS это уже разрешала (миграция 0006, "orders update").
+          Теперь блок открыт и canManage, даже когда сам не в бригаде. */}
+      {(canManage || (canEditSchedulePrice && myCrew)) && editDate && editStart && editEnd && (
         <View style={styles.editBlock}>
           <Divider style={styles.divider} />
           <Text variant="labelLarge">Изменить время и сумму</Text>
+          {canManage && (
+            <Text variant="bodySmall" style={styles.muted}>
+              Перенос заказа — просто измените дату или время ниже и сохраните.
+            </Text>
+          )}
           <DateTimeField label="Дата" value={editDate} mode="date" onChange={setEditDate} />
           <View style={styles.timeRow}>
             <DateTimeField label="Начало" value={editStart} mode="time" onChange={setEditStart} />
@@ -361,6 +370,16 @@ export default function OrderScreen() {
       {canManage && (
         <Button
           mode="outlined"
+          icon="content-copy"
+          style={styles.action}
+          onPress={() => router.push({ pathname: '/order/new', params: { duplicateFrom: order.id } })}
+        >
+          Копировать заказ
+        </Button>
+      )}
+      {canManage && (
+        <Button
+          mode="outlined"
           icon="delete-outline"
           textColor="#b91c1c"
           style={styles.deleteButton}
@@ -424,6 +443,9 @@ const styles = StyleSheet.create({
   editBlock: {
     gap: 10,
     marginTop: 12,
+  },
+  muted: {
+    opacity: 0.6,
   },
   divider: {
     marginBottom: 4,

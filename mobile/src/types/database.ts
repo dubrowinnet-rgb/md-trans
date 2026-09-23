@@ -12,6 +12,10 @@ export type AccountStatus = 'active' | 'pending_payment' | 'suspended';
 export type OrderStatus = 'new' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled';
 export type StopType = 'pickup' | 'dropoff';
 export type CrewStatus = 'notified' | 'read' | 'confirmed';
+// Режим самообслуживания графика: mark_off — отмечает выходные (по
+// умолчанию), mark_on — отмечает рабочие дни. См. миграцию 0008.
+export type ScheduleMode = 'mark_off' | 'mark_on';
+export type ScheduleDayStatus = 'off' | 'on';
 
 export interface Database {
   public: {
@@ -34,6 +38,7 @@ export interface Database {
           can_view_contacts_and_amounts: boolean;
           can_manage_own_schedule: boolean;
           default_vehicle_id: string | null;
+          schedule_mode: ScheduleMode;
           created_at: string;
         };
         Insert: {
@@ -52,6 +57,7 @@ export interface Database {
           can_view_contacts_and_amounts?: boolean;
           can_manage_own_schedule?: boolean;
           default_vehicle_id?: string | null;
+          schedule_mode?: ScheduleMode;
         };
         Update: Partial<Database['public']['Tables']['employees']['Insert']>;
         Relationships: [];
@@ -209,17 +215,23 @@ export interface Database {
         Update: Partial<Database['public']['Tables']['vehicles']['Insert']>;
         Relationships: [];
       };
-      employee_days_off: {
+      employee_schedule_days: {
         Row: {
           employee_id: string;
           day: string;
+          status: ScheduleDayStatus;
+          start_time: string | null;
+          end_time: string | null;
           created_at: string;
         };
         Insert: {
           employee_id: string;
           day: string;
+          status: ScheduleDayStatus;
+          start_time?: string | null;
+          end_time?: string | null;
         };
-        Update: Partial<Database['public']['Tables']['employee_days_off']['Insert']>;
+        Update: Partial<Database['public']['Tables']['employee_schedule_days']['Insert']>;
         Relationships: [];
       };
     };

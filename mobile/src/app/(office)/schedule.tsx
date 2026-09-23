@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useEmployees } from '../../api/employees';
 import { useSession } from '../../providers/SessionProvider';
 import { canManageOrders } from '../../lib/permissions';
-import { DayOffCalendar } from '../../components/schedule/DayOffCalendar';
+import { ScheduleCalendar } from '../../components/schedule/ScheduleCalendar';
 
 // «Рабочий график» (раздел «рабочий график»): диспетчер/админ проставляет
 // водителям и грузчикам выходные дни на месяц вперёд. Без права
@@ -49,7 +49,11 @@ export default function OfficeScheduleScreen() {
           )}
           {selectedEmployee && (
             <ScrollView contentContainerStyle={styles.content}>
-              <DayOffCalendar employeeId={selectedEmployee.id} canEdit={canEdit} />
+              <ScheduleCalendar
+                employeeId={selectedEmployee.id}
+                mode={selectedEmployee.schedule_mode}
+                canEdit={canEdit}
+              />
             </ScrollView>
           )}
         </>
