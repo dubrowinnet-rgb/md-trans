@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import {
@@ -38,7 +38,7 @@ function atHour(base: Date, hour: number) {
 // Создание заказа: клиент, точки маршрута (2 основные + дополнительные),
 // экипаж с проверкой занятости по времени, сумма вручную (разделы 4 и 9.1 ТЗ).
 export default function NewOrderScreen() {
-  const { start } = useLocalSearchParams<{ start?: string }>();
+  const { start, employeeId } = useLocalSearchParams<{ start?: string; employeeId?: string }>();
   const slotStart = start ? new Date(start) : null;
 
   const [date, setDate] = useState(() => slotStart ?? new Date());
@@ -69,6 +69,17 @@ export default function NewOrderScreen() {
   const employees = useEmployees().data ?? [];
   const drivers = employees.filter((e) => e.role === 'driver');
   const loaders = employees.filter((e) => e.role === 'loader');
+
+  // Заказ создан из колонки/вкладки сотрудника — сразу назначаем его.
+  const presetApplied = useRef(false);
+  useEffect(() => {
+    if (presetApplied.current || !employeeId) return;
+    const preset = employees.find((e) => e.id === employeeId);
+    if (!preset) return;
+    presetApplied.current = true;
+    if (preset.role === 'driver') setDriverId(preset.id);
+    else setLoaderIds([preset.id]);
+  }, [employeeId, employees]);
 
   const clientsQuery = useClients(clientSearch);
   const createClient = useCreateClient();

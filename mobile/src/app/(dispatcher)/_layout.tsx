@@ -21,6 +21,15 @@ export default function DispatcherLayout() {
         }}
       />
       <Tabs.Screen
+        name="clients"
+        options={{
+          title: 'Клиенты',
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons name="card-account-phone" color={color} size={size} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="employees"
         options={{
           title: 'Сотрудники',

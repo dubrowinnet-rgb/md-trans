@@ -19,13 +19,25 @@ export function useClients(search: string) {
   });
 }
 
+export interface ClientInput {
+  name: string;
+  phone?: string;
+  discount_percent?: number;
+  notes?: string;
+}
+
 export function useCreateClient() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { name: string; phone?: string }) => {
+    mutationFn: async (input: ClientInput) => {
       const { data, error } = await supabase
         .from('clients')
-        .insert({ name: input.name, phone: input.phone || null })
+        .insert({
+          name: input.name,
+          phone: input.phone || null,
+          discount_percent: input.discount_percent ?? 0,
+          notes: input.notes || null,
+        })
         .select()
         .single();
       if (error) throw error;
@@ -33,6 +45,28 @@ export function useCreateClient() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['clients'] });
+    },
+  });
+}
+
+export function useUpdateClient() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...input }: ClientInput & { id: string }) => {
+      const { error } = await supabase
+        .from('clients')
+        .update({
+          name: input.name,
+          phone: input.phone || null,
+          discount_percent: input.discount_percent ?? 0,
+          notes: input.notes || null,
+        })
+        .eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['clients'] });
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
     },
   });
 }

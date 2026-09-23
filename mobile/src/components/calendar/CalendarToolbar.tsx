@@ -1,7 +1,7 @@
 import { StyleSheet, View } from 'react-native';
 import { IconButton, SegmentedButtons, Text } from 'react-native-paper';
 import type { ViewMode } from '../../hooks/useCalendarNav';
-import { formatHeaderDate } from '../../utils/date';
+import { formatDayLabel, formatHeaderDate } from '../../utils/date';
 
 export function CalendarToolbar({
   anchorDate,
@@ -23,7 +23,7 @@ export function CalendarToolbar({
       <View style={styles.nav}>
         <IconButton icon="chevron-left" size={20} onPress={onPrev} accessibilityLabel="Назад" />
         <Text variant="titleSmall" style={styles.date} onPress={onToday}>
-          {formatHeaderDate(anchorDate)}
+          {viewMode === 'day' ? formatDayLabel(anchorDate) : formatHeaderDate(anchorDate)}
         </Text>
         <IconButton icon="chevron-right" size={20} onPress={onNext} accessibilityLabel="Вперёд" />
       </View>

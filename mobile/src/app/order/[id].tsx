@@ -10,6 +10,7 @@ import {
   type OrderStatus,
 } from '../../api/orders';
 import { useSession } from '../../providers/SessionProvider';
+import { yandexMapsRouteUrl } from '../../lib/yandexMaps';
 import { CREW_STATUS_LABELS, ORDER_STATUS_COLORS, ORDER_STATUS_LABELS } from '../../theme';
 import { formatDayLabel, formatTime } from '../../utils/date';
 
@@ -151,6 +152,16 @@ export default function OrderScreen() {
               left={(props) => <List.Icon {...props} icon="map-marker-outline" />}
             />
           ))}
+        {sortedStops.length > 0 && (
+          <Button
+            mode="outlined"
+            icon="navigation-variant"
+            style={styles.route}
+            onPress={() => Linking.openURL(yandexMapsRouteUrl(sortedStops.map((s) => s.address)))}
+          >
+            Маршрут в Яндекс.Картах
+          </Button>
+        )}
       </List.Section>
       <Divider />
 
@@ -213,6 +224,10 @@ const styles = StyleSheet.create({
   accepted: {
     marginTop: 8,
     color: '#15803d',
+  },
+  route: {
+    marginHorizontal: 16,
+    marginTop: 8,
   },
   moreStops: {
     alignSelf: 'flex-start',

@@ -2,13 +2,12 @@ import { Pressable, StyleSheet, View, type GestureResponderEvent } from 'react-n
 import { Text, useTheme } from 'react-native-paper';
 import type { OrderWithDetails } from '../../api/orders';
 import { OrderBlock } from './OrderBlock';
+import type { CalendarColumn } from './columns';
 import {
   addMinutes,
   CALENDAR_END_HOUR,
   CALENDAR_START_HOUR,
   dayBounds,
-  formatDayLabel,
-  isSameDay,
   PIXELS_PER_MINUTE,
 } from '../../utils/date';
 
@@ -43,28 +42,27 @@ export function HourAxis() {
 }
 
 export function DayColumn({
-  date,
-  orders,
+  column,
   width,
-  isToday,
   onPressOrder,
   onPressSlot,
 }: {
-  date: Date;
-  orders: OrderWithDetails[];
+  column: CalendarColumn;
   width: number;
-  isToday: boolean;
   onPressOrder: (order: OrderWithDetails) => void;
-  onPressSlot?: (date: Date) => void;
+  onPressSlot?: (date: Date, column: CalendarColumn) => void;
 }) {
   const theme = useTheme();
-  const dayOrders = orders.filter((o) => isSameDay(new Date(o.scheduled_start), date));
 
   const handlePressGrid = (event: GestureResponderEvent) => {
     if (!onPressSlot) return;
-    const rawMinutes = event.nativeEvent.locationY / PIXELS_PER_MINUTE;
+    // В браузере (react-native-web) у клика нет locationY — берём offsetY DOM-события.
+    const native = event.nativeEvent as typeof event.nativeEvent & { offsetY?: number };
+    const y = Number.isFinite(native.locationY) ? native.locationY : native.offsetY;
+    if (y == null || !Number.isFinite(y)) return;
+    const rawMinutes = y / PIXELS_PER_MINUTE;
     const snappedMinutes = Math.floor(rawMinutes / SLOT_SNAP_MINUTES) * SLOT_SNAP_MINUTES;
-    onPressSlot(addMinutes(dayBounds(date).start, snappedMinutes));
+    onPressSlot(addMinutes(dayBounds(column.date).start, snappedMinutes), column);
   };
 
   return (
@@ -73,16 +71,20 @@ export function DayColumn({
         style={[
           styles.header,
           {
-            backgroundColor: isToday ? theme.colors.primaryContainer : theme.colors.surfaceVariant,
+            backgroundColor: column.highlighted ? theme.colors.primaryContainer : theme.colors.surfaceVariant,
             borderBottomColor: theme.colors.outlineVariant,
           },
         ]}
       >
         <Text
           variant="labelMedium"
-          style={[styles.headerText, isToday && { color: theme.colors.primary }]}
+          numberOfLines={1}
+          style={[styles.headerText, column.highlighted && { color: theme.colors.primary }]}
         >
-          {formatDayLabel(date)}
+          {column.title}
+        </Text>
+        <Text variant="labelSmall" style={[styles.count, { color: theme.colors.outline }]}>
+          {column.orders.length}
         </Text>
       </View>
       <Pressable style={{ height: GRID_HEIGHT }} onPress={handlePressGrid}>
@@ -95,7 +97,7 @@ export function DayColumn({
             ]}
           />
         ))}
-        {dayOrders.map((order) => (
+        {column.orders.map((order) => (
           <OrderBlock key={order.id} order={order} onPress={onPressOrder} />
         ))}
       </Pressable>
@@ -118,12 +120,19 @@ const styles = StyleSheet.create({
   },
   header: {
     height: HEADER_HEIGHT,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 6,
+    paddingHorizontal: 4,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   headerText: {
     textTransform: 'capitalize',
+    flexShrink: 1,
+  },
+  count: {
+    minWidth: 10,
   },
   gridLine: {
     position: 'absolute',

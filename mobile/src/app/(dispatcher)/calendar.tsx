@@ -9,6 +9,7 @@ import { useCalendarNav } from '../../hooks/useCalendarNav';
 import { CalendarGrid } from '../../components/calendar/CalendarGrid';
 import { CalendarToolbar } from '../../components/calendar/CalendarToolbar';
 import { ALL_EMPLOYEES, EmployeeFilter } from '../../components/calendar/EmployeeFilter';
+import { dayColumns, employeeColumns } from '../../components/calendar/columns';
 
 export default function DispatcherCalendarScreen() {
   const nav = useCalendarNav();
@@ -27,8 +28,22 @@ export default function DispatcherCalendarScreen() {
   const loadError = employeesQuery.error ?? ordersQuery.error;
   const noEmployees = employees.length === 0 && !employeesQuery.isLoading && !employeesQuery.isError;
 
-  const openNewOrder = (start?: Date) =>
-    router.push({ pathname: '/order/new', params: start ? { start: start.toISOString() } : {} });
+  // «День» + «Все» — колонка на каждого сотрудника; иначе колонка на каждый день.
+  const byEmployee = nav.viewMode === 'day' && activeEmployeeId === ALL_EMPLOYEES && employees.length > 0;
+  const columns = byEmployee
+    ? employeeColumns(nav.anchorDate, employees, allOrders)
+    : dayColumns(nav.days, orders);
+
+  const openNewOrder = (start?: Date, employeeId?: string) => {
+    const preset = employeeId ?? (activeEmployeeId === ALL_EMPLOYEES ? undefined : activeEmployeeId);
+    router.push({
+      pathname: '/order/new',
+      params: {
+        ...(start ? { start: start.toISOString() } : {}),
+        ...(preset ? { employeeId: preset } : {}),
+      },
+    });
+  };
 
   return (
     <View style={styles.container}>
@@ -61,12 +76,10 @@ export default function DispatcherCalendarScreen() {
       </Banner>
 
       <CalendarGrid
-        days={nav.days}
-        orders={orders}
-        viewMode={nav.viewMode}
+        columns={columns}
         isLoading={ordersQuery.isLoading || employeesQuery.isLoading}
         onPressOrder={(order) => router.push(`/order/${order.id}`)}
-        onPressSlot={openNewOrder}
+        onPressSlot={(start, column) => openNewOrder(start, column.employeeId)}
       />
 
       <FAB icon="plus" style={styles.fab} onPress={() => openNewOrder()} accessibilityLabel="Новый заказ" />

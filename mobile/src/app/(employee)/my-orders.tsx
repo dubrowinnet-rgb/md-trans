@@ -7,6 +7,7 @@ import { useSession } from '../../providers/SessionProvider';
 import { useCalendarNav } from '../../hooks/useCalendarNav';
 import { CalendarGrid } from '../../components/calendar/CalendarGrid';
 import { CalendarToolbar } from '../../components/calendar/CalendarToolbar';
+import { dayColumns } from '../../components/calendar/columns';
 
 // Календарь водителя/грузчика: та же сетка, только собственные заказы и без создания.
 export default function EmployeeCalendarScreen() {
@@ -42,9 +43,7 @@ export default function EmployeeCalendarScreen() {
       </Banner>
 
       <CalendarGrid
-        days={nav.days}
-        orders={orders}
-        viewMode={nav.viewMode}
+        columns={dayColumns(nav.days, orders)}
         isLoading={ordersQuery.isLoading}
         onPressOrder={(order) => router.push(`/order/${order.id}`)}
       />
