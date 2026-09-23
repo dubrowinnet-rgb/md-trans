@@ -1,0 +1,49 @@
+# Мобильное приложение (Expo + expo-router)
+
+Каркас приложения заново: Expo SDK 57, экраны файлами через **expo-router**,
+интерфейс на готовой библиотеке **React Native Paper** (Material 3).
+Данные — тот же Supabase, что и раньше (`../supabase`).
+
+## Запуск
+
+```bash
+cd mobile
+npm install
+cp .env.example .env   # заполнить EXPO_PUBLIC_SUPABASE_URL и EXPO_PUBLIC_SUPABASE_ANON_KEY
+npx expo start
+```
+
+Значения для `.env` — в Supabase Dashboard → Project Settings → API. После
+`git pull` один раз выполните `npx expo install --check`, чтобы сверить версии
+нативных пакетов с SDK (из среды разработки нет доступа к `api.expo.dev`).
+
+## Структура
+
+Экраны лежат в `src/app` — путь файла и есть адрес экрана:
+
+- `_layout.tsx` — корень: Paper, React Query, сессия. Через `Stack.Protected`
+  решает, какие группы экранов доступны: без входа — только `login`,
+  диспетчеру — `(dispatcher)`, водителю/грузчику — `(employee)`.
+- `index.tsx` — перенаправляет на нужный стартовый экран по роли.
+- `login.tsx` — вход (общий для всех ролей).
+- `(dispatcher)/` — вкладки диспетчера: `calendar` (календарь день/неделя,
+  фильтр по сотрудникам, «+» и тап по слоту) и `employees`.
+- `(employee)/my-orders.tsx` — календарь водителя/грузчика: только его заказы.
+- `order/[id].tsx` — карточка заказа (модалка).
+- `order/new.tsx` — создание заказа (пока заглушка, форма переносится следующим шагом).
+
+Остальное в `src/`:
+
+- `api/` — запросы к Supabase на React Query (перенесены со старой ветки без изменений,
+  добавлен `useOrder`).
+- `components/calendar/` — сетка календаря на компонентах Paper.
+- `providers/SessionProvider.tsx` — сессия и роль. Роль определяется, как раньше:
+  есть строка в `employees` с `auth_user_id` вошедшего — это сотрудник, иначе диспетчер.
+- `lib/` — клиент Supabase и push-уведомления.
+- `theme.ts` — тема Paper и цвета статусов заказа.
+
+## Push-уведомления
+
+Логика та же, что в старой версии (`src/lib/pushNotifications.ts`): экран
+сотрудника регистрирует push-токен, создание заказа шлёт уведомление экипажу.
+Для реальной доставки нужен EAS project ID: `npx eas init` локально.
