@@ -73,13 +73,17 @@ supabase db push
 будет возвращать ошибку.
 
 Если Supabase CLI не установлен — ставить отдельно не нужно, `npx` сам
-скачает его при первом запуске. Выполните по очереди в терминале, в
-корневой папке проекта (той, где лежат папки `mobile` и `supabase`):
+скачает его при первом запуске. Флаг `-y` обязателен: без него npx
+спрашивает подтверждение на установку («Ok to proceed?»), и если команды
+выполняются одна за другой без паузы, этот вопрос «съедает» следующую
+строку как ответ, и установка обрывается с `npm error canceled`. Выполните
+в терминале, в корневой папке проекта (той, где лежат папки `mobile` и
+`supabase`):
 
 ```bash
-npx supabase login                                        # откроется браузер для входа
-npx supabase link --project-ref mjrbqnsvwohmwvapiikr       # если ещё не делали
-npx supabase functions deploy create-account
+npx -y supabase login                                        # откроется браузер для входа
+npx -y supabase link --project-ref mjrbqnsvwohmwvapiikr       # если ещё не делали
+npx -y supabase functions deploy create-account
 ```
 
 Больше ничего настраивать не нужно: `SUPABASE_URL`, `SUPABASE_ANON_KEY` и
