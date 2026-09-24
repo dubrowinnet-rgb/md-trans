@@ -238,7 +238,10 @@ const styles = StyleSheet.create({
   content: {
     gap: 10,
     paddingHorizontal: 24,
-    paddingVertical: 8,
+    paddingTop: 8,
+    // Больше воздуха снизу, чем сверху: иначе последний чек-поинт упирается
+    // в «Сохранить»/«Отмена» вплотную под ним (раздел «баги», п.8).
+    paddingBottom: 24,
   },
   muted: {
     opacity: 0.6,

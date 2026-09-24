@@ -39,7 +39,7 @@ export function ServicePicker({
       <Dialog visible={visible} onDismiss={onDismiss} style={styles.dialog}>
         <Dialog.Title>Услуги</Dialog.Title>
         <Dialog.ScrollArea style={styles.area}>
-          <ScrollView>
+          <ScrollView contentContainerStyle={styles.listContent}>
             {loadError && <HelperText type="error">{loadError}</HelperText>}
             {services.length === 0 && !loadError && (
               <Text style={styles.empty}>
@@ -80,6 +80,11 @@ const styles = StyleSheet.create({
   },
   area: {
     paddingHorizontal: 0,
+  },
+  // Без этого последняя строка списка упиралась прямо в «Сохранить»/
+  // «Отмена» (раздел «баги», п.8).
+  listContent: {
+    paddingBottom: 16,
   },
   row: {
     flexDirection: 'row',

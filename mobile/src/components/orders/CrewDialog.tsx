@@ -184,7 +184,10 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: 24,
-    paddingVertical: 8,
+    paddingTop: 8,
+    // Больше воздуха снизу, чем сверху: иначе последний ряд чипов упирается
+    // в «Сохранить»/«Отмена» вплотную под ним (раздел «баги», п.8).
+    paddingBottom: 24,
   },
   chips: {
     flexDirection: 'row',
