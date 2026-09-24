@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { Button, Dialog, HelperText, Portal, Switch, Text, TextInput } from 'react-native-paper';
 import { useCreateVehicle, useDeleteVehicle, useUpdateVehicle, type Vehicle, type VehicleInput } from '../../api/vehicles';
+import { DismissKeyboardView } from '../form/DismissKeyboardView';
 
 // Размер кузова хранится одной строкой («Д 400 х Ш 200 х В 180 см», в
 // сантиметрах) — тот же формат читает и пишет веб-кабинет, чтобы поле
@@ -103,6 +104,7 @@ export function VehicleDialog({
       <Dialog visible={!confirmDelete} onDismiss={onClose} style={styles.dialog}>
         <Dialog.Title>{vehicle ? vehicle.name : 'Новая машина'}</Dialog.Title>
         <Dialog.ScrollArea style={styles.area}>
+          <DismissKeyboardView>
           <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
             <TextInput mode="outlined" label="Название *" accessibilityLabel="Название" value={name} onChangeText={setName} />
             <TextInput
@@ -178,6 +180,7 @@ export function VehicleDialog({
             />
             {error && <HelperText type="error">{error}</HelperText>}
           </ScrollView>
+          </DismissKeyboardView>
         </Dialog.ScrollArea>
         <Dialog.Actions>
           {vehicle && (

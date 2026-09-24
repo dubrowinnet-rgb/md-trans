@@ -89,12 +89,32 @@ function PagedCalendarInner({
   }, [middle]);
   useLayoutEffect(recenter, [anchor, recenter]);
 
-  // При входе и по кнопке «Сегодня» экран начинается с линии текущего времени.
+  // При входе и по кнопке «Сегодня»: на 1 дне экран всегда начинается с
+  // линии текущего времени (выполненные заказы просто остаются выше, вне
+  // экрана — это ожидаемо). На 3/7 днях — с более ранней из двух точек:
+  // либо линия времени, либо самый ранний ещё предстоящий заказ текущей
+  // страницы, чтобы оба были видны без прокрутки.
+  // orders.length в зависимостях — при первом заходе список заказов ещё
+  // пуст (запрос не успел ответить), эффект должен пересчитать цель, когда
+  // заказы подгрузятся, а не только при смене scrollToNowSignal.
   useEffect(() => {
-    const y = Math.max(0, minutesFromDayStart(new Date()) * PIXELS_PER_MINUTE - 24);
-    const id = setTimeout(() => verticalRef.current?.scrollTo({ y, animated: scrollToNowSignal > 0 }), 50);
+    const now = new Date();
+    let y = minutesFromDayStart(now) * PIXELS_PER_MINUTE;
+    if (mode !== 1) {
+      const pageEnd = addDays(anchor, mode);
+      let earliest: number | null = null;
+      for (const order of orders) {
+        const orderStart = new Date(order.scheduled_start);
+        if (orderStart <= now || orderStart < anchor || orderStart >= pageEnd) continue;
+        const orderY = minutesFromDayStart(orderStart) * PIXELS_PER_MINUTE;
+        if (earliest === null || orderY < earliest) earliest = orderY;
+      }
+      if (earliest !== null) y = Math.min(y, earliest);
+    }
+    const target = Math.max(0, y - 24);
+    const id = setTimeout(() => verticalRef.current?.scrollTo({ y: target, animated: scrollToNowSignal > 0 }), 50);
     return () => clearTimeout(id);
-  }, [scrollToNowSignal]);
+  }, [scrollToNowSignal, orders.length]);
 
   const settle = useCallback(
     (offset: number) => {

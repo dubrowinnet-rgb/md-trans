@@ -31,7 +31,7 @@ export default function TeamScreen() {
           ListEmptyComponent={<Text style={styles.empty}>Пока никого нет.</Text>}
           renderItem={({ item }) => (
             <List.Item
-              title={item.name}
+              title={[item.name, item.last_name].filter(Boolean).join(' ')}
               description={`${ACCOUNT_ROLE_LABELS[item.role]}${item.login ? ` · ${item.login}` : ''}${item.phone ? ` · ${item.phone}` : ''}`}
               left={(props) => <List.Icon {...props} icon={ACCOUNT_ROLE_ICONS[item.role]} />}
               onPress={() => setEditing(item)}

@@ -1,5 +1,5 @@
 import { ScrollView, StyleSheet, View } from 'react-native';
-import { Text } from 'react-native-paper';
+import { Portal, Text } from 'react-native-paper';
 import { useSession } from '../providers/SessionProvider';
 import { ScheduleCalendar } from '../components/schedule/ScheduleCalendar';
 import { useSetScheduleMode } from '../api/schedule';
@@ -23,6 +23,11 @@ export default function SelfScheduleScreen() {
   }
 
   return (
+    // Экран открыт нативным modal-presentation (app/_layout.tsx) — своё
+    // дерево портала обязательно, та же причина, что в order/new.tsx:
+    // иначе диалог дня графика (ScheduleCalendar) рендерится за этим
+    // модальным окном и виден только после его закрытия.
+    <Portal.Host>
     <ScrollView contentContainerStyle={styles.content}>
       <Text variant="titleMedium" style={styles.title}>
         Мой график
@@ -40,6 +45,7 @@ export default function SelfScheduleScreen() {
         onSetMode={(mode: ScheduleMode) => setScheduleMode.mutate({ employeeId: employee.id, mode })}
       />
     </ScrollView>
+    </Portal.Host>
   );
 }
 

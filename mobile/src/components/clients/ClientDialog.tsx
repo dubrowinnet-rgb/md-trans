@@ -3,6 +3,7 @@ import { ActivityIndicator, Platform, ScrollView, StyleSheet, View } from 'react
 import { Button, Dialog, Divider, HelperText, Portal, Text, TextInput } from 'react-native-paper';
 import { useClientOrderStats, useCreateClient, useUpdateClient, type Client } from '../../api/clients';
 import { pickPhoneContact } from '../../lib/phoneContacts';
+import { DismissKeyboardView } from '../form/DismissKeyboardView';
 
 // Карточка клиента: создание и правка. Для нового клиента имя и телефон
 // можно взять из записной книжки телефона кнопкой «Выбрать из контактов».
@@ -80,6 +81,7 @@ export function ClientDialog({
       <Dialog visible onDismiss={onClose}>
         <Dialog.Title>{client ? 'Клиент' : 'Новый клиент'}</Dialog.Title>
         <Dialog.ScrollArea style={styles.area}>
+          <DismissKeyboardView>
           <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
             {!client && Platform.OS !== 'web' && (
               <Button mode="text" icon="contacts" onPress={fillFromContacts} loading={picking} style={styles.contacts}>
@@ -134,6 +136,7 @@ export function ClientDialog({
             )}
             {error && <HelperText type="error">{error}</HelperText>}
           </ScrollView>
+          </DismissKeyboardView>
         </Dialog.ScrollArea>
         <Dialog.Actions>
           <Button onPress={onClose}>Отмена</Button>

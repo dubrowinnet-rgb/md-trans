@@ -225,6 +225,77 @@ export function useUpdateOrderScheduleAndPrice() {
   });
 }
 
+export interface UpdateOrderCrewInput {
+  orderId: string;
+  vehicleId: string | null;
+  crew: CreateOrderCrewInput[];
+}
+
+// Смена экипажа/машины уже созданного заказа (раздел «редактирование
+// экипажа» — выбор/замена должны быть кликабельными и в уже созданном
+// заказе, не только при создании). Не трогаем строки, которые не
+// изменились, — иначе уже принятый («принял заказ») сотрудник без
+// причины откатился бы обратно в «уведомлён» только из-за того, что
+// диалог открыли и сохранили.
+export function useUpdateOrderCrew() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ orderId, vehicleId, crew }: UpdateOrderCrewInput) => {
+      const { data: current, error: currentError } = await supabase
+        .from('order_crew')
+        .select('employee_id, role')
+        .eq('order_id', orderId);
+      if (currentError) throw currentError;
+
+      const key = (c: { employee_id: string; role: string }) => `${c.employee_id}:${c.role}`;
+      const nextKeys = new Set(crew.map(key));
+      const currentKeys = new Set((current ?? []).map(key));
+      const toRemove = (current ?? []).filter((c) => !nextKeys.has(key(c)));
+      const toAdd = crew.filter((c) => !currentKeys.has(key(c)));
+
+      for (const row of toRemove) {
+        const { error } = await supabase
+          .from('order_crew')
+          .delete()
+          .eq('order_id', orderId)
+          .eq('employee_id', row.employee_id)
+          .eq('role', row.role);
+        if (error) throw error;
+      }
+      if (toAdd.length > 0) {
+        const { error } = await supabase.from('order_crew').insert(
+          toAdd.map((c) => ({
+            order_id: orderId,
+            employee_id: c.employee_id,
+            role: c.role,
+            status: 'notified',
+            notified_at: new Date().toISOString(),
+          }))
+        );
+        if (error) throw error;
+      }
+
+      const { error: vehicleError } = await supabase.from('orders').update({ vehicle_id: vehicleId }).eq('id', orderId);
+      if (vehicleError) throw vehicleError;
+
+      if (toAdd.length > 0) {
+        const { data: addedEmployees } = await supabase
+          .from('employees')
+          .select('expo_push_token')
+          .in('id', toAdd.map((c) => c.employee_id));
+        const tokens = (addedEmployees ?? [])
+          .map((e) => e.expo_push_token)
+          .filter((t): t is string => Boolean(t));
+        await sendPushNotifications(tokens, 'Изменение экипажа', 'Вас назначили на заказ', { orderId });
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      queryClient.invalidateQueries({ queryKey: ['busy-employees'] });
+    },
+  });
+}
+
 export function useUpdateOrderStatus() {
   const queryClient = useQueryClient();
   return useMutation({
