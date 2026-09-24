@@ -1,32 +1,17 @@
 import { useState } from 'react';
-import { pickPhoneContact, type PickedContact } from '../lib/phoneContacts';
 
-// «Добавить клиента»: сразу открываем записную книжку телефона, а потом
-// карточку нового клиента с подставленными именем и телефоном. Если контакт
-// не выбрали или доступа нет, карточка открывается пустой.
+// «Добавить клиента»: открываем пустую карточку клиента сразу, не дожидаясь
+// выбора контакта — там уже есть своя кнопка «Выбрать из контактов»
+// (ClientDialog). Раньше сперва вызывали пикер контактов и только потом
+// показывали карточку с результатом; если пикер на телефоне зависал или не
+// возвращал ответ (сообщалось на реальном iPhone — выбор контакта не
+// приводил ни к чему), пользователь не видел вообще никакого экрана. Теперь
+// карточка видна в любом случае, а пикер — просто опциональное действие внутри неё.
 export function useNewClientFromContacts() {
-  const [draft, setDraft] = useState<PickedContact | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [picking, setPicking] = useState(false);
+  const [open, setOpen] = useState(false);
 
-  const start = async () => {
-    if (picking) return;
-    setPicking(true);
-    setNotice(null);
-    try {
-      setDraft((await pickPhoneContact()) ?? { name: '', phone: '' });
-    } catch (err) {
-      setNotice(err instanceof Error ? err.message : 'Не удалось открыть контакты');
-      setDraft({ name: '', phone: '' });
-    } finally {
-      setPicking(false);
-    }
-  };
+  const start = () => setOpen(true);
+  const close = () => setOpen(false);
 
-  const close = () => {
-    setDraft(null);
-    setNotice(null);
-  };
-
-  return { draft, notice, picking, start, close };
+  return { open, start, close };
 }

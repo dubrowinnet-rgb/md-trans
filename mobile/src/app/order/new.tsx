@@ -363,22 +363,14 @@ export default function NewOrderScreen() {
                   onPress={() => setSelectedClient(client)}
                 />
               ))}
-              <Button mode="outlined" icon="account-plus" onPress={newClient.start} loading={newClient.picking}>
+              <Button mode="outlined" icon="account-plus" onPress={newClient.start}>
                 Добавить клиента
               </Button>
             </>
           )}
         </FormSection>
 
-        {newClient.draft && (
-          <ClientDialog
-            client={null}
-            initial={newClient.draft}
-            notice={newClient.notice}
-            onClose={newClient.close}
-            onSaved={setSelectedClient}
-          />
-        )}
+        {newClient.open && <ClientDialog client={null} onClose={newClient.close} onSaved={setSelectedClient} />}
 
         <FormSection title="Услуги">
           {selectedServices.map((service) => (

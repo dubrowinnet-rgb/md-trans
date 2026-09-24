@@ -57,13 +57,7 @@ export default function ClientsScreen() {
           )}
         />
       )}
-      <FAB
-        icon="account-plus"
-        label="Добавить"
-        style={styles.fab}
-        loading={newClient.picking}
-        onPress={newClient.start}
-      />
+      <FAB icon="account-plus" label="Добавить" style={styles.fab} onPress={newClient.start} />
       {editing && (
         <ClientDialog
           client={editing}
@@ -72,9 +66,7 @@ export default function ClientsScreen() {
           onClose={() => setEditing(null)}
         />
       )}
-      {newClient.draft && (
-        <ClientDialog client={null} initial={newClient.draft} notice={newClient.notice} onClose={newClient.close} />
-      )}
+      {newClient.open && <ClientDialog client={null} onClose={newClient.close} />}
     </View>
   );
 }
