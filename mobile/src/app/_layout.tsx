@@ -90,6 +90,10 @@ function RootNavigator() {
           name="my-schedule"
           options={{ presentation: 'containedModal', headerShown: true, title: 'Мой график' }}
         />
+        {/* settings — свой вложенный Stack (index/profile/services/...),
+            каждый экран сам рисует Appbar.Header, поэтому headerShown тут
+            не переопределяем (см. app/settings/_layout.tsx). */}
+        <Stack.Screen name="settings" options={{ presentation: 'containedModal' }} />
       </Stack.Protected>
     </Stack>
   );

@@ -3,6 +3,7 @@ import { FlatList, StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Appbar, Divider, FAB, HelperText, List, Searchbar, Text } from 'react-native-paper';
 import { useClients, type Client } from '../../api/clients';
 import { ClientDialog } from '../../components/clients/ClientDialog';
+import { AccountMenu } from '../../components/layout/AccountMenu';
 import { useNewClientFromContacts } from '../../hooks/useNewClientFromContacts';
 import { useSession } from '../../providers/SessionProvider';
 import { canViewClientPhone, canViewClientStats } from '../../lib/permissions';
@@ -21,6 +22,7 @@ export default function ClientsScreen() {
     <View style={styles.container}>
       <Appbar.Header>
         <Appbar.Content title="Клиенты" />
+        <AccountMenu />
       </Appbar.Header>
       <Searchbar
         style={styles.search}

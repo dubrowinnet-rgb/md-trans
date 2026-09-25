@@ -43,6 +43,8 @@ export interface Database {
           birth_date: string | null;
           hire_date: string | null;
           address: string | null;
+          personal_vehicle_make: string | null;
+          personal_vehicle_plate: string | null;
           created_at: string;
         };
         Insert: {
@@ -66,6 +68,8 @@ export interface Database {
           birth_date?: string | null;
           hire_date?: string | null;
           address?: string | null;
+          personal_vehicle_make?: string | null;
+          personal_vehicle_plate?: string | null;
         };
         Update: Partial<Database['public']['Tables']['employees']['Insert']>;
         Relationships: [];
@@ -123,6 +127,7 @@ export interface Database {
           photos: string[];
           created_by: string | null;
           vehicle_id: string | null;
+          client_sms_sent_at: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -240,6 +245,38 @@ export interface Database {
           end_time?: string | null;
         };
         Update: Partial<Database['public']['Tables']['employee_schedule_days']['Insert']>;
+        Relationships: [];
+      };
+      sms_templates: {
+        Row: {
+          key: string;
+          label: string;
+          body: string;
+          updated_at: string;
+        };
+        Insert: {
+          key: string;
+          label: string;
+          body: string;
+        };
+        Update: Partial<Database['public']['Tables']['sms_templates']['Insert']>;
+        Relationships: [];
+      };
+      reminder_rules: {
+        Row: {
+          id: string;
+          target: 'crew_push';
+          offset_minutes: number;
+          enabled: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          target?: 'crew_push';
+          offset_minutes: number;
+          enabled?: boolean;
+        };
+        Update: Partial<Database['public']['Tables']['reminder_rules']['Insert']>;
         Relationships: [];
       };
     };

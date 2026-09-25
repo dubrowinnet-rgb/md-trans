@@ -3,11 +3,11 @@ import { StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { Appbar, Banner, ProgressBar, Text } from 'react-native-paper';
 import { useOrdersForRange, type OrderWithDetails } from '../../api/orders';
-import { supabase } from '../../lib/supabase';
 import { useSession } from '../../providers/SessionProvider';
 import { useCalendarNav } from '../../hooks/useCalendarNav';
 import { PagedCalendar } from '../../components/calendar/PagedCalendar';
 import { CalendarToolbar } from '../../components/calendar/CalendarToolbar';
+import { AccountMenu } from '../../components/layout/AccountMenu';
 import { formatHeaderDate } from '../../utils/date';
 
 // Календарь водителя/грузчика: та же сетка, только собственные заказы и без создания.
@@ -36,7 +36,7 @@ export default function EmployeeCalendarScreen() {
         />
         <Appbar.Action icon="calendar-today" onPress={nav.goToday} accessibilityLabel="Сегодня" />
         <Appbar.Action icon="calendar-remove-outline" onPress={() => router.push('/my-schedule')} accessibilityLabel="Мой график" />
-        <Appbar.Action icon="logout" onPress={() => supabase.auth.signOut()} accessibilityLabel="Выйти" />
+        <AccountMenu />
       </Appbar.Header>
 
       <CalendarToolbar mode={nav.mode} onPrev={nav.goPrev} onNext={nav.goNext} onSetMode={nav.setMode} />

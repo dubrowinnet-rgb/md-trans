@@ -105,6 +105,7 @@ export function CrewDialog({ order, onClose }: { order: OrderWithDetails; onClos
                         icon={dotIcon(TIER_COLOR[tier])}
                         selected={driverId === driver.id}
                         showSelectedOverlay
+                        disabled={tier === 'dayoff' && driverId !== driver.id}
                         onPress={() => selectDriver(driverId === driver.id ? null : driver.id)}
                       >
                         {`${driver.name}${suffix}`}
@@ -146,7 +147,7 @@ export function CrewDialog({ order, onClose }: { order: OrderWithDetails; onClos
                           icon={dotIcon(TIER_COLOR[tier])}
                           selected={loaderIds.includes(person.id)}
                           showSelectedOverlay
-                          disabled={tier === 'busy'}
+                          disabled={tier !== 'available' && !loaderIds.includes(person.id)}
                           onPress={() => toggleLoader(person.id)}
                         >
                           {`${person.name}${isDriver ? ' (водитель)' : ''}${suffix}`}

@@ -3,9 +3,12 @@ import type { OrderWithDetails } from '../../api/orders';
 export const PAST_ORDER_COLOR = '#6B6B6B';
 export const DEFAULT_ORDER_COLOR = '#8E24AA';
 
-// Цвет заказа как в Bumpix: цвет его (первой) услуги; закончившийся заказ — серый.
+// Цвет заказа как в Bumpix: цвет его (первой) услуги; прошедший или уже
+// отмеченный «выполнен» заказ — серый (раздел «баги 3», п.8: цветное —
+// только предстоящее, статус учитываем отдельно от времени, потому что
+// диспетчер может закрыть заказ раньше времени окончания в форме).
 export function orderColor(order: OrderWithDetails, now: Date) {
-  if (new Date(order.scheduled_end) <= now) return PAST_ORDER_COLOR;
+  if (order.status === 'completed' || new Date(order.scheduled_end) <= now) return PAST_ORDER_COLOR;
   return order.order_services[0]?.services?.color ?? DEFAULT_ORDER_COLOR;
 }
 

@@ -4,7 +4,7 @@ import { router } from 'expo-router';
 import { Appbar, Banner, FAB, ProgressBar } from 'react-native-paper';
 import { useEmployees } from '../../api/employees';
 import { useOrdersForRange, type OrderWithDetails } from '../../api/orders';
-import { supabase } from '../../lib/supabase';
+import { AccountMenu } from '../../components/layout/AccountMenu';
 import { useSession } from '../../providers/SessionProvider';
 import { canManageOrders } from '../../lib/permissions';
 import { useCalendarNav } from '../../hooks/useCalendarNav';
@@ -53,7 +53,7 @@ export default function DispatcherCalendarScreen() {
       <Appbar.Header>
         <Appbar.Content title={formatHeaderDate(nav.anchor)} titleStyle={styles.title} />
         <Appbar.Action icon="calendar-today" onPress={nav.goToday} accessibilityLabel="Сегодня" />
-        <Appbar.Action icon="logout" onPress={() => supabase.auth.signOut()} accessibilityLabel="Выйти" />
+        <AccountMenu />
       </Appbar.Header>
 
       <EmployeeFilter employees={employees} activeId={activeEmployeeId} onSelect={setActiveEmployeeId} />

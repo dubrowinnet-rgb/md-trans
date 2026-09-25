@@ -128,7 +128,14 @@ export function AccountDialog({ account, onClose }: { account: Account | null; o
   const [birthDate, setBirthDate] = useState<Date | null>(parseDate(account?.birth_date ?? null));
   const [hireDate, setHireDate] = useState<Date | null>(parseDate(account?.hire_date ?? null));
   const [address, setAddress] = useState(account?.address ?? '');
+  const [personalVehicleMake, setPersonalVehicleMake] = useState(account?.personal_vehicle_make ?? '');
+  const [personalVehiclePlate, setPersonalVehiclePlate] = useState(account?.personal_vehicle_plate ?? '');
   const [role, setRole] = useState<AccountRole>(account?.role ?? 'dispatcher');
+  // Роль выбирается один раз при заведении сотрудника и почти никогда не
+  // меняется — на редактировании селектор свёрнут в строку с кнопкой
+  // «Изменить», а не всегда раскрыт (раздел «баги 3», п.5). На создании
+  // роль ещё не выбрана, так что селектор открыт сразу.
+  const [roleEditing, setRoleEditing] = useState(!account);
   const [permissions, setPermissions] = useState<AccountPermissions>(
     account
       ? {
@@ -176,6 +183,8 @@ export function AccountDialog({ account, onClose }: { account: Account | null; o
         birth_date: birthDate ? format(birthDate, 'yyyy-MM-dd') : null,
         hire_date: hireDate ? format(hireDate, 'yyyy-MM-dd') : null,
         address: address.trim() || undefined,
+        personal_vehicle_make: personalVehicleMake.trim() || undefined,
+        personal_vehicle_plate: personalVehiclePlate.trim() || undefined,
       };
       if (account) {
         await updateProfile.mutateAsync({
@@ -265,11 +274,47 @@ export function AccountDialog({ account, onClose }: { account: Account | null; o
                   onChangeText={setAddress}
                   multiline
                 />
+                <Text variant="bodySmall" style={styles.muted}>
+                  Личный транспорт (необязательно) — если сотрудник иногда добирается на нём до заказа.
+                </Text>
+                <TextInput
+                  mode="outlined"
+                  label="Марка"
+                  accessibilityLabel="Марка личного транспорта"
+                  value={personalVehicleMake}
+                  onChangeText={setPersonalVehicleMake}
+                />
+                <TextInput
+                  mode="outlined"
+                  label="Гос номер"
+                  accessibilityLabel="Гос номер личного транспорта"
+                  value={personalVehiclePlate}
+                  onChangeText={setPersonalVehiclePlate}
+                  autoCapitalize="characters"
+                />
 
                 <Divider style={styles.divider} />
                 <Text variant="labelLarge">Роль</Text>
-                <SegmentedButtons value={role} onValueChange={handleRoleChange} buttons={ROLE_OPTIONS.slice(0, 2)} />
-                <SegmentedButtons value={role} onValueChange={handleRoleChange} buttons={ROLE_OPTIONS.slice(2)} />
+                {roleEditing ? (
+                  <>
+                    <SegmentedButtons value={role} onValueChange={handleRoleChange} buttons={ROLE_OPTIONS.slice(0, 2)} />
+                    <SegmentedButtons value={role} onValueChange={handleRoleChange} buttons={ROLE_OPTIONS.slice(2)} />
+                    {account && (
+                      <HelperText type="info">
+                        Роль обычно назначается один раз и не меняется — проверьте перед сохранением.
+                      </HelperText>
+                    )}
+                  </>
+                ) : (
+                  <View style={styles.roleRow}>
+                    <Text variant="bodyMedium" style={styles.flex}>
+                      {ACCOUNT_ROLE_LABELS[role]}
+                    </Text>
+                    <Button compact onPress={() => setRoleEditing(true)}>
+                      Изменить
+                    </Button>
+                  </View>
+                )}
 
                 {role === 'driver' && (
                   <>
@@ -406,6 +451,10 @@ const styles = StyleSheet.create({
   },
   permissionLabel: {
     flex: 1,
+  },
+  roleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   dateField: {
     gap: 4,

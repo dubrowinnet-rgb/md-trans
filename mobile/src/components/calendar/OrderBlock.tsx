@@ -9,8 +9,10 @@ function crewConfirmed(order: OrderWithDetails) {
   return `${confirmed}/${order.order_crew.length} приняли`;
 }
 
-// Карточка заказа в сетке, как в Bumpix: «время, клиент, услуга, (адрес)» белым
-// текстом на цвете услуги.
+// Карточка заказа в сетке, как в Bumpix: «время, клиент, услуга» белым
+// текстом на цвете услуги, плюс адрес откуда/куда и груз отдельными
+// строками (раздел «баги 3», п.2) — видно, только если блок достаточно
+// высокий (короткие заказы просто обрезаются по высоте, как раньше).
 export function OrderBlock({
   order,
   lane,
@@ -35,6 +37,8 @@ export function OrderBlock({
   const height = Math.min(Math.max(durationMinutes * PIXELS_PER_MINUTE, 22), GRID_HEIGHT - top);
   const laneWidth = columnWidth / lanes;
   const pickup = order.order_stops.find((s) => s.is_primary && s.type === 'pickup')?.address;
+  const dropoff = order.order_stops.find((s) => s.is_primary && s.type === 'dropoff')?.address;
+  const route = [pickup, dropoff].filter(Boolean).join(' → ');
   const service = order.order_services[0]?.services?.name;
   const confirmation = crewConfirmed(order);
   const cancelled = order.status === 'cancelled';
@@ -58,9 +62,14 @@ export function OrderBlock({
         {formatTime(start)} - {formatTime(end)},{' '}
         <Text style={styles.bold}>{order.clients?.name ?? 'Без клиента'}</Text>
         {service ? `, ${service}` : ''}
-        {pickup ? `, (${pickup})` : ''}
         {cancelled ? ' · отменён' : ''}
       </Text>
+      {route.length > 0 && (
+        <Text style={[styles.text, compact && styles.compact, styles.detail]}>{route}</Text>
+      )}
+      {order.cargo_description && !compact && (
+        <Text style={[styles.text, styles.detail]}>{`Груз: ${order.cargo_description}`}</Text>
+      )}
       {confirmation && !compact && <Text style={[styles.text, styles.confirmation]}>{confirmation}</Text>}
     </Pressable>
   );
@@ -85,6 +94,10 @@ const styles = StyleSheet.create({
   },
   bold: {
     fontWeight: '700',
+  },
+  detail: {
+    marginTop: 1,
+    opacity: 0.9,
   },
   confirmation: {
     marginTop: 2,
