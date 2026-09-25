@@ -11,7 +11,10 @@ import { formatPhone } from '@/lib/phone';
 import { PageHeader } from '@/components/common/PageHeader';
 import { AccountModal } from '@/components/team/AccountModal';
 
-const ROLE_COLOR = { admin: 'violet', dispatcher: 'blue', driver: 'teal', loader: 'orange' } as const;
+// 'owner' сюда никогда не попадает (RLS не отдаёт эту роль в списке
+// сотрудников компании — см. lib/ownerAccess.ts), запись только ради
+// исчерпывающего Record<AccountRole, ...>.
+const ROLE_COLOR = { owner: 'gray', admin: 'violet', dispatcher: 'blue', driver: 'teal', loader: 'orange' } as const;
 
 function Tick({ on }: { on: boolean }) {
   return on ? <IconCheck size={16} color="var(--mantine-color-green-7)" /> : <Text c="dimmed">—</Text>;

@@ -5,8 +5,11 @@
 // в отличие от роли входа (AccountRole), которая шире.
 export type EmployeeRole = 'driver' | 'loader';
 // Роль входа в приложение: у каждой — свой набор экранов (см. app/_layout.tsx).
-export type AccountRole = 'admin' | 'dispatcher' | 'driver' | 'loader';
+// 'owner' — владелец сервиса (миграция 0013): не привязан к компании
+// (company_id всегда null), доступен только в веб-кабинете (/owner/).
+export type AccountRole = 'owner' | 'admin' | 'dispatcher' | 'driver' | 'loader';
 export type AccountStatus = 'active' | 'pending_payment' | 'suspended';
+export type TicketStatus = 'open' | 'in_progress' | 'resolved';
 export type OrderStatus = 'new' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled';
 export type StopType = 'pickup' | 'dropoff';
 export type CrewStatus = 'notified' | 'read' | 'confirmed';
@@ -43,6 +46,9 @@ export interface Database {
           address: string | null;
           personal_vehicle_make: string | null;
           personal_vehicle_plate: string | null;
+          // null только у роли 'owner' — остальные роли всегда привязаны
+          // к компании (миграция 0013, employees_company_id_by_role).
+          company_id: string | null;
           created_at: string;
         };
         Insert: {
@@ -68,6 +74,7 @@ export interface Database {
           address?: string | null;
           personal_vehicle_make?: string | null;
           personal_vehicle_plate?: string | null;
+          company_id?: string | null;
         };
         Update: Partial<Database['public']['Tables']['employees']['Insert']>;
         Relationships: [];
@@ -79,6 +86,7 @@ export interface Database {
           phone: string | null;
           discount_percent: number;
           notes: string | null;
+          company_id: string;
           created_at: string;
         };
         Insert: {
@@ -87,6 +95,8 @@ export interface Database {
           phone?: string | null;
           discount_percent?: number;
           notes?: string | null;
+          // DEFAULT get_my_company_id() в базе — слать не нужно (миграция 0013).
+          company_id?: string;
         };
         Update: Partial<Database['public']['Tables']['clients']['Insert']>;
         Relationships: [];
@@ -99,6 +109,7 @@ export interface Database {
           base_price: number | null;
           category: string | null;
           color: string;
+          company_id: string;
           created_at: string;
         };
         Insert: {
@@ -108,6 +119,7 @@ export interface Database {
           base_price?: number | null;
           category?: string | null;
           color?: string;
+          company_id?: string;
         };
         Update: Partial<Database['public']['Tables']['services']['Insert']>;
         Relationships: [];
@@ -126,6 +138,7 @@ export interface Database {
           created_by: string | null;
           vehicle_id: string | null;
           client_sms_sent_at: string | null;
+          company_id: string;
           created_at: string;
           updated_at: string;
         };
@@ -141,6 +154,10 @@ export interface Database {
           photos?: string[];
           created_by?: string | null;
           vehicle_id?: string | null;
+          // В обычном INSERT не участвует — заказы заводятся через RPC
+          // create_order(), которая сама проставляет company_id сервером
+          // (get_my_company_id()). Поле здесь только для полноты Row/Insert.
+          company_id?: string;
         };
         Update: Partial<Database['public']['Tables']['orders']['Insert']>;
         Relationships: [];
@@ -210,6 +227,7 @@ export interface Database {
           top_loading: boolean;
           side_loading: boolean;
           moscow_center_pass: boolean;
+          company_id: string;
           created_at: string;
         };
         Insert: {
@@ -222,6 +240,7 @@ export interface Database {
           top_loading?: boolean;
           side_loading?: boolean;
           moscow_center_pass?: boolean;
+          company_id?: string;
         };
         Update: Partial<Database['public']['Tables']['vehicles']['Insert']>;
         Relationships: [];
@@ -247,15 +266,19 @@ export interface Database {
       };
       sms_templates: {
         Row: {
+          // Первичный ключ теперь (company_id, key), не просто key —
+          // миграция 0013, у каждой компании свой набор тех же ключей.
           key: string;
           label: string;
           body: string;
+          company_id: string;
           updated_at: string;
         };
         Insert: {
           key: string;
           label: string;
           body: string;
+          company_id?: string;
         };
         Update: Partial<Database['public']['Tables']['sms_templates']['Insert']>;
         Relationships: [];
@@ -266,6 +289,7 @@ export interface Database {
           target: 'crew_push';
           offset_minutes: number;
           enabled: boolean;
+          company_id: string;
           created_at: string;
         };
         Insert: {
@@ -273,8 +297,72 @@ export interface Database {
           target?: 'crew_push';
           offset_minutes: number;
           enabled?: boolean;
+          company_id?: string;
         };
         Update: Partial<Database['public']['Tables']['reminder_rules']['Insert']>;
+        Relationships: [];
+      };
+      companies: {
+        Row: {
+          id: string;
+          name: string;
+          subscription_status: AccountStatus;
+          subscription_plan: string | null;
+          subscription_price: number | null;
+          subscription_expires_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          subscription_status?: AccountStatus;
+          subscription_plan?: string | null;
+          subscription_price?: number | null;
+          subscription_expires_at?: string | null;
+        };
+        Update: Partial<Database['public']['Tables']['companies']['Insert']>;
+        Relationships: [];
+      };
+      support_tickets: {
+        Row: {
+          id: string;
+          company_id: string;
+          created_by: string;
+          subject: string;
+          status: TicketStatus;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          created_by: string;
+          subject: string;
+          status?: TicketStatus;
+          // Триггер set_updated_at перезапишет любое присланное значение
+          // на своё UPDATE — поле здесь только чтобы можно было вызвать
+          // update({ updated_at: ... }) ради самого факта UPDATE (см.
+          // useSendTicketMessage в api/supportTickets.ts).
+          updated_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['support_tickets']['Insert']>;
+        Relationships: [];
+      };
+      support_ticket_messages: {
+        Row: {
+          id: string;
+          ticket_id: string;
+          sender_id: string;
+          body: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          ticket_id: string;
+          sender_id: string;
+          body: string;
+        };
+        Update: Partial<Database['public']['Tables']['support_ticket_messages']['Insert']>;
         Relationships: [];
       };
     };

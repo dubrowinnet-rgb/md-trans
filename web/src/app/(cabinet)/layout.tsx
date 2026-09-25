@@ -3,7 +3,7 @@
 import { useEffect, type ReactNode } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { AppShell, Avatar, Button, Center, Divider, Group, Loader, NavLink, Stack, Text, Title } from '@mantine/core';
+import { AppShell, Avatar, Button, Center, Group, Loader, NavLink, Stack, Text, Title } from '@mantine/core';
 import {
   IconBuildingStore,
   IconCalendarWeek,
@@ -45,9 +45,18 @@ export default function CabinetLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { session, employee, isLoading } = useSession();
 
+  const isOwner = isServiceOwner(employee);
+
   useEffect(() => {
     if (!isLoading && !session) router.replace('/login/');
   }, [isLoading, session, router]);
+
+  // Владелец сервиса не работает с заказами конкретной компании — уводим
+  // его сразу в /owner/, минуя общий кабинет диспетчера (куда ведут /login/
+  // и корневой /).
+  useEffect(() => {
+    if (isOwner && !pathname?.startsWith('/owner')) router.replace('/owner/');
+  }, [isOwner, pathname, router]);
 
   if (isLoading || !session) {
     return (
@@ -57,7 +66,7 @@ export default function CabinetLayout({ children }: { children: ReactNode }) {
     );
   }
 
-  if (!isOfficeRole(employee)) {
+  if (!isOfficeRole(employee) && !isOwner) {
     return (
       <Center h="100vh">
         <Stack align="center" maw={420}>
@@ -78,42 +87,42 @@ export default function CabinetLayout({ children }: { children: ReactNode }) {
   }
 
   const isAdmin = employee?.role === 'admin';
-  const isOwner = isServiceOwner(employee);
 
   return (
     <AppShell navbar={{ width: 220, breakpoint: 0 }} padding={0}>
       <AppShell.Navbar p="sm">
         <AppShell.Section>
           <Title order={5} px="xs" py="sm">
-            Кабинет диспетчера
+            {isOwner ? 'Кабинет владельца' : 'Кабинет диспетчера'}
           </Title>
         </AppShell.Section>
         <AppShell.Section grow>
-          {NAV.filter((item) => !item.adminOnly || isAdmin).map((item) => (
+          {isOwner ? (
+            // Владелец сервиса не привязан к компании — ему не нужны
+            // операционные разделы (заказы, клиенты и т.д.), только его
+            // собственный кабинет.
             <NavLink
-              key={item.href}
               component={Link}
-              href={item.href}
-              label={item.label}
-              leftSection={<item.icon size={18} stroke={1.6} />}
-              active={pathname?.startsWith(item.href.replace(/\/$/, ''))}
+              href="/owner/"
+              label="Кабинет владельца"
+              leftSection={<IconBuildingStore size={18} stroke={1.6} />}
+              active={pathname?.startsWith('/owner')}
               variant="light"
               style={{ borderRadius: 8 }}
             />
-          ))}
-          {isOwner && (
-            <>
-              <Divider my="xs" label="Владелец сервиса" labelPosition="left" />
+          ) : (
+            NAV.filter((item) => !item.adminOnly || isAdmin).map((item) => (
               <NavLink
+                key={item.href}
                 component={Link}
-                href="/owner/"
-                label="Кабинет владельца"
-                leftSection={<IconBuildingStore size={18} stroke={1.6} />}
-                active={pathname?.startsWith('/owner')}
+                href={item.href}
+                label={item.label}
+                leftSection={<item.icon size={18} stroke={1.6} />}
+                active={pathname?.startsWith(item.href.replace(/\/$/, ''))}
                 variant="light"
                 style={{ borderRadius: 8 }}
               />
-            </>
+            ))
           )}
         </AppShell.Section>
         <AppShell.Section>

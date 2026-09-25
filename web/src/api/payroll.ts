@@ -22,6 +22,7 @@ export interface EmployeeRates {
 export type AccountWithRates = Account & Partial<EmployeeRates>;
 
 interface PayPeriodRow {
+  order_id: string;
   employee_id: string;
   role: 'driver' | 'loader';
   scheduled_start: string;
@@ -38,8 +39,11 @@ export interface EmployeePayEstimate {
 // «Оплата» считается по режиму ставки: combined — вся продолжительность
 // по hourly_rate; split — по ставке, соответствующей роли назначения в
 // заказе (driving_hourly_rate для role='driver', loading_hourly_rate для
-// role='loader') — см. открытый вопрос в памяти про разделение часов
-// вождения/погрузки внутри одного заказа у водителя.
+// role='loader'). Когда у сотрудника на одном заказе две роли (и водитель,
+// и грузчик — например на сборном грузе), это две строки order_crew с
+// одинаковым order_id: часы этого заказа считаются один раз, а не дважды
+// (решение Максима, мобильный тред 2026-09-25), по большей из ставок
+// вождения/погрузки — поэтому строки группируются по order_id перед счётом.
 export function useEmployeePayEstimate(employeeId: string | undefined, rates: EmployeeRates | undefined, periodStart: string, periodEnd: string) {
   return useQuery({
     queryKey: ['payroll-estimate', employeeId, periodStart, periodEnd],
@@ -47,7 +51,7 @@ export function useEmployeePayEstimate(employeeId: string | undefined, rates: Em
     queryFn: async (): Promise<{ estimate: EmployeePayEstimate; missingSchema: boolean }> => {
       const { data, error } = await db
         .from('order_crew')
-        .select('employee_id, role, orders!inner(scheduled_start, scheduled_end, status)')
+        .select('order_id, employee_id, role, orders!inner(scheduled_start, scheduled_end, status)')
         .eq('employee_id', employeeId as string)
         .eq('orders.status', 'completed')
         .gte('orders.scheduled_start', periodStart)
@@ -59,20 +63,28 @@ export function useEmployeePayEstimate(employeeId: string | undefined, rates: Em
         throw error;
       }
       const rows = (data as unknown as (PayPeriodRow & { orders: { scheduled_start: string; scheduled_end: string } })[]) ?? [];
-      let hours = 0;
-      let pay = 0;
+      const orderRoles = new Map<string, { durationHours: number; roles: Set<'driver' | 'loader'> }>();
       for (const row of rows) {
         const durationHours =
           (new Date(row.orders.scheduled_end).getTime() - new Date(row.orders.scheduled_start).getTime()) / 3_600_000;
+        const entry = orderRoles.get(row.order_id) ?? { durationHours, roles: new Set() };
+        entry.roles.add(row.role);
+        orderRoles.set(row.order_id, entry);
+      }
+      let hours = 0;
+      let pay = 0;
+      for (const { durationHours, roles } of orderRoles.values()) {
         hours += durationHours;
         if (!rates) continue;
-        const rate =
-          rates.rate_mode === 'split'
-            ? row.role === 'driver'
-              ? rates.driving_hourly_rate
-              : rates.loading_hourly_rate
-            : rates.hourly_rate;
-        pay += durationHours * (rate ?? 0);
+        if (rates.rate_mode !== 'split') {
+          pay += durationHours * (rates.hourly_rate ?? 0);
+          continue;
+        }
+        // Одна роль — её ставка; обе роли на одном заказе — большая из двух.
+        const rate = roles.has('driver') && roles.has('loader')
+          ? Math.max(rates.driving_hourly_rate ?? 0, rates.loading_hourly_rate ?? 0)
+          : (roles.has('driver') ? rates.driving_hourly_rate : rates.loading_hourly_rate) ?? 0;
+        pay += durationHours * rate;
       }
       return { estimate: { hours: Math.round(hours * 100) / 100, pay: Math.round(pay) }, missingSchema: false };
     },

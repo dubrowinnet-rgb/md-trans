@@ -1,19 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
-import type { AccountStatus } from '@/types/database';
+import type { AccountStatus, Database } from '@/types/database';
 
-// companies и employees.company_id ещё не в сгенерированных типах
-// (types/database.ts) — их добавит миграция мобильного треда. До тех пор
-// обращаемся к ним через нетипизированный клиент; уберётся вместе с
-// isMissingTableError, когда типы синхронизируют с реальной схемой.
-const db = supabase as unknown as SupabaseClient;
-
-// Таблица companies ещё не существует в боевой базе — её добавляет миграция
-// мобильного треда (предложенная форма в памяти owner-console-feature).
-// Запросы к ней до этого момента возвращают «таблицы нет», а не данные —
-// isMissingTableError() отличает это от настоящей ошибки, чтобы кабинет
-// владельца показывал «скоро появится», а не падал с ошибкой.
+// companies приземлилась миграцией 0013 (мобильный тред) — типизированный
+// клиент теперь можно использовать напрямую, как для любой другой таблицы.
+// isMissingTableError остаётся экспортированной: её всё ещё использует
+// api/driverReports.ts для ЕЩЁ не приземлившейся схемы (см. память
+// payroll-and-driver-reports-feature) — тот же приём, другая таблица.
 export function isMissingTableError(err: unknown): boolean {
   if (!err || typeof err !== 'object') return false;
   const code = 'code' in err ? String((err as { code?: unknown }).code) : '';
@@ -36,43 +29,35 @@ export function isMissingTableError(err: unknown): boolean {
 // Максима — тенант, у которого свои сотрудники/клиенты/заказы. Статус
 // подписки — та же форма, что и AccountStatus, которым уже пользуется
 // вкладка «Оплата» в Настройках, для единообразия терминологии.
-export interface Company {
-  id: string;
-  name: string;
-  subscription_status: AccountStatus;
-  subscription_plan: string | null;
-  subscription_price: number | null;
-  subscription_expires_at: string | null;
-  created_at: string;
-}
+export type Company = Database['public']['Tables']['companies']['Row'];
 
 export interface CompanyWithStats extends Company {
   employeeCount: number;
 }
 
+// Видно только владельцу сервиса (RLS "companies select by owner") —
+// вторая часть запроса (все employees.company_id, для подсчёта по
+// компаниям) владельцу тоже открыта отдельной веткой политики "employees
+// select" (is_service_owner()).
 export function useCompanies() {
   return useQuery({
     queryKey: ['companies'],
-    queryFn: async (): Promise<{ companies: CompanyWithStats[]; missingTable: boolean }> => {
+    queryFn: async (): Promise<CompanyWithStats[]> => {
       const [companiesRes, employeesRes] = await Promise.all([
-        db.from('companies').select('*').order('name', { ascending: true }),
-        db.from('employees').select('company_id'),
+        supabase.from('companies').select('*').order('name', { ascending: true }),
+        supabase.from('employees').select('company_id'),
       ]);
-      if (companiesRes.error) {
-        if (isMissingTableError(companiesRes.error)) return { companies: [], missingTable: true };
-        throw companiesRes.error;
-      }
+      if (companiesRes.error) throw companiesRes.error;
       if (employeesRes.error) throw employeesRes.error;
       const counts = new Map<string, number>();
       for (const row of employeesRes.data as { company_id: string | null }[]) {
         if (!row.company_id) continue;
         counts.set(row.company_id, (counts.get(row.company_id) ?? 0) + 1);
       }
-      const companies = (companiesRes.data as Company[]).map((c) => ({
+      return (companiesRes.data as Company[]).map((c) => ({
         ...c,
         employeeCount: counts.get(c.id) ?? 0,
       }));
-      return { companies, missingTable: false };
     },
   });
 }
@@ -92,7 +77,7 @@ export function useCreateCompany() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (input: CompanyInput) => {
-      const { data, error } = await db
+      const { data, error } = await supabase
         .from('companies')
         .insert({
           name: input.name,
@@ -125,7 +110,7 @@ export function useUpdateCompanySubscription() {
       subscription_plan?: string | null;
       subscription_price?: number | null;
     }) => {
-      const { error } = await db.from('companies').update(input).eq('id', id);
+      const { error } = await supabase.from('companies').update(input).eq('id', id);
       if (error) throw error;
     },
     onSuccess: () => {

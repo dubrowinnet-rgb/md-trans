@@ -13,8 +13,17 @@ export interface AccountPermissions {
 }
 
 // Права по умолчанию при создании аккаунта — те же, что в мобильном
-// приложении (mobile/src/components/accounts/AccountDialog.tsx).
+// приложении (mobile/src/components/accounts/AccountDialog.tsx). У
+// 'owner' в экране «Команда» этой записи не видно (заводится не отсюда —
+// см. lib/ownerAccess.ts), запись нужна только чтобы Record<AccountRole,...>
+// был исчерпывающим, как и в мобильной копии этого файла.
 export const ROLE_DEFAULT_PERMISSIONS: Record<AccountRole, AccountPermissions> = {
+  owner: {
+    can_manage_orders: false,
+    can_view_client_stats: false,
+    can_view_contacts_and_amounts: false,
+    can_manage_own_schedule: false,
+  },
   admin: {
     can_manage_orders: true,
     can_view_client_stats: true,

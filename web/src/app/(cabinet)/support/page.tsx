@@ -8,42 +8,34 @@ import { useSession } from '@/providers/SessionProvider';
 import { TICKET_STATUS_COLORS, TICKET_STATUS_LABELS } from '@/lib/labels';
 import { dayjs } from '@/lib/dates';
 import { PageHeader } from '@/components/common/PageHeader';
-import { ComingSoon } from '@/components/common/ComingSoon';
 import { NewTicketModal } from '@/components/support/NewTicketModal';
 import { TicketThread } from '@/components/support/TicketThread';
 
 // «Техподдержка» — свои обращения администратора к владельцу сервиса.
-// Пункт доступен только администратору (см. layout.tsx), companyId у
-// самого сотрудника пока нет в схеме (см. память owner-console-feature) —
-// кнопка нового обращения отключена, пока это не так.
+// Пункт доступен только администратору (см. layout.tsx).
 export default function SupportPage() {
   const { employee } = useSession();
-  const companyId = (employee as { company_id?: string | null } | null)?.company_id ?? null;
+  const companyId = employee?.company_id ?? null;
   const ticketsQuery = useMyTickets(employee?.id);
   const [creating, setCreating] = useState(false);
 
-  const tickets = ticketsQuery.data?.tickets ?? [];
-  const missingTable = ticketsQuery.data?.missingTable ?? false;
-  const canCreate = Boolean(companyId) && !missingTable;
+  const tickets = ticketsQuery.data ?? [];
+  const canCreate = Boolean(companyId);
 
   return (
     <Box p="lg">
       <PageHeader title="Техподдержка" subtitle="Обращения к владельцу сервиса">
-        <Tooltip label={!canCreate ? 'Появится вместе с остальным кабинетом владельца' : ''} disabled={canCreate}>
+        <Tooltip label={!canCreate ? 'У вашего аккаунта не задана компания' : ''} disabled={canCreate}>
           <Button leftSection={<IconPlus size={16} />} onClick={() => setCreating(true)} disabled={!canCreate}>
             Новое обращение
           </Button>
         </Tooltip>
       </PageHeader>
 
-      {missingTable && (
-        <ComingSoon text="Раздел техподдержки скоро появится — сейчас достраивается база для него." />
-      )}
+      {ticketsQuery.isLoading && <Loader />}
+      {ticketsQuery.isError && <Alert color="red">Не удалось загрузить обращения</Alert>}
 
-      {!missingTable && ticketsQuery.isLoading && <Loader />}
-      {!missingTable && ticketsQuery.isError && <Alert color="red">Не удалось загрузить обращения</Alert>}
-
-      {!missingTable && !ticketsQuery.isLoading && (
+      {!ticketsQuery.isLoading && (
         <Paper withBorder>
           {tickets.length === 0 ? (
             <Text c="dimmed" ta="center" py="lg">

@@ -28,6 +28,7 @@ export const CREW_STATUS_LABELS: Record<CrewStatus, string> = {
 };
 
 export const ACCOUNT_ROLE_LABELS: Record<AccountRole, string> = {
+  owner: 'Владелец сервиса',
   admin: 'Администратор',
   dispatcher: 'Диспетчер',
   driver: 'Водитель',
