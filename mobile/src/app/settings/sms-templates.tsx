@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { FlatList, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
-import { ActivityIndicator, Appbar, Button, Dialog, Divider, HelperText, List, Portal, TextInput } from 'react-native-paper';
+import { ActivityIndicator, Appbar, Button, Dialog, Divider, HelperText, List, Portal, Text, TextInput } from 'react-native-paper';
 import { useSmsTemplates, useUpdateSmsTemplate, type SmsTemplate } from '../../api/smsTemplates';
 import { DismissKeyboardView } from '../../components/form/DismissKeyboardView';
+import { useSession } from '../../providers/SessionProvider';
 
 // Только new_order отправляется автоматически сейчас (доработки 1, п.0 —
 // смс клиенту при принятом заказе); остальные шаблоны уже можно готовить
@@ -11,8 +12,19 @@ import { DismissKeyboardView } from '../../components/form/DismissKeyboardView';
 const AUTO_SENT_KEYS = new Set(['new_order']);
 
 export default function SmsTemplatesSettingsScreen() {
+  const { employee } = useSession();
   const templatesQuery = useSmsTemplates();
   const [editing, setEditing] = useState<SmsTemplate | null>(null);
+
+  // Пункт меню скрыт не-админам, но прямой переход по адресу это не
+  // остановит — проверяем ещё раз здесь, как order/new.tsx.
+  if (employee?.role !== 'admin') {
+    return (
+      <View style={styles.noAccess}>
+        <Text variant="bodyMedium">Недостаточно прав для просмотра шаблонов СМС.</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -122,5 +134,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 8,
     paddingBottom: 24,
+  },
+  noAccess: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
   },
 });

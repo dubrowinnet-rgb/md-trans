@@ -3,17 +3,29 @@ import { FlatList, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { ActivityIndicator, Appbar, Button, Dialog, Divider, HelperText, IconButton, List, Portal, Text, TextInput } from 'react-native-paper';
 import { useCreateReminderRule, useDeleteReminderRule, useReminderRules } from '../../api/reminders';
+import { useSession } from '../../providers/SessionProvider';
 
 // Правила «за сколько минут напомнить сотруднику о заказе» (доработки 1,
 // п.1 — сама отправка в Edge Function send-crew-reminders). Список, как
 // в референсе Bumpix: несколько правил, каждое можно убрать крестиком.
 export default function RemindersSettingsScreen() {
+  const { employee } = useSession();
   const rulesQuery = useReminderRules();
   const createRule = useCreateReminderRule();
   const deleteRule = useDeleteReminderRule();
   const [adding, setAdding] = useState(false);
   const [minutesText, setMinutesText] = useState('30');
   const [error, setError] = useState<string | null>(null);
+
+  // Пункт меню скрыт не-админам, но прямой переход по адресу это не
+  // остановит — проверяем ещё раз здесь, как order/new.tsx.
+  if (employee?.role !== 'admin') {
+    return (
+      <View style={styles.noAccess}>
+        <Text variant="bodyMedium">Недостаточно прав для просмотра напоминаний.</Text>
+      </View>
+    );
+  }
 
   const handleAdd = async () => {
     setError(null);
@@ -113,5 +125,11 @@ const styles = StyleSheet.create({
   },
   dialogContent: {
     gap: 4,
+  },
+  noAccess: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
   },
 });

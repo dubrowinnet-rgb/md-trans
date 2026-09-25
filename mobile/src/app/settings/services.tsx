@@ -4,10 +4,22 @@ import { router } from 'expo-router';
 import { ActivityIndicator, Appbar, Divider, FAB, HelperText, List, Text } from 'react-native-paper';
 import { useServices, type Service } from '../../api/services';
 import { ServiceDialog } from '../../components/services/ServiceDialog';
+import { useSession } from '../../providers/SessionProvider';
 
 export default function ServicesSettingsScreen() {
+  const { employee } = useSession();
   const servicesQuery = useServices();
   const [editing, setEditing] = useState<Service | 'new' | null>(null);
+
+  // Пункт меню скрыт не-админам, но прямой переход по адресу это не
+  // остановит — проверяем ещё раз здесь, как order/new.tsx.
+  if (employee?.role !== 'admin') {
+    return (
+      <View style={styles.noAccess}>
+        <Text variant="bodyMedium">Недостаточно прав для просмотра услуг.</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -72,5 +84,11 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 16,
     bottom: 16,
+  },
+  noAccess: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
   },
 });
