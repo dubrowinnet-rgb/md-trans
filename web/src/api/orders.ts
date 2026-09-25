@@ -346,6 +346,14 @@ export function useDeleteOrder() {
   });
 }
 
+// Статусы заказа сведены к «активен/отменён» (доработки 2, п.2) — new/
+// confirmed/in_progress/completed больше не выбираются вручную ни в
+// одном интерфейсе; «завершён» теперь определяется по времени
+// (см. orderLayout.ts), а не проставляется руками. ACTIVE_ORDER_STATUS —
+// значение, в которое переходит заказ при возврате из «отменён» (то же,
+// что и DEFAULT в БД для новых заказов).
+export const ACTIVE_ORDER_STATUS: OrderStatus = 'new';
+
 export function useUpdateOrderStatus() {
   const queryClient = useQueryClient();
   return useMutation({

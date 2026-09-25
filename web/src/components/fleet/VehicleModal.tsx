@@ -7,16 +7,17 @@ import { notifications } from '@mantine/notifications';
 import { errorMessage } from '@/lib/errors';
 import { useCreateVehicle, useDeleteVehicle, useUpdateVehicle, type Vehicle } from '@/api/vehicles';
 
-// Размер кузова хранится одной строкой («Д 400 х Ш 200 х В 180 см», в
-// сантиметрах — маска по просьбе Максима вместо свободного текста).
-// Старое значение в старом формате (метры, без букв Д/Ш/В) не
-// разбираем на три поля: перепутать метры с сантиметрами хуже, чем
-// попросить ввести заново.
-const DIMENSIONS_RE = /Д\s*(\d+)\s*х\s*Ш\s*(\d+)\s*х\s*В\s*(\d+)\s*см/i;
+// Размер кузова хранится одной строкой («Д 4.2 х Ш 2.1 х В 2.3 м», в
+// метрах — доработки 2, п.4: раньше было в сантиметрах, Максим попросил
+// метры). Старое значение в сантиметрах (формат «... см») не пересчитываем
+// на три поля автоматически: перепутать см с метрами хуже, чем попросить
+// ввести заново — тот же приём, что уже был на этом поле при вводе маски.
+const DIMENSIONS_RE = /Д\s*([\d.,]+)\s*х\s*Ш\s*([\d.,]+)\s*х\s*В\s*([\d.,]+)\s*м/i;
 
 function parseBodyDimensions(text: string): { l: number | string; w: number | string; h: number | string } {
   const m = text.match(DIMENSIONS_RE);
-  return m ? { l: Number(m[1]), w: Number(m[2]), h: Number(m[3]) } : { l: '', w: '', h: '' };
+  const num = (s: string) => Number(s.replace(',', '.'));
+  return m ? { l: num(m[1]), w: num(m[2]), h: num(m[3]) } : { l: '', w: '', h: '' };
 }
 
 function composeBodyDimensions(l: number | string, w: number | string, h: number | string) {
@@ -24,7 +25,7 @@ function composeBodyDimensions(l: number | string, w: number | string, h: number
   if (l !== '') parts.push(`Д ${l}`);
   if (w !== '') parts.push(`Ш ${w}`);
   if (h !== '') parts.push(`В ${h}`);
-  return parts.length ? `${parts.join(' х ')} см` : '';
+  return parts.length ? `${parts.join(' х ')} м` : '';
 }
 
 // Машина автопарка: название и гос номер обязательны, остальное — по желанию.
@@ -95,12 +96,12 @@ export function VehicleModal({ vehicle, onClose }: { vehicle: Vehicle | null; on
         </SimpleGrid>
         <div>
           <Text size="sm" fw={500} mb={4}>
-            Размер кузова, см
+            Размер кузова, м
           </Text>
           <SimpleGrid cols={3} spacing="xs">
-            <NumberInput label="Д" placeholder="__" min={0} value={length} onChange={setLength} />
-            <NumberInput label="Ш" placeholder="__" min={0} value={width} onChange={setWidth} />
-            <NumberInput label="В" placeholder="__" min={0} value={height} onChange={setHeight} />
+            <NumberInput label="Д" placeholder="__" min={0} decimalScale={2} step={0.1} value={length} onChange={setLength} />
+            <NumberInput label="Ш" placeholder="__" min={0} decimalScale={2} step={0.1} value={width} onChange={setWidth} />
+            <NumberInput label="В" placeholder="__" min={0} decimalScale={2} step={0.1} value={height} onChange={setHeight} />
           </SimpleGrid>
         </div>
         <Group>

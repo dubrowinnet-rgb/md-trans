@@ -250,7 +250,6 @@ export function WeekGrid({
                         left: `calc(${(lane / lanes) * 100}% + 2px)`,
                         width: `calc(${100 / lanes}% - 4px)`,
                         background: orderColor(order, now),
-                        opacity: cancelled ? 0.45 : 1,
                         borderRadius: 4,
                         padding: '2px 5px',
                         overflow: 'hidden',
@@ -262,25 +261,27 @@ export function WeekGrid({
                         boxShadow: '0 1px 2px rgba(0,0,0,0.15)',
                       }}
                     >
-                      <div>
-                        <b>
-                          {formatTime(start)}–{formatTime(end)}
-                        </b>{' '}
-                        {confirmed && <span style={{ opacity: 0.9 }}>{confirmed}</span>}
-                      </div>
-                      <div style={{ fontWeight: 700 }}>
-                        {order.clients?.name ?? 'Без клиента'}
-                        {cancelled ? ' · отменён' : ''}
-                      </div>
-                      {service && <div>{service}</div>}
-                      {(pickup || dropoff) && (
-                        <div style={{ opacity: 0.9 }}>
-                          {pickup ?? '—'} → {dropoff ?? '—'}
-                        </div>
+                      {cancelled && (
+                        <div style={{ fontWeight: 700, color: '#f87171' }}>заказ отменен</div>
                       )}
-                      {order.cargo_description && <div style={{ opacity: 0.85 }}>📦 {order.cargo_description}</div>}
-                      {crew && <div style={{ opacity: 0.9 }}>👤 {crew}</div>}
-                      {order.vehicles && <div style={{ opacity: 0.9 }}>🚚 {order.vehicles.plate}</div>}
+                      <div style={{ textDecoration: cancelled ? 'line-through' : undefined }}>
+                        <div>
+                          <b>
+                            {formatTime(start)}–{formatTime(end)}
+                          </b>{' '}
+                          {confirmed && <span style={{ opacity: 0.9 }}>{confirmed}</span>}
+                        </div>
+                        <div style={{ fontWeight: 700 }}>{order.clients?.name ?? 'Без клиента'}</div>
+                        {service && <div>{service}</div>}
+                        {(pickup || dropoff) && (
+                          <div style={{ opacity: 0.9 }}>
+                            {pickup ?? '—'} → {dropoff ?? '—'}
+                          </div>
+                        )}
+                        {order.cargo_description && <div style={{ opacity: 0.85 }}>📦 {order.cargo_description}</div>}
+                        {crew && <div style={{ opacity: 0.9 }}>👤 {crew}</div>}
+                        {order.vehicles && <div style={{ opacity: 0.9 }}>🚚 {order.vehicles.plate}</div>}
+                      </div>
                     </Box>
                   );
                 })}

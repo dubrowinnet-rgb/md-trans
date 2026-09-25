@@ -23,6 +23,7 @@ import { isOfficeRole, useSession } from '@/providers/SessionProvider';
 import { isServiceOwner } from '@/lib/ownerAccess';
 import { ACCOUNT_ROLE_LABELS } from '@/lib/labels';
 import { OrderUIProvider } from '@/components/orders/OrderUIProvider';
+import { NotificationBell } from '@/components/common/NotificationBell';
 
 const NAV = [
   { href: '/calendar/', label: 'Календарь', icon: IconCalendarWeek, adminOnly: false },
@@ -92,9 +93,10 @@ export default function CabinetLayout({ children }: { children: ReactNode }) {
     <AppShell navbar={{ width: 220, breakpoint: 0 }} padding={0}>
       <AppShell.Navbar p="sm">
         <AppShell.Section>
-          <Title order={5} px="xs" py="sm">
-            {isOwner ? 'Кабинет владельца' : 'Кабинет диспетчера'}
-          </Title>
+          <Group justify="space-between" wrap="nowrap" px="xs" py="sm">
+            <Title order={5}>{isOwner ? 'Кабинет владельца' : 'Кабинет диспетчера'}</Title>
+            {isAdmin && <NotificationBell />}
+          </Group>
         </AppShell.Section>
         <AppShell.Section grow>
           {isOwner ? (

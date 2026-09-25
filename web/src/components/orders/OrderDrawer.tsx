@@ -35,7 +35,8 @@ import {
 import { useDeleteOrder, useOrder, useUpdateOrderStatus, type OrderWithDetails } from '@/api/orders';
 import { useSession } from '@/providers/SessionProvider';
 import { canManageOrders, canViewClientPhone, canViewOrderAmount } from '@/lib/permissions';
-import { CREW_STATUS_LABELS, ORDER_STATUSES, ORDER_STATUS_COLORS, ORDER_STATUS_LABELS } from '@/lib/labels';
+import { CREW_STATUS_LABELS } from '@/lib/labels';
+import { ACTIVE_ORDER_STATUS } from '@/api/orders';
 import { dayjs, formatMoney, formatTime } from '@/lib/dates';
 import { formatPhone } from '@/lib/phone';
 import { yandexMapsRouteUrl } from '@/lib/yandexMaps';
@@ -187,28 +188,26 @@ function OrderDetails({
         </Text>
       </div>
 
-      <Group gap={6}>
-        {ORDER_STATUSES.map((status) => {
-          const active = order.status === status;
-          return (
-            <Badge
-              key={status}
-              size="lg"
-              variant={active ? 'filled' : 'outline'}
-              color={active ? undefined : 'gray'}
-              style={{
-                cursor: canManage && !statusPending ? 'pointer' : 'default',
-                background: active ? ORDER_STATUS_COLORS[status].bg : undefined,
-                color: active ? '#111' : undefined,
-                borderColor: ORDER_STATUS_COLORS[status].border,
-                textTransform: 'none',
-              }}
-              onClick={() => canManage && !statusPending && !active && onStatus(status)}
-            >
-              {ORDER_STATUS_LABELS[status]}
-            </Badge>
-          );
-        })}
+      <Group gap="xs">
+        <Badge
+          size="lg"
+          color={order.status === 'cancelled' ? 'red' : 'green'}
+          variant="light"
+          style={{ textTransform: 'none' }}
+        >
+          {order.status === 'cancelled' ? 'Заказ отменён' : 'Активен'}
+        </Badge>
+        {canManage && (
+          <Button
+            size="xs"
+            variant="subtle"
+            color={order.status === 'cancelled' ? 'gray' : 'red'}
+            loading={statusPending}
+            onClick={() => onStatus(order.status === 'cancelled' ? ACTIVE_ORDER_STATUS : 'cancelled')}
+          >
+            {order.status === 'cancelled' ? 'Вернуть заказ' : 'Отменить заказ'}
+          </Button>
+        )}
       </Group>
 
       {canManage && (

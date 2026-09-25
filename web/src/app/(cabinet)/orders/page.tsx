@@ -1,20 +1,29 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Alert, Badge, Box, Button, Group, Loader, MultiSelect, Paper, Select, Table, Text, TextInput } from '@mantine/core';
+import { Alert, Badge, Box, Button, Group, Loader, Paper, Select, Table, Text, TextInput } from '@mantine/core';
 import { DatePickerInput } from '@mantine/dates';
 import { IconPlus, IconSearch } from '@tabler/icons-react';
 import { useOrdersList } from '@/api/orders';
 import { useEmployees } from '@/api/employees';
 import { useSession } from '@/providers/SessionProvider';
 import { canManageOrders, canViewClientPhone, canViewOrderAmount } from '@/lib/permissions';
-import { ORDER_STATUSES, ORDER_STATUS_COLORS, ORDER_STATUS_LABELS } from '@/lib/labels';
 import { dayjs, formatMoney, fromDateKey, toDateKey } from '@/lib/dates';
 import { formatPhone } from '@/lib/phone';
 import type { OrderStatus } from '@/types/database';
 import { PageHeader } from '@/components/common/PageHeader';
 import { useOrderUI } from '@/components/orders/OrderUIProvider';
 import { mergeCrew } from '@/components/orders/OrderDrawer';
+
+// Активные статусы — всё, кроме «отменён» (доработки 2, п.2: статусы
+// заказа сведены к активен/отменён, промежуточные new/confirmed/
+// in_progress/completed вручную больше не выбираются).
+const ACTIVE_ORDER_STATUSES: OrderStatus[] = ['new', 'confirmed', 'in_progress', 'completed'];
+const ORDER_FILTER_OPTIONS = [
+  { value: 'all', label: 'Все' },
+  { value: 'active', label: 'Активные' },
+  { value: 'cancelled', label: 'Отменённые' },
+];
 
 // Все заказы за период одной таблицей — удобно искать, сверять суммы и
 // статусы, чего на телефоне не сделать.
@@ -23,7 +32,8 @@ export default function OrdersPage() {
     toDateKey(dayjs().startOf('month').toDate()),
     toDateKey(dayjs().endOf('month').toDate()),
   ]);
-  const [statuses, setStatuses] = useState<string[]>([]);
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'cancelled'>('all');
+  const statuses = statusFilter === 'active' ? ACTIVE_ORDER_STATUSES : statusFilter === 'cancelled' ? ['cancelled' as OrderStatus] : [];
   const [employeeId, setEmployeeId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const { employee } = useSession();
@@ -75,14 +85,13 @@ export default function OrdersPage() {
             valueFormat="D MMM YYYY"
             w={260}
           />
-          <MultiSelect
+          <Select
             label="Статус"
-            placeholder={statuses.length ? undefined : 'Любой'}
-            data={ORDER_STATUSES.map((s) => ({ value: s, label: ORDER_STATUS_LABELS[s] }))}
-            value={statuses}
-            onChange={setStatuses}
-            w={280}
-            clearable
+            data={ORDER_FILTER_OPTIONS}
+            value={statusFilter}
+            onChange={(v) => setStatusFilter((v as typeof statusFilter) ?? 'all')}
+            w={200}
+            allowDeselect={false}
           />
           <Select
             label="Сотрудник"
@@ -177,11 +186,15 @@ export default function OrdersPage() {
                     )}
                   </Table.Td>
                   <Table.Td>
-                    <Badge
-                      style={{ background: ORDER_STATUS_COLORS[o.status].bg, color: '#111', textTransform: 'none' }}
-                    >
-                      {ORDER_STATUS_LABELS[o.status]}
-                    </Badge>
+                    {o.status === 'cancelled' ? (
+                      <Badge color="red" variant="light" style={{ textTransform: 'none' }}>
+                        Отменён
+                      </Badge>
+                    ) : (
+                      <Badge color="green" variant="light" style={{ textTransform: 'none' }}>
+                        Активен
+                      </Badge>
+                    )}
                   </Table.Td>
                   {showAmount && (
                     <Table.Td ta="right" style={{ whiteSpace: 'nowrap' }}>
