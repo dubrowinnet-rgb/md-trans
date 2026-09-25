@@ -7,6 +7,7 @@ import {
   Divider,
   Group,
   Modal,
+  NumberInput,
   PasswordInput,
   SegmentedControl,
   Select,
@@ -32,6 +33,13 @@ import {
   type AccountPermissions,
 } from '@/api/accounts';
 import { useVehicles } from '@/api/vehicles';
+import {
+  useEmployeePayEstimate,
+  useUpdateEmployeeRates,
+  type AccountWithRates,
+  type EmployeeRates,
+  type RateMode,
+} from '@/api/payroll';
 import { ACCOUNT_ROLE_LABELS } from '@/lib/labels';
 import type { AccountRole } from '@/types/database';
 
@@ -63,6 +71,7 @@ const PERMISSION_LABELS: { key: keyof AccountPermissions; label: string; hint: s
 // пароль — необязательные поля: пусто значит «не менять», см.
 // useUpdateAccountProfile).
 export function AccountModal({ account, onClose }: { account: Account | null; onClose: () => void }) {
+  const accountRates = account as AccountWithRates | null;
   const [name, setName] = useState(account?.name ?? '');
   const [lastName, setLastName] = useState(account?.last_name ?? '');
   const [phone, setPhone] = useState(account?.phone ?? '');
@@ -73,6 +82,10 @@ export function AccountModal({ account, onClose }: { account: Account | null; on
   const [address, setAddress] = useState(account?.address ?? '');
   const [personalVehicleMake, setPersonalVehicleMake] = useState(account?.personal_vehicle_make ?? '');
   const [personalVehiclePlate, setPersonalVehiclePlate] = useState(account?.personal_vehicle_plate ?? '');
+  const [rateMode, setRateMode] = useState<RateMode>(accountRates?.rate_mode ?? 'combined');
+  const [hourlyRate, setHourlyRate] = useState<number | string>(accountRates?.hourly_rate ?? '');
+  const [drivingHourlyRate, setDrivingHourlyRate] = useState<number | string>(accountRates?.driving_hourly_rate ?? '');
+  const [loadingHourlyRate, setLoadingHourlyRate] = useState<number | string>(accountRates?.loading_hourly_rate ?? '');
   const [role, setRole] = useState<AccountRole>(account?.role ?? 'dispatcher');
   // Роль задаётся один раз при заведении сотрудника и почти никогда не
   // меняется — у уже существующего аккаунта прячем переключатель за
@@ -95,7 +108,21 @@ export function AccountModal({ account, onClose }: { account: Account | null; on
   const createAccount = useCreateAccount();
   const updateAccount = useUpdateAccount();
   const updateProfile = useUpdateAccountProfile();
-  const saving = createAccount.isPending || updateAccount.isPending || updateProfile.isPending;
+  const updateEmployeeRates = useUpdateEmployeeRates();
+  const saving = createAccount.isPending || updateAccount.isPending || updateProfile.isPending || updateEmployeeRates.isPending;
+  // Расчёт за текущий месяц по уже сохранённым ставкам (не по
+  // несохранённым правкам в форме — во избежание путаницы, что именно
+  // посчитано). Виден только у уже существующего сотрудника: у нового
+  // ставки ещё нечем считать, часов пока нет.
+  const savedRates: EmployeeRates = {
+    rate_mode: accountRates?.rate_mode ?? 'combined',
+    hourly_rate: accountRates?.hourly_rate ?? null,
+    driving_hourly_rate: accountRates?.driving_hourly_rate ?? null,
+    loading_hourly_rate: accountRates?.loading_hourly_rate ?? null,
+  };
+  const periodStart = dayjs().startOf('month').format('YYYY-MM-DD');
+  const periodEnd = dayjs().startOf('month').add(1, 'month').format('YYYY-MM-DD');
+  const payEstimate = useEmployeePayEstimate(account?.id, savedRates, periodStart, periodEnd);
   const age = birthDate ? dayjs().diff(dayjs(birthDate), 'year') : null;
 
   const changeRole = (value: string) => {
@@ -106,10 +133,22 @@ export function AccountModal({ account, onClose }: { account: Account | null; on
     if (!account) setPermissions(ROLE_DEFAULT_PERMISSIONS[next]);
   };
 
+  const isAdminRole = role === 'admin';
+  const isCrew = role === 'driver' || role === 'loader';
+
   const save = async () => {
     setError(null);
     if (!name.trim()) return setError('Укажите имя');
     const vehicleForRole = role === 'driver' ? vehicleId : null;
+    // Ставки применимы только водителю/грузчику — при другой роли шлём
+    // null-ы, чтобы не оставлять висящую ставку у диспетчера/админа,
+    // если роль сменили.
+    const rates = {
+      rate_mode: rateMode,
+      hourly_rate: isCrew && hourlyRate !== '' ? Number(hourlyRate) : null,
+      driving_hourly_rate: isCrew && rateMode === 'split' && drivingHourlyRate !== '' ? Number(drivingHourlyRate) : null,
+      loading_hourly_rate: isCrew && rateMode === 'split' && loadingHourlyRate !== '' ? Number(loadingHourlyRate) : null,
+    };
     // Авто по умолчанию имеет смысл только у водителя — при другой роли
     // всегда отправляем null, чтобы очистить поле, если, скажем,
     // бывшего водителя переводят в диспетчеры.
@@ -128,6 +167,18 @@ export function AccountModal({ account, onClose }: { account: Account | null; on
       personal_vehicle_make: personalVehicleMake.trim() || null,
       personal_vehicle_plate: personalVehiclePlate.trim() || null,
     };
+    // Ставки — отдельный, изолированный запрос (см. useUpdateEmployeeRates):
+    // пока не пришла миграция с колонками ставок, его неудача не должна
+    // ронять сохранение роли/прав/машины той же кнопкой.
+    const saveRates = async (id: string) => {
+      const result = await updateEmployeeRates.mutateAsync({ id, rates });
+      if (result.missingSchema) {
+        notifications.show({
+          message: 'Остальное сохранено. Ставки пока нельзя сохранить — ждём миграцию от мобильного треда',
+          color: 'yellow',
+        });
+      }
+    };
     try {
       if (account) {
         await updateProfile.mutateAsync({
@@ -137,8 +188,15 @@ export function AccountModal({ account, onClose }: { account: Account | null; on
           ...profileFields,
         });
         await updateAccount.mutateAsync({ id: account.id, role, permissions, default_vehicle_id: vehicleForRole });
+        // Помимо самих водителей/грузчиков, шлём и когда у аккаунта раньше
+        // уже была сохранена ставка — иначе при смене роли в диспетчеры
+        // старая ставка так и останется висеть в базе.
+        const hadRates = Boolean(
+          accountRates?.hourly_rate || accountRates?.driving_hourly_rate || accountRates?.loading_hourly_rate
+        );
+        if (isCrew || hadRates) await saveRates(account.id);
       } else {
-        await createAccount.mutateAsync({
+        const created = await createAccount.mutateAsync({
           login: login.trim(),
           password,
           role,
@@ -146,6 +204,7 @@ export function AccountModal({ account, onClose }: { account: Account | null; on
           default_vehicle_id: vehicleForRole,
           ...profileFields,
         });
+        if (isCrew) await saveRates(created.id);
       }
       notifications.show({ message: 'Аккаунт сохранён', color: 'green' });
       onClose();
@@ -153,9 +212,6 @@ export function AccountModal({ account, onClose }: { account: Account | null; on
       setError(errorMessage(err, 'Не удалось сохранить'));
     }
   };
-
-  const isAdminRole = role === 'admin';
-  const isCrew = role === 'driver' || role === 'loader';
 
   return (
     <Modal opened onClose={onClose} size="lg" title={<Title order={4}>{account ? account.name : 'Новый аккаунт'}</Title>}>
@@ -268,6 +324,46 @@ export function AccountModal({ account, onClose }: { account: Account | null; on
             onChange={setVehicleId}
             clearable
           />
+        )}
+        {isCrew && (
+          <Stack gap="xs">
+            <Text size="sm" fw={500}>
+              Ставка за час
+            </Text>
+            {role === 'driver' && (
+              <SegmentedControl
+                value={rateMode}
+                onChange={(v) => setRateMode(v as RateMode)}
+                data={[
+                  { value: 'combined', label: 'Общая ставка' },
+                  { value: 'split', label: 'Раздельно вождение/погрузка' },
+                ]}
+              />
+            )}
+            {role === 'driver' && rateMode === 'split' ? (
+              <SimpleGrid cols={2}>
+                <NumberInput
+                  label="За час вождения, ₽"
+                  min={0}
+                  value={drivingHourlyRate}
+                  onChange={setDrivingHourlyRate}
+                />
+                <NumberInput
+                  label="За час погрузки, ₽"
+                  min={0}
+                  value={loadingHourlyRate}
+                  onChange={setLoadingHourlyRate}
+                />
+              </SimpleGrid>
+            ) : (
+              <NumberInput label="За час, ₽" min={0} value={hourlyRate} onChange={setHourlyRate} maw={220} />
+            )}
+            {account && !payEstimate.data?.missingSchema && (
+              <Text size="xs" c="dimmed">
+                За {dayjs().format('MMMM')}: {payEstimate.isLoading ? '…' : `${payEstimate.data?.estimate.hours ?? 0} ч × ставка ≈ ${payEstimate.data?.estimate.pay ?? 0} ₽`}
+              </Text>
+            )}
+          </Stack>
         )}
         {isAdminRole ? (
           <Text size="sm" c="dimmed">
