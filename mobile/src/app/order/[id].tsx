@@ -174,11 +174,6 @@ export default function OrderScreen() {
   }
 
   return (
-    // Экран открыт нативным modal-presentation (app/_layout.tsx) — своё
-    // дерево портала обязательно, иначе Dialog (подтверждение удаления,
-    // диалог экипажа) рендерится в портал ЗА этим модальным окном и виден
-    // только после его закрытия (та же причина, что и в order/new.tsx).
-    <Portal.Host>
     <View style={styles.screen}>
     <DismissKeyboardView>
     <ScrollView contentContainerStyle={styles.content}>
@@ -437,7 +432,6 @@ export default function OrderScreen() {
     </DismissKeyboardView>
     <FAB icon="check" style={styles.doneFab} accessibilityLabel="Готово, назад к заказам" onPress={() => router.back()} />
     </View>
-    </Portal.Host>
   );
 }
 

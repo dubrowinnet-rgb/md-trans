@@ -8,7 +8,6 @@ import {
   HelperText,
   IconButton,
   List,
-  Portal,
   Searchbar,
   Surface,
   Text,
@@ -289,11 +288,6 @@ export default function NewOrderScreen() {
   }
 
   return (
-    // Экран открыт нативным modal-presentation (app/_layout.tsx) — своё
-    // дерево портала обязательно, иначе Portal/Dialog из ServicePicker и
-    // ClientDialog рендерится в портал ЗА этим модальным окном и виден
-    // только после его закрытия (репорт с реального устройства).
-    <Portal.Host>
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <DismissKeyboardView>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
@@ -550,7 +544,6 @@ export default function NewOrderScreen() {
       </ScrollView>
       </DismissKeyboardView>
     </KeyboardAvoidingView>
-    </Portal.Host>
   );
 }
 

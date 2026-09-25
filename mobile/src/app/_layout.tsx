@@ -57,11 +57,20 @@ function RootNavigator() {
       <Stack.Protected guard={!session}>
         <Stack.Screen name="login" />
       </Stack.Protected>
+      {/* containedModal, не modal: обычный "modal" на iOS презентуется
+          отдельным слоем поверх ВСЕГО окна, и Paper-диалоги (ServicePicker,
+          подтверждение удаления, CrewDialog и т.п.), открытые с этих
+          экранов, либо рендерились за ним, либо не показывались вовсе
+          (баг с реального iPhone) — containedModal использует
+          UIModalPresentationCurrentContext, который остаётся в слое
+          навигационного стека и не перекрывает обычный Portal.Host из
+          PaperProvider. На Android presentation всё равно ведёт себя как
+          push, так что здесь ничего не меняется. */}
       <Stack.Protected guard={isOffice}>
         <Stack.Screen name="(office)" />
         <Stack.Screen
           name="order/new"
-          options={{ presentation: 'modal', headerShown: true, title: 'Новый заказ' }}
+          options={{ presentation: 'containedModal', headerShown: true, title: 'Новый заказ' }}
         />
       </Stack.Protected>
       <Stack.Protected guard={isCrew}>
@@ -70,11 +79,11 @@ function RootNavigator() {
       <Stack.Protected guard={Boolean(session)}>
         <Stack.Screen
           name="order/[id]"
-          options={{ presentation: 'modal', headerShown: true, title: 'Заказ' }}
+          options={{ presentation: 'containedModal', headerShown: true, title: 'Заказ' }}
         />
         <Stack.Screen
           name="my-schedule"
-          options={{ presentation: 'modal', headerShown: true, title: 'Мой график' }}
+          options={{ presentation: 'containedModal', headerShown: true, title: 'Мой график' }}
         />
       </Stack.Protected>
     </Stack>
