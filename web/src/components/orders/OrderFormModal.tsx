@@ -42,7 +42,8 @@ import { useVehicles } from '@/api/vehicles';
 import { useScheduleDaysOn, type ScheduleDay } from '@/api/schedule';
 import { combineDateTime, dayjs, toDateKey } from '@/lib/dates';
 import { useSession } from '@/providers/SessionProvider';
-import { canViewClientPhone } from '@/lib/permissions';
+import { canViewClientPhone, canViewOrderAmount } from '@/lib/permissions';
+import { serviceNeedsLoaders } from '@/lib/services';
 import { ClientFormModal } from '@/components/clients/ClientFormModal';
 import { AvailabilityDot, evaluateAvailability, sortByAvailability, type Availability } from './availability';
 
@@ -114,6 +115,11 @@ export function OrderFormModal({
 
   const { employee } = useSession();
   const showPhones = canViewClientPhone(employee);
+  // Грузчику сумма не положена никогда, диспетчеру — только если админ
+  // включил галочку «видеть контакты и суммы» (см. lib/permissions.ts).
+  // Поле остаётся в состоянии формы и при скрытом инпуте (не сбрасывается),
+  // так что сохранение без права на сумму просто не трогает её.
+  const showAmount = canViewOrderAmount(employee);
   const employees = useEmployees().data ?? [];
   const drivers = employees.filter((e) => e.role === 'driver');
   const loaders = employees.filter((e) => e.role === 'loader');
@@ -151,16 +157,29 @@ export function OrderFormModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [employees, preset.employeeId, order]);
 
+  const selectedServices = serviceIds
+    .map((id) => services.find((s) => s.id === id))
+    .filter((s): s is NonNullable<typeof s> => Boolean(s));
+  // «Грузчики выбираются только в услугах, где есть слово „грузчики“ в
+  // названии» — пока такая услуга не выбрана, раздел «Грузчики» скрыт и
+  // водитель не подставляется в него автоматически. Сам список loaderIds
+  // при этом не чистим (не терять отметки при переключении услуг туда-
+  // обратно) — из отправляемой бригады грузчиков просто исключаем ниже,
+  // на сохранении.
+  const needsLoaders = selectedServices.some((s) => serviceNeedsLoaders(s.name));
+
   // Как в мобильном приложении: выбранный водитель сразу числится и
   // грузчиком (можно снять), и подставляется его машина по умолчанию,
   // если диспетчер не выбрал другую руками.
   function selectDriver(id: string | null) {
-    setLoaderIds((prev) => {
-      let next = prev;
-      if (driverId && next.includes(driverId)) next = next.filter((x) => x !== driverId);
-      if (id && !next.includes(id)) next = [...next, id];
-      return next;
-    });
+    if (needsLoaders) {
+      setLoaderIds((prev) => {
+        let next = prev;
+        if (driverId && next.includes(driverId)) next = next.filter((x) => x !== driverId);
+        if (id && !next.includes(id)) next = [...next, id];
+        return next;
+      });
+    }
     const fallback = drivers.find((d) => d.id === id)?.default_vehicle_id ?? null;
     if (vehicleId === null || vehicleId === autoVehicleId.current) {
       autoVehicleId.current = fallback;
@@ -220,7 +239,7 @@ export function OrderFormModal({
       stops,
       crew: [
         ...(driverId ? [{ employee_id: driverId, role: 'driver' as const }] : []),
-        ...loaderIds.map((id) => ({ employee_id: id, role: 'loader' as const })),
+        ...(needsLoaders ? loaderIds.map((id) => ({ employee_id: id, role: 'loader' as const })) : []),
       ],
       service_ids: serviceIds,
       vehicle_id: driverId ? vehicleId : null,
@@ -377,14 +396,16 @@ export function OrderFormModal({
               onChange={(e) => setCargo(e.currentTarget.value)}
             />
             <Group grow align="flex-start">
-              <NumberInput
-                label="Сумма"
-                suffix=" ₽"
-                thousandSeparator=" "
-                min={0}
-                value={price}
-                onChange={setPrice}
-              />
+              {showAmount && (
+                <NumberInput
+                  label="Сумма"
+                  suffix=" ₽"
+                  thousandSeparator=" "
+                  min={0}
+                  value={price}
+                  onChange={setPrice}
+                />
+              )}
               <Textarea
                 label="Комментарий"
                 autosize
@@ -452,46 +473,48 @@ export function OrderFormModal({
               )}
             </Paper>
 
-            <Paper withBorder p="sm">
-              <Text fw={600} size="sm" mb={6}>
-                Грузчики
-              </Text>
-              {loaderCandidates.length === 0 && (
-                <Text size="sm" c="dimmed">
-                  Нет ни одного грузчика
+            {needsLoaders && (
+              <Paper withBorder p="sm">
+                <Text fw={600} size="sm" mb={6}>
+                  Грузчики
                 </Text>
-              )}
-              <Stack gap={6}>
-                {sortByAvailability(loaderCandidates, availability).map((p) => {
-                  const { tier, suffix } = availabilityOf(p.id);
-                  const checked = loaderIds.includes(p.id);
-                  return (
-                    <Checkbox
-                      key={p.id}
-                      checked={checked}
-                      // Грузчик не может быть на двух заказах одновременно —
-                      // это запрещает и база; выходной — только подсказка.
-                      disabled={busyIds.has(p.id) && !checked}
-                      onChange={() =>
-                        setLoaderIds((prev) => (checked ? prev.filter((x) => x !== p.id) : [...prev, p.id]))
-                      }
-                      label={
-                        <Group gap={8} wrap="nowrap">
-                          <AvailabilityDot tier={tier} />
-                          <Text size="sm">
-                            {p.name}
-                            {p.id === driverId ? ' (водитель)' : ''}
-                            <Text span size="xs" c="dimmed">
-                              {suffix}
+                {loaderCandidates.length === 0 && (
+                  <Text size="sm" c="dimmed">
+                    Нет ни одного грузчика
+                  </Text>
+                )}
+                <Stack gap={6}>
+                  {sortByAvailability(loaderCandidates, availability).map((p) => {
+                    const { tier, suffix } = availabilityOf(p.id);
+                    const checked = loaderIds.includes(p.id);
+                    return (
+                      <Checkbox
+                        key={p.id}
+                        checked={checked}
+                        // Грузчик не может быть на двух заказах одновременно —
+                        // это запрещает и база; выходной — только подсказка.
+                        disabled={busyIds.has(p.id) && !checked}
+                        onChange={() =>
+                          setLoaderIds((prev) => (checked ? prev.filter((x) => x !== p.id) : [...prev, p.id]))
+                        }
+                        label={
+                          <Group gap={8} wrap="nowrap">
+                            <AvailabilityDot tier={tier} />
+                            <Text size="sm">
+                              {p.name}
+                              {p.id === driverId ? ' (водитель)' : ''}
+                              <Text span size="xs" c="dimmed">
+                                {suffix}
+                              </Text>
                             </Text>
-                          </Text>
-                        </Group>
-                      }
-                    />
-                  );
-                })}
-              </Stack>
-            </Paper>
+                          </Group>
+                        }
+                      />
+                    );
+                  })}
+                </Stack>
+              </Paper>
+            )}
           </Stack>
         </Grid.Col>
       </Grid>

@@ -23,6 +23,7 @@ export interface Database {
           id: string;
           role: AccountRole;
           name: string;
+          last_name: string | null;
           phone: string | null;
           login: string | null;
           account_status: AccountStatus;
@@ -37,12 +38,16 @@ export interface Database {
           can_manage_own_schedule: boolean;
           default_vehicle_id: string | null;
           schedule_mode: ScheduleMode;
+          birth_date: string | null;
+          hire_date: string | null;
+          address: string | null;
           created_at: string;
         };
         Insert: {
           id?: string;
           role: AccountRole;
           name: string;
+          last_name?: string | null;
           phone?: string | null;
           login?: string | null;
           account_status?: AccountStatus;
@@ -56,6 +61,9 @@ export interface Database {
           can_manage_own_schedule?: boolean;
           default_vehicle_id?: string | null;
           schedule_mode?: ScheduleMode;
+          birth_date?: string | null;
+          hire_date?: string | null;
+          address?: string | null;
         };
         Update: Partial<Database['public']['Tables']['employees']['Insert']>;
         Relationships: [];

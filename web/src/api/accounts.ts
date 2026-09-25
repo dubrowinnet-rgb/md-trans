@@ -62,7 +62,11 @@ export interface CreateAccountInput {
   login: string;
   password: string;
   name: string;
+  last_name?: string;
   phone?: string;
+  birth_date?: string | null;
+  hire_date?: string | null;
+  address?: string;
   role: AccountRole;
   permissions: AccountPermissions;
   default_vehicle_id?: string | null;
@@ -121,6 +125,47 @@ export function useUpdateAccount() {
         .update({ role, ...permissions, ...(default_vehicle_id !== undefined ? { default_vehicle_id } : {}) })
         .eq('id', id);
       if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+    },
+  });
+}
+
+export interface UpdateAccountProfileInput {
+  id: string;
+  login: string;
+  password?: string;
+  name: string;
+  last_name?: string;
+  phone?: string;
+  birth_date?: string | null;
+  hire_date?: string | null;
+  address?: string;
+}
+
+// Логин, пароль и остальной профиль уже существующего сотрудника — тоже
+// через Edge Function (supabase/functions/update-account), по той же
+// причине, что и создание: сменить чужой email/пароль можно только через
+// Supabase Admin API, а он требует service role key.
+export function useUpdateAccountProfile() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: UpdateAccountProfileInput) => {
+      const { data, error } = await supabase.functions.invoke<{ employee: Account; error?: string }>(
+        'update-account',
+        { body: input }
+      );
+      if (error) {
+        if (error instanceof FunctionsHttpError) {
+          const body = await error.context.json().catch(() => null);
+          throw new Error(body?.error || error.message);
+        }
+        throw new Error(error.message);
+      }
+      if (data && 'error' in data && data.error) throw new Error(data.error);
+      return data!.employee;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['accounts'] });

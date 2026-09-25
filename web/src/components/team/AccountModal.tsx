@@ -4,6 +4,7 @@ import { useState } from 'react';
 import {
   Alert,
   Button,
+  Divider,
   Group,
   Modal,
   PasswordInput,
@@ -13,15 +14,19 @@ import {
   Stack,
   Switch,
   Text,
+  Textarea,
   TextInput,
   Title,
 } from '@mantine/core';
+import { DatePickerInput } from '@mantine/dates';
 import { notifications } from '@mantine/notifications';
 import { errorMessage } from '@/lib/errors';
+import { dayjs } from '@/lib/dates';
 import {
   ROLE_DEFAULT_PERMISSIONS,
   useCreateAccount,
   useUpdateAccount,
+  useUpdateAccountProfile,
   type Account,
   type AccountPermissions,
 } from '@/api/accounts';
@@ -51,14 +56,20 @@ const PERMISSION_LABELS: { key: keyof AccountPermissions; label: string; hint: s
   },
 ];
 
-// Аккаунт сотрудника — как экран «Команда» в мобильном приложении: при
-// создании администратор задаёт логин и пароль, при правке — роль, права
-// и машину по умолчанию.
+// Аккаунт сотрудника — как экран «Команда» в мобильном приложении: один
+// диалог и на создание, и на правку. При создании администратор сразу
+// задаёт логин и пароль; при правке их тоже можно сменить (логин и
+// пароль — необязательные поля: пусто значит «не менять», см.
+// useUpdateAccountProfile).
 export function AccountModal({ account, onClose }: { account: Account | null; onClose: () => void }) {
   const [name, setName] = useState(account?.name ?? '');
+  const [lastName, setLastName] = useState(account?.last_name ?? '');
   const [phone, setPhone] = useState(account?.phone ?? '');
   const [login, setLogin] = useState(account?.login ?? '');
   const [password, setPassword] = useState('');
+  const [birthDate, setBirthDate] = useState<string | null>(account?.birth_date ?? null);
+  const [hireDate, setHireDate] = useState<string | null>(account?.hire_date ?? null);
+  const [address, setAddress] = useState(account?.address ?? '');
   const [role, setRole] = useState<AccountRole>(account?.role ?? 'dispatcher');
   const [permissions, setPermissions] = useState<AccountPermissions>(
     account
@@ -75,6 +86,9 @@ export function AccountModal({ account, onClose }: { account: Account | null; on
   const vehicles = useVehicles().data ?? [];
   const createAccount = useCreateAccount();
   const updateAccount = useUpdateAccount();
+  const updateProfile = useUpdateAccountProfile();
+  const saving = createAccount.isPending || updateAccount.isPending || updateProfile.isPending;
+  const age = birthDate ? dayjs().diff(dayjs(birthDate), 'year') : null;
 
   const changeRole = (value: string) => {
     const next = value as AccountRole;
@@ -86,20 +100,36 @@ export function AccountModal({ account, onClose }: { account: Account | null; on
 
   const save = async () => {
     setError(null);
+    if (!name.trim()) return setError('Укажите имя');
     const vehicleForRole = role === 'driver' ? vehicleId : null;
+    // Авто по умолчанию имеет смысл только у водителя — при другой роли
+    // всегда отправляем null, чтобы очистить поле, если, скажем,
+    // бывшего водителя переводят в диспетчеры.
+    const profileFields = {
+      name: name.trim(),
+      last_name: lastName.trim() || undefined,
+      phone: phone.trim() || undefined,
+      birth_date: birthDate,
+      hire_date: hireDate,
+      address: address.trim() || undefined,
+    };
     try {
       if (account) {
+        await updateProfile.mutateAsync({
+          id: account.id,
+          login: login.trim(),
+          password: password || undefined,
+          ...profileFields,
+        });
         await updateAccount.mutateAsync({ id: account.id, role, permissions, default_vehicle_id: vehicleForRole });
       } else {
-        if (!name.trim()) throw new Error('Укажите имя');
         await createAccount.mutateAsync({
           login: login.trim(),
           password,
-          name: name.trim(),
-          phone: phone.trim() || undefined,
           role,
           permissions,
           default_vehicle_id: vehicleForRole,
+          ...profileFields,
         });
       }
       notifications.show({ message: 'Аккаунт сохранён', color: 'green' });
@@ -115,30 +145,65 @@ export function AccountModal({ account, onClose }: { account: Account | null; on
   return (
     <Modal opened onClose={onClose} size="lg" title={<Title order={4}>{account ? account.name : 'Новый аккаунт'}</Title>}>
       <Stack>
-        {!account && (
-          <SimpleGrid cols={2}>
-            <TextInput label="Имя *" value={name} onChange={(e) => setName(e.currentTarget.value)} />
-            <TextInput label="Телефон" value={phone} onChange={(e) => setPhone(e.currentTarget.value)} />
-            <TextInput
-              label="Логин *"
-              description="Латиница, цифры, точка, дефис, 3–32 символа"
-              value={login}
-              onChange={(e) => setLogin(e.currentTarget.value)}
+        <SimpleGrid cols={2}>
+          <TextInput label="Имя *" value={name} onChange={(e) => setName(e.currentTarget.value)} />
+          <TextInput label="Фамилия" value={lastName} onChange={(e) => setLastName(e.currentTarget.value)} />
+          <TextInput label="Телефон" value={phone} onChange={(e) => setPhone(e.currentTarget.value)} />
+          <TextInput
+            label={account ? 'Логин' : 'Логин *'}
+            description={
+              account
+                ? 'Латиница, цифры, точка, дефис, 3–32 символа. Пусто — логин не меняется'
+                : 'Латиница, цифры, точка, дефис, 3–32 символа'
+            }
+            value={login}
+            onChange={(e) => setLogin(e.currentTarget.value)}
+          />
+          <PasswordInput
+            label={account ? 'Новый пароль' : 'Пароль *'}
+            description={account ? 'Пусто — пароль не меняется' : 'Не короче 6 символов'}
+            value={password}
+            onChange={(e) => setPassword(e.currentTarget.value)}
+          />
+        </SimpleGrid>
+
+        <Divider label="Данные сотрудника" labelPosition="left" />
+        <SimpleGrid cols={3}>
+          <div>
+            <DatePickerInput
+              label="Дата рождения"
+              placeholder="Не указана"
+              value={birthDate}
+              onChange={setBirthDate}
+              valueFormat="D MMMM YYYY"
+              clearable
+              popoverProps={{ zIndex: 500 }}
             />
-            <PasswordInput
-              label="Пароль *"
-              description="Не короче 6 символов"
-              value={password}
-              onChange={(e) => setPassword(e.currentTarget.value)}
-            />
-          </SimpleGrid>
-        )}
-        {account && (
-          <Text size="sm" c="dimmed">
-            Логин: {account.login ?? '—'}
-            {account.phone ? ` · ${account.phone}` : ''}
-          </Text>
-        )}
+            {age != null && (
+              <Text size="xs" c="dimmed" mt={4}>
+                {age} лет
+              </Text>
+            )}
+          </div>
+          <DatePickerInput
+            label="Начало работы в компании"
+            placeholder="Не указано"
+            value={hireDate}
+            onChange={setHireDate}
+            valueFormat="D MMMM YYYY"
+            clearable
+            popoverProps={{ zIndex: 500 }}
+          />
+          <Textarea
+            label="Адрес проживания"
+            autosize
+            minRows={1}
+            value={address}
+            onChange={(e) => setAddress(e.currentTarget.value)}
+          />
+        </SimpleGrid>
+
+        <Divider />
         <div>
           <Text size="sm" fw={500} mb={4}>
             Роль
@@ -188,7 +253,7 @@ export function AccountModal({ account, onClose }: { account: Account | null; on
           <Button variant="default" onClick={onClose}>
             Отмена
           </Button>
-          <Button onClick={save} loading={createAccount.isPending || updateAccount.isPending}>
+          <Button onClick={save} loading={saving}>
             {account ? 'Сохранить' : 'Создать аккаунт'}
           </Button>
         </Group>
