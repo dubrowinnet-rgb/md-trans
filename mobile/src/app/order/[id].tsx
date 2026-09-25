@@ -265,16 +265,18 @@ export default function OrderScreen() {
             <DateTimeField label="Начало" value={editStart} mode="time" onChange={setEditStart} />
             <DateTimeField label="Окончание" value={editEnd} mode="time" onChange={setEditEnd} />
           </View>
-          <TextInput
-            mode="outlined"
-            label="Сумма"
-            accessibilityLabel="Сумма заказа"
-            placeholder="Например: 14500"
-            value={editPriceText}
-            onChangeText={setEditPriceText}
-            keyboardType="numeric"
-            right={<TextInput.Affix text="₽" />}
-          />
+          {showAmount && (
+            <TextInput
+              mode="outlined"
+              label="Сумма"
+              accessibilityLabel="Сумма заказа"
+              placeholder="Например: 14500"
+              value={editPriceText}
+              onChangeText={setEditPriceText}
+              keyboardType="numeric"
+              right={<TextInput.Affix text="₽" />}
+            />
+          )}
           {updateSchedulePrice.error && (
             <HelperText type="error">{updateSchedulePrice.error.message}</HelperText>
           )}

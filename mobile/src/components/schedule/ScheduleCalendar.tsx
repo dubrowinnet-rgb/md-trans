@@ -207,6 +207,12 @@ export function ScheduleCalendar({
       </View>
 
       {daysQuery.isError && <HelperText type="error">{daysQuery.error.message}</HelperText>}
+      {/* setDay/clearDay здесь, а не только внутри диалога дня: вставка
+          копии/переноса (armClipboard → applyToDay) уже закрывает диалог до
+          того, как мутация уйдёт, так что ошибка сети там была бы не видна. */}
+      {(setDay.error ?? clearDay.error) && (
+        <HelperText type="error">{(setDay.error ?? clearDay.error)?.message}</HelperText>
+      )}
       {daysQuery.isLoading ? (
         <ActivityIndicator style={styles.loader} />
       ) : (

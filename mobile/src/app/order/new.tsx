@@ -26,7 +26,7 @@ import { DateTimeField } from '../../components/form/DateTimeField';
 import { FormSection } from '../../components/form/FormSection';
 import { DismissKeyboardView } from '../../components/form/DismissKeyboardView';
 import { useSession } from '../../providers/SessionProvider';
-import { canManageOrders, canViewClientPhone } from '../../lib/permissions';
+import { canManageOrders, canViewClientPhone, canViewOrderAmount } from '../../lib/permissions';
 import {
   evaluateAvailability,
   sortByAvailability,
@@ -196,6 +196,7 @@ export default function NewOrderScreen() {
   const { employee } = useSession();
   const canManage = canManageOrders(employee);
   const canViewContacts = canViewClientPhone(employee);
+  const showAmount = canViewOrderAmount(employee);
 
   const clientsQuery = useClients(clientSearch);
   const busyQuery = useBusyEmployeeIds(scheduledStart, scheduledEnd);
@@ -313,7 +314,7 @@ export default function NewOrderScreen() {
                 description={
                   selectedClient.discount_percent
                     ? `Скидка ${selectedClient.discount_percent}%`
-                    : selectedClient.phone ?? undefined
+                    : (canViewContacts ? selectedClient.phone : null) ?? undefined
                 }
                 right={() => <Button onPress={() => setSelectedClient(null)}>Изменить</Button>}
               />
@@ -513,19 +514,21 @@ export default function NewOrderScreen() {
           </FormSection>
         )}
 
-        <FormSection title="Сумма (вручную)">
-          <TextInput
-            mode="outlined"
-            placeholder="Например: 14500"
-            value={priceText}
-            onChangeText={setPriceText}
-            keyboardType="numeric"
-            right={<TextInput.Affix text="₽" />}
-          />
-          {selectedClient?.discount_percent ? (
-            <HelperText type="info">Скидка клиента {selectedClient.discount_percent}%</HelperText>
-          ) : null}
-        </FormSection>
+        {showAmount && (
+          <FormSection title="Сумма (вручную)">
+            <TextInput
+              mode="outlined"
+              placeholder="Например: 14500"
+              value={priceText}
+              onChangeText={setPriceText}
+              keyboardType="numeric"
+              right={<TextInput.Affix text="₽" />}
+            />
+            {selectedClient?.discount_percent ? (
+              <HelperText type="info">Скидка клиента {selectedClient.discount_percent}%</HelperText>
+            ) : null}
+          </FormSection>
+        )}
 
         <FormSection title="Комментарий">
           <TextInput mode="outlined" multiline value={comment} onChangeText={setComment} />

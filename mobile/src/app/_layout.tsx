@@ -68,15 +68,20 @@ function RootNavigator() {
           push, так что здесь ничего не меняется. */}
       <Stack.Protected guard={isOffice}>
         <Stack.Screen name="(office)" />
-        <Stack.Screen
-          name="order/new"
-          options={{ presentation: 'containedModal', headerShown: true, title: 'Новый заказ' }}
-        />
       </Stack.Protected>
       <Stack.Protected guard={isCrew}>
         <Stack.Screen name="(employee)" />
       </Stack.Protected>
+      {/* order/new живёт здесь, а не только под isOffice: водителю/грузчику
+          с выданным can_manage_orders тоже нужно уметь открыть эту форму
+          (например, кнопкой «Копировать заказ» на карточке заказа) — сам
+          экран уже проверяет canManage внутри и показывает «Недостаточно
+          прав», если его открыли без этого права. */}
       <Stack.Protected guard={Boolean(session)}>
+        <Stack.Screen
+          name="order/new"
+          options={{ presentation: 'containedModal', headerShown: true, title: 'Новый заказ' }}
+        />
         <Stack.Screen
           name="order/[id]"
           options={{ presentation: 'containedModal', headerShown: true, title: 'Заказ' }}
