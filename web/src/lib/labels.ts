@@ -1,4 +1,4 @@
-import type { AccountRole, CrewStatus, OrderStatus } from '@/types/database';
+import type { AccountRole, AccountStatus, CrewStatus, OrderStatus } from '@/types/database';
 
 // Те же подписи и цвета, что в мобильном приложении (mobile/src/theme.ts).
 export const ORDER_STATUSES: OrderStatus[] = ['new', 'confirmed', 'in_progress', 'completed', 'cancelled'];
@@ -30,6 +30,18 @@ export const ACCOUNT_ROLE_LABELS: Record<AccountRole, string> = {
   dispatcher: 'Диспетчер',
   driver: 'Водитель',
   loader: 'Грузчик',
+};
+
+export const ACCOUNT_STATUS_LABELS: Record<AccountStatus, string> = {
+  active: 'Активен',
+  pending_payment: 'Ожидает оплаты',
+  suspended: 'Приостановлен',
+};
+
+export const ACCOUNT_STATUS_COLORS: Record<AccountStatus, string> = {
+  active: 'green',
+  pending_payment: 'yellow',
+  suspended: 'red',
 };
 
 export const PAST_ORDER_COLOR = '#6B6B6B';

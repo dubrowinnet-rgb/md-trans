@@ -96,7 +96,21 @@ export default function CabinetLayout({ children }: { children: ReactNode }) {
           ))}
         </AppShell.Section>
         <AppShell.Section>
-          <Group gap="xs" px="xs" py="sm" wrap="nowrap">
+          <Group
+            gap="xs"
+            px="xs"
+            py="sm"
+            wrap="nowrap"
+            {...(isAdmin ? { component: Link, href: '/settings/' } : {})}
+            style={{
+              borderRadius: 8,
+              textDecoration: 'none',
+              color: 'inherit',
+              cursor: isAdmin ? 'pointer' : 'default',
+              background: isAdmin && pathname?.startsWith('/settings') ? 'var(--mantine-color-violet-1)' : undefined,
+            }}
+            title={isAdmin ? 'Настройки' : undefined}
+          >
             <Avatar color="violet" radius="xl" size="sm">
               {employee?.name.slice(0, 1)}
             </Avatar>
