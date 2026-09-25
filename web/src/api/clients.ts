@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
+import { formatPhone } from '@/lib/phone';
 import type { Database, OrderStatus } from '@/types/database';
 
 export type Client = Database['public']['Tables']['clients']['Row'];
@@ -99,7 +100,7 @@ export function useCreateClient() {
         .from('clients')
         .insert({
           name: input.name,
-          phone: input.phone || null,
+          phone: input.phone ? formatPhone(input.phone) : null,
           discount_percent: input.discount_percent ?? 0,
           notes: input.notes || null,
         })
@@ -122,7 +123,7 @@ export function useUpdateClient() {
         .from('clients')
         .update({
           name: input.name,
-          phone: input.phone || null,
+          phone: input.phone ? formatPhone(input.phone) : null,
           discount_percent: input.discount_percent ?? 0,
           notes: input.notes || null,
         })
@@ -161,7 +162,7 @@ export function useImportClients() {
         const { error } = await supabase.from('clients').insert(
           toInsert.map((c) => ({
             name: c.name,
-            phone: c.phone ?? null,
+            phone: c.phone ? formatPhone(c.phone) : null,
             discount_percent: c.discount_percent ?? 0,
             notes: c.notes ?? null,
           }))
@@ -173,6 +174,11 @@ export function useImportClients() {
           .from('clients')
           .update({
             name: u.name,
+            // Раз уже нашли клиента по совпадению телефона — заодно
+            // приводим его сохранённый номер к единому формату, даже если
+            // сам импортируемый файл записал его иначе (пункт «единый
+            // формат для всех телефонов в базе», 2026-09-25).
+            ...(u.phone ? { phone: formatPhone(u.phone) } : {}),
             ...(u.discount_percent !== undefined ? { discount_percent: u.discount_percent } : {}),
             ...(u.notes !== undefined ? { notes: u.notes } : {}),
           })

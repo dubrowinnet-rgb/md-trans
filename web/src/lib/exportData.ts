@@ -2,6 +2,7 @@ import type { ClientWithStats } from '@/api/clients';
 import type { OrderWithDetails } from '@/api/orders';
 import { ORDER_STATUS_LABELS } from './labels';
 import { dayjs } from './dates';
+import { formatPhone } from './phone';
 
 export type ExportCell = string | number | Date | null;
 
@@ -20,7 +21,7 @@ export interface ExportColumn<T> {
 
 export const CLIENT_COLUMNS: ExportColumn<ClientWithStats>[] = [
   { key: 'name', label: 'Клиент', width: 30, defaultOn: true, value: (c) => c.name },
-  { key: 'phone', label: 'Телефон', width: 18, guard: 'phone', defaultOn: true, value: (c) => c.phone },
+  { key: 'phone', label: 'Телефон', width: 18, guard: 'phone', defaultOn: true, value: (c) => (c.phone ? formatPhone(c.phone) : null) },
   { key: 'discount', label: 'Скидка, %', width: 10, defaultOn: true, value: (c) => c.discount_percent || 0 },
   { key: 'notes', label: 'Заметки', width: 40, defaultOn: true, value: (c) => c.notes },
   { key: 'orders', label: 'Заказов всего', width: 14, guard: 'stats', defaultOn: true, value: (c) => c.ordersCount },
@@ -65,7 +66,13 @@ export const ORDER_COLUMNS: ExportColumn<OrderWithDetails>[] = [
   },
   { key: 'status', label: 'Статус', width: 14, defaultOn: true, value: (o) => ORDER_STATUS_LABELS[o.status] },
   { key: 'client', label: 'Клиент', width: 26, defaultOn: true, value: (o) => o.clients?.name ?? null },
-  { key: 'phone', label: 'Телефон клиента', width: 18, guard: 'phone', value: (o) => o.clients?.phone ?? null },
+  {
+    key: 'phone',
+    label: 'Телефон клиента',
+    width: 18,
+    guard: 'phone',
+    value: (o) => (o.clients?.phone ? formatPhone(o.clients.phone) : null),
+  },
   {
     key: 'services',
     label: 'Услуги',

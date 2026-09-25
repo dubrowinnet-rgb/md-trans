@@ -236,16 +236,7 @@ export function detectColumnsSmart(rows: string[][]): ColumnDetection {
   return { columns, hasHeader, contentFields };
 }
 
-// К единому виду без кода страны — чтобы «+7 916 000-00-02», «8 (916)
-// 000 00 02» и «9160000002» считались одним и тем же номером при поиске
-// уже существующего клиента.
-export function normalizePhone(phone: string | null | undefined): string | null {
-  if (!phone) return null;
-  const digits = phone.replace(/\D/g, '');
-  if (!digits) return null;
-  if (digits.length === 11 && (digits[0] === '7' || digits[0] === '8')) return digits.slice(1);
-  return digits;
-}
+export { normalizePhone } from './phone';
 
 export function parseDiscount(raw: string): number {
   const n = Number(raw.replace(',', '.').replace('%', '').trim());

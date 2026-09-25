@@ -21,6 +21,7 @@ import { useClientsWithStats, type ClientWithStats } from '@/api/clients';
 import { useSession } from '@/providers/SessionProvider';
 import { canViewClientPhone, canViewClientStats, canViewOrderAmount } from '@/lib/permissions';
 import { dayjs, formatMoney } from '@/lib/dates';
+import { formatPhone } from '@/lib/phone';
 import { PageHeader } from '@/components/common/PageHeader';
 import { ClientFormModal } from '@/components/clients/ClientFormModal';
 import { ClientImportModal } from '@/components/clients/ClientImportModal';
@@ -153,7 +154,7 @@ export default function ClientsPage() {
             {pageRows.map((c: ClientWithStats) => (
               <Table.Tr key={c.id} style={{ cursor: 'pointer' }} onClick={() => ui.openClient(c.id)}>
                 <Table.Td fw={500}>{c.name}</Table.Td>
-                {showPhone && <Table.Td>{c.phone || '—'}</Table.Td>}
+                {showPhone && <Table.Td>{c.phone ? formatPhone(c.phone) : '—'}</Table.Td>}
                 <Table.Td ta="right">{c.discount_percent ? `${c.discount_percent}%` : '—'}</Table.Td>
                 {showStats && (
                   <Table.Td ta="right">

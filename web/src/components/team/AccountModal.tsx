@@ -22,6 +22,7 @@ import { DatePickerInput } from '@mantine/dates';
 import { notifications } from '@mantine/notifications';
 import { errorMessage } from '@/lib/errors';
 import { dayjs } from '@/lib/dates';
+import { formatPhone } from '@/lib/phone';
 import {
   ROLE_DEFAULT_PERMISSIONS,
   useCreateAccount,
@@ -113,7 +114,7 @@ export function AccountModal({ account, onClose }: { account: Account | null; on
     const profileFields = {
       name: name.trim(),
       last_name: lastName.trim() || undefined,
-      phone: phone.trim() || undefined,
+      phone: phone.trim() ? formatPhone(phone.trim()) : undefined,
       birth_date: birthDate,
       hire_date: hireDate,
       address: address.trim() || undefined,
@@ -153,7 +154,12 @@ export function AccountModal({ account, onClose }: { account: Account | null; on
         <SimpleGrid cols={2}>
           <TextInput label="Имя *" value={name} onChange={(e) => setName(e.currentTarget.value)} />
           <TextInput label="Фамилия" value={lastName} onChange={(e) => setLastName(e.currentTarget.value)} />
-          <TextInput label="Телефон" value={phone} onChange={(e) => setPhone(e.currentTarget.value)} />
+          <TextInput
+            label="Телефон"
+            value={phone}
+            onChange={(e) => setPhone(e.currentTarget.value)}
+            onBlur={() => phone.trim() && setPhone(formatPhone(phone.trim()))}
+          />
           <TextInput
             label={account ? 'Логин' : 'Логин *'}
             description={

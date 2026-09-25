@@ -102,7 +102,8 @@ export function ClientImportModal({
     };
 
     const toInsert: { name: string; phone: string | null; discount_percent: number; notes: string | null }[] = [];
-    const toUpdate: { id: string; name: string; discount_percent?: number; notes?: string | null }[] = [];
+    const toUpdate: { id: string; name: string; phone?: string | null; discount_percent?: number; notes?: string | null }[] =
+      [];
     let skipped = 0;
     const seenPhones = new Set<string>();
 
@@ -121,6 +122,7 @@ export function ClientImportModal({
         toUpdate.push({
           id: existing.id,
           name,
+          ...(rawPhone ? { phone: rawPhone } : {}),
           ...(discountRaw !== undefined ? { discount_percent: parseDiscount(discountRaw) } : {}),
           ...(notesRaw !== undefined ? { notes: notesRaw || null } : {}),
         });

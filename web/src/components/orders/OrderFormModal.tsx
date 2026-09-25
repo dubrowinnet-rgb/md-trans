@@ -41,6 +41,7 @@ import { useServices } from '@/api/services';
 import { useVehicles } from '@/api/vehicles';
 import { useScheduleDaysOn, type ScheduleDay } from '@/api/schedule';
 import { combineDateTime, dayjs, toDateKey } from '@/lib/dates';
+import { formatPhone } from '@/lib/phone';
 import { useSession } from '@/providers/SessionProvider';
 import { canViewClientPhone, canViewOrderAmount } from '@/lib/permissions';
 import { serviceNeedsLoaders } from '@/lib/services';
@@ -207,7 +208,7 @@ export function OrderFormModal({
     if (selected && !list.some((c) => c.id === selected.id)) list.unshift(selected);
     return list.map((c) => ({
       value: c.id,
-      label: showPhones && c.phone ? `${c.name} · ${c.phone}` : c.name,
+      label: showPhones && c.phone ? `${c.name} · ${formatPhone(c.phone)}` : c.name,
     }));
   }, [clientsQuery.data, selectedClientQuery.data, showPhones]);
 

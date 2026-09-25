@@ -37,6 +37,7 @@ import { useSession } from '@/providers/SessionProvider';
 import { canManageOrders, canViewClientPhone, canViewOrderAmount } from '@/lib/permissions';
 import { CREW_STATUS_LABELS, ORDER_STATUSES, ORDER_STATUS_COLORS, ORDER_STATUS_LABELS } from '@/lib/labels';
 import { dayjs, formatMoney, formatTime } from '@/lib/dates';
+import { formatPhone } from '@/lib/phone';
 import { yandexMapsRouteUrl } from '@/lib/yandexMaps';
 import type { CrewStatus } from '@/types/database';
 import { useOrderUI } from './OrderUIProvider';
@@ -232,7 +233,7 @@ function OrderDetails({
           {clientPhone && (
             <Group gap={6}>
               <IconPhone size={16} />
-              <Anchor href={`tel:${clientPhone}`}>{clientPhone}</Anchor>
+              <Anchor href={`tel:${clientPhone}`}>{formatPhone(clientPhone)}</Anchor>
             </Group>
           )}
           {order.clients?.discount_percent ? (

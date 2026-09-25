@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Alert, Button, Group, Modal, NumberInput, Stack, TextInput, Textarea, Title } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { errorMessage } from '@/lib/errors';
+import { formatPhone } from '@/lib/phone';
 import { useCreateClient, useUpdateClient, type Client } from '@/api/clients';
 
 // Создание и правка клиента (имя, телефон, скидка, заметки).
@@ -31,7 +32,7 @@ export function ClientFormModal({
     if (!name.trim()) return setError('Укажите имя клиента');
     const input = {
       name: name.trim(),
-      phone: phone.trim(),
+      phone: phone.trim() ? formatPhone(phone.trim()) : '',
       discount_percent: Number(discount) || 0,
       notes: notes.trim(),
     };
@@ -59,7 +60,12 @@ export function ClientFormModal({
     >
       <Stack>
         <TextInput label="Имя *" value={name} onChange={(e) => setName(e.currentTarget.value)} data-autofocus />
-        <TextInput label="Телефон" value={phone} onChange={(e) => setPhone(e.currentTarget.value)} />
+        <TextInput
+          label="Телефон"
+          value={phone}
+          onChange={(e) => setPhone(e.currentTarget.value)}
+          onBlur={() => phone.trim() && setPhone(formatPhone(phone.trim()))}
+        />
         <NumberInput label="Скидка" suffix=" %" min={0} max={100} value={discount} onChange={setDiscount} />
         <Textarea
           label="Заметки"

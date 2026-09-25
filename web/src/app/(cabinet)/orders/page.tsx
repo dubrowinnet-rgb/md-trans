@@ -10,6 +10,7 @@ import { useSession } from '@/providers/SessionProvider';
 import { canManageOrders, canViewClientPhone, canViewOrderAmount } from '@/lib/permissions';
 import { ORDER_STATUSES, ORDER_STATUS_COLORS, ORDER_STATUS_LABELS } from '@/lib/labels';
 import { dayjs, formatMoney, fromDateKey, toDateKey } from '@/lib/dates';
+import { formatPhone } from '@/lib/phone';
 import type { OrderStatus } from '@/types/database';
 import { PageHeader } from '@/components/common/PageHeader';
 import { useOrderUI } from '@/components/orders/OrderUIProvider';
@@ -143,7 +144,7 @@ export default function OrdersPage() {
                     </Text>
                     {showPhone && o.clients?.phone && (
                       <Text size="xs" c="dimmed">
-                        {o.clients.phone}
+                        {formatPhone(o.clients.phone)}
                       </Text>
                     )}
                   </Table.Td>

@@ -25,6 +25,7 @@ import { useSession } from '@/providers/SessionProvider';
 import { canManageOrders, canViewClientPhone, canViewClientStats, canViewOrderAmount } from '@/lib/permissions';
 import { ORDER_STATUS_COLORS, ORDER_STATUS_LABELS } from '@/lib/labels';
 import { dayjs, formatMoney } from '@/lib/dates';
+import { formatPhone } from '@/lib/phone';
 import { useOrderUI } from '@/components/orders/OrderUIProvider';
 import { ClientFormModal } from './ClientFormModal';
 
@@ -73,7 +74,7 @@ export function ClientModal({ clientId, onClose }: { clientId: string; onClose: 
             <div>
               <Title order={3}>{client.name}</Title>
               <Text c="dimmed">
-                {canViewClientPhone(employee) ? client.phone || 'Телефон не указан' : 'Телефон скрыт'}
+                {canViewClientPhone(employee) ? (client.phone && formatPhone(client.phone)) || 'Телефон не указан' : 'Телефон скрыт'}
                 {client.discount_percent ? ` · скидка ${client.discount_percent}%` : ''}
               </Text>
               <Text size="xs" c="dimmed">

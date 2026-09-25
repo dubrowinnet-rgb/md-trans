@@ -7,6 +7,7 @@ import { useAllAccounts, type Account } from '@/api/accounts';
 import { useVehicles } from '@/api/vehicles';
 import { useSession } from '@/providers/SessionProvider';
 import { ACCOUNT_ROLE_LABELS } from '@/lib/labels';
+import { formatPhone } from '@/lib/phone';
 import { PageHeader } from '@/components/common/PageHeader';
 import { AccountModal } from '@/components/team/AccountModal';
 
@@ -68,7 +69,7 @@ export default function TeamPage() {
                     </Badge>
                   </Table.Td>
                   <Table.Td>{a.login ?? '—'}</Table.Td>
-                  <Table.Td>{a.phone ?? '—'}</Table.Td>
+                  <Table.Td>{a.phone ? formatPhone(a.phone) : '—'}</Table.Td>
                   <Table.Td ta="center">
                     <Group justify="center">
                       <Tick on={admin || a.can_manage_orders} />

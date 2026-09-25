@@ -7,6 +7,7 @@ import { useServices, useDeleteService, type Service } from '@/api/services';
 import { useSession } from '@/providers/SessionProvider';
 import { ACCOUNT_STATUS_COLORS, ACCOUNT_STATUS_LABELS } from '@/lib/labels';
 import { errorMessage } from '@/lib/errors';
+import { formatPhone } from '@/lib/phone';
 import { notifications } from '@mantine/notifications';
 import { PageHeader } from '@/components/common/PageHeader';
 import { ServiceModal } from '@/components/settings/ServiceModal';
@@ -125,7 +126,7 @@ export default function SettingsPage() {
               {employee.name}
             </Text>
             <Text size="sm" c="dimmed" mb="md">
-              Логин {employee.login ?? '—'} · {employee.phone || 'телефон не указан'}
+              Логин {employee.login ?? '—'} · {employee.phone ? formatPhone(employee.phone) : 'телефон не указан'}
             </Text>
             <Text size="xs" c="dimmed" mb="md">
               «Логин» — это то, чем вы входите в кабинет и приложение (настоящей почты и SMTP в системе нет). Здесь
