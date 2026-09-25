@@ -4,6 +4,7 @@ import { ActivityIndicator, Appbar, Divider, FAB, HelperText, List, Text } from 
 import { useAllAccounts, type Account } from '../../api/accounts';
 import { AccountDialog } from '../../components/accounts/AccountDialog';
 import { AccountMenu } from '../../components/layout/AccountMenu';
+import { NotificationBell } from '../../components/layout/NotificationBell';
 import { formatPhone } from '../../lib/phone';
 import { ACCOUNT_ROLE_ICONS, ACCOUNT_ROLE_LABELS } from '../../theme';
 
@@ -18,6 +19,7 @@ export default function TeamScreen() {
     <View style={styles.container}>
       <Appbar.Header>
         <Appbar.Content title="Команда" />
+        <NotificationBell />
         <AccountMenu />
       </Appbar.Header>
       {accountsQuery.isLoading ? (

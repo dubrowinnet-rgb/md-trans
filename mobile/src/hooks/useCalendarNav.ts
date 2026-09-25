@@ -12,9 +12,24 @@ export function alignToMode(date: Date, mode: DaysMode) {
 
 // Состояние календаря: режим 1/3/7 дней и первый видимый день страницы.
 // Заказы грузим на все отрисованные страницы, чтобы листание не ждало сети.
-export function useCalendarNav() {
+// minAnchor (доработки 2, п.1) — у водителя/грузчика назад листать можно
+// только в пределах текущего календарного месяца; у диспетчера/админа
+// параметр не передаётся, и ограничения нет.
+export function useCalendarNav(options?: { minAnchor?: Date }) {
+  const minAnchor = options?.minAnchor;
   const [mode, setModeState] = useState<DaysMode>(3);
-  const [anchor, setAnchor] = useState(() => startOfDay(new Date()));
+  const [anchor, setAnchorState] = useState(() => startOfDay(new Date()));
+
+  const clampAnchor = useCallback(
+    (date: Date, forMode: DaysMode) => {
+      const aligned = alignToMode(date, forMode);
+      if (minAnchor && aligned < minAnchor) return alignToMode(minAnchor, forMode);
+      return aligned;
+    },
+    [minAnchor]
+  );
+
+  const setAnchor = useCallback((date: Date) => setAnchorState(clampAnchor(date, mode)), [clampAnchor, mode]);
   // Счётчик запросов «прокрутить к текущему времени» (кнопка «Сегодня»).
   const [nowSignal, setNowSignal] = useState(0);
 
@@ -32,17 +47,19 @@ export function useCalendarNav() {
       const today = startOfDay(new Date());
       const showsToday = today >= anchor && today < addDays(anchor, mode);
       setModeState(next);
-      setAnchor(alignToMode(showsToday ? today : anchor, next));
+      setAnchorState(clampAnchor(showsToday ? today : anchor, next));
     },
-    [anchor, mode]
+    [anchor, mode, clampAnchor]
   );
 
-  const goPrev = useCallback(() => setAnchor((a) => addDays(a, -mode)), [mode]);
-  const goNext = useCallback(() => setAnchor((a) => addDays(a, mode)), [mode]);
+  const goPrev = useCallback(() => setAnchorState((a) => clampAnchor(addDays(a, -mode), mode)), [mode, clampAnchor]);
+  const goNext = useCallback(() => setAnchorState((a) => clampAnchor(addDays(a, mode), mode)), [mode, clampAnchor]);
   const goToday = useCallback(() => {
-    setAnchor(alignToMode(new Date(), mode));
+    setAnchorState(clampAnchor(new Date(), mode));
     setNowSignal((n) => n + 1);
-  }, [mode]);
+  }, [mode, clampAnchor]);
 
-  return { mode, setMode, anchor, setAnchor, rangeStart, rangeEnd, goPrev, goNext, goToday, nowSignal };
+  const atMinAnchor = Boolean(minAnchor) && anchor <= clampAnchor(minAnchor as Date, mode);
+
+  return { mode, setMode, anchor, setAnchor, rangeStart, rangeEnd, goPrev, goNext, goToday, nowSignal, atMinAnchor };
 }

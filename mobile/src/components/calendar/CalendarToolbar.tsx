@@ -7,15 +7,17 @@ export function CalendarToolbar({
   onPrev,
   onNext,
   onSetMode,
+  disablePrev,
 }: {
   mode: DaysMode;
   onPrev: () => void;
   onNext: () => void;
   onSetMode: (mode: DaysMode) => void;
+  disablePrev?: boolean;
 }) {
   return (
     <View style={styles.row}>
-      <IconButton icon="chevron-left" size={22} onPress={onPrev} accessibilityLabel="Назад" />
+      <IconButton icon="chevron-left" size={22} onPress={onPrev} disabled={disablePrev} accessibilityLabel="Назад" />
       <SegmentedButtons
         style={styles.modes}
         density="small"

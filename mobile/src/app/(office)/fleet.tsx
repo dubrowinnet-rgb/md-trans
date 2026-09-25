@@ -4,6 +4,7 @@ import { ActivityIndicator, Appbar, Divider, FAB, HelperText, List, Text } from 
 import { useVehicles, type Vehicle } from '../../api/vehicles';
 import { VehicleDialog } from '../../components/vehicles/VehicleDialog';
 import { AccountMenu } from '../../components/layout/AccountMenu';
+import { NotificationBell } from '../../components/layout/NotificationBell';
 
 function describeVehicle(vehicle: Vehicle) {
   const parts: string[] = [];
@@ -29,6 +30,7 @@ export default function FleetScreen() {
     <View style={styles.container}>
       <Appbar.Header>
         <Appbar.Content title="Автопарк" />
+        <NotificationBell />
         <AccountMenu />
       </Appbar.Header>
       {vehiclesQuery.isLoading ? (

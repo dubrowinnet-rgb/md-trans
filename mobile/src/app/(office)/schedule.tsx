@@ -3,6 +3,7 @@ import { Appbar, Chip, Text } from 'react-native-paper';
 import { useState } from 'react';
 import { useEmployees } from '../../api/employees';
 import { AccountMenu } from '../../components/layout/AccountMenu';
+import { NotificationBell } from '../../components/layout/NotificationBell';
 import { useSession } from '../../providers/SessionProvider';
 import { canManageOrders } from '../../lib/permissions';
 import { ScheduleCalendar } from '../../components/schedule/ScheduleCalendar';
@@ -23,6 +24,7 @@ export default function OfficeScheduleScreen() {
     <View style={styles.container}>
       <Appbar.Header>
         <Appbar.Content title="График" />
+        <NotificationBell />
         <AccountMenu />
       </Appbar.Header>
 
