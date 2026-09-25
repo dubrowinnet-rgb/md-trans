@@ -22,8 +22,9 @@ import {
   type Account,
   type AccountPermissions,
 } from '../../api/accounts';
+import { useUpdateEmployeeRates } from '../../api/payroll';
 import { useVehicles } from '../../api/vehicles';
-import type { AccountRole } from '../../types/database';
+import type { AccountRole, RateMode } from '../../types/database';
 import { ACCOUNT_ROLE_LABELS } from '../../theme';
 import { DismissKeyboardView } from '../form/DismissKeyboardView';
 
@@ -129,7 +130,8 @@ export function AccountDialog({ account, onClose }: { account: Account | null; o
   const createAccount = useCreateAccount();
   const updateAccount = useUpdateAccount();
   const updateProfile = useUpdateAccountProfile();
-  const saving = createAccount.isPending || updateAccount.isPending || updateProfile.isPending;
+  const updateRates = useUpdateEmployeeRates();
+  const saving = createAccount.isPending || updateAccount.isPending || updateProfile.isPending || updateRates.isPending;
 
   const [name, setName] = useState(account?.name ?? '');
   const [lastName, setLastName] = useState(account?.last_name ?? '');
@@ -158,6 +160,14 @@ export function AccountDialog({ account, onClose }: { account: Account | null; o
       : ROLE_DEFAULT_PERMISSIONS[role]
   );
   const [defaultVehicleId, setDefaultVehicleId] = useState<string | null>(account?.default_vehicle_id ?? null);
+  const [rateMode, setRateMode] = useState<RateMode>(account?.rate_mode ?? 'combined');
+  const [hourlyRateText, setHourlyRateText] = useState(account?.hourly_rate != null ? String(account.hourly_rate) : '');
+  const [drivingRateText, setDrivingRateText] = useState(
+    account?.driving_hourly_rate != null ? String(account.driving_hourly_rate) : ''
+  );
+  const [loadingRateText, setLoadingRateText] = useState(
+    account?.loading_hourly_rate != null ? String(account.loading_hourly_rate) : ''
+  );
   const [error, setError] = useState<string | null>(null);
   const vehiclesQuery = useVehicles();
 
@@ -205,6 +215,15 @@ export function AccountDialog({ account, onClose }: { account: Account | null; o
           ...profileFields,
         });
         await updateAccount.mutateAsync({ id: account.id, role, permissions, default_vehicle_id: vehicleForRole });
+        if (role === 'driver' || role === 'loader') {
+          await updateRates.mutateAsync({
+            id: account.id,
+            rate_mode: role === 'loader' ? 'combined' : rateMode,
+            hourly_rate: hourlyRateText.trim() ? Number(hourlyRateText.trim().replace(',', '.')) : null,
+            driving_hourly_rate: drivingRateText.trim() ? Number(drivingRateText.trim().replace(',', '.')) : null,
+            loading_hourly_rate: loadingRateText.trim() ? Number(loadingRateText.trim().replace(',', '.')) : null,
+          });
+        }
       } else {
         await createAccount.mutateAsync({
           login: login.trim(),
@@ -349,6 +368,55 @@ export function AccountDialog({ account, onClose }: { account: Account | null; o
                         </Chip>
                       ))}
                     </View>
+                  </>
+                )}
+
+                {account && (role === 'driver' || role === 'loader') && (
+                  <>
+                    <Divider style={styles.divider} />
+                    <Text variant="labelLarge">Ставка за час</Text>
+                    {role === 'driver' && (
+                      <SegmentedButtons
+                        value={rateMode}
+                        onValueChange={(value) => setRateMode(value as RateMode)}
+                        buttons={[
+                          { value: 'combined', label: 'Общая' },
+                          { value: 'split', label: 'Раздельно' },
+                        ]}
+                      />
+                    )}
+                    {role === 'loader' || rateMode === 'combined' ? (
+                      <TextInput
+                        mode="outlined"
+                        label="Ставка, ₽/час"
+                        accessibilityLabel="Ставка за час"
+                        value={hourlyRateText}
+                        onChangeText={setHourlyRateText}
+                        keyboardType="numeric"
+                      />
+                    ) : (
+                      <>
+                        <Text variant="bodySmall" style={styles.muted}>
+                          Раздельно — за вождение и отдельно за погрузку/разгрузку на этом же заказе.
+                        </Text>
+                        <TextInput
+                          mode="outlined"
+                          label="Вождение, ₽/час"
+                          accessibilityLabel="Ставка за вождение"
+                          value={drivingRateText}
+                          onChangeText={setDrivingRateText}
+                          keyboardType="numeric"
+                        />
+                        <TextInput
+                          mode="outlined"
+                          label="Погрузка/разгрузка, ₽/час"
+                          accessibilityLabel="Ставка за погрузку"
+                          value={loadingRateText}
+                          onChangeText={setLoadingRateText}
+                          keyboardType="numeric"
+                        />
+                      </>
+                    )}
                   </>
                 )}
 

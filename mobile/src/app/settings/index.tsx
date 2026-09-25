@@ -10,6 +10,8 @@ import { useSession } from '../../providers/SessionProvider';
 export default function SettingsScreen() {
   const { employee } = useSession();
   const isAdmin = employee?.role === 'admin';
+  const isDriver = employee?.role === 'driver';
+  const canEarnPay = employee?.role === 'driver' || employee?.role === 'loader';
 
   return (
     <View style={styles.container}>
@@ -25,6 +27,24 @@ export default function SettingsScreen() {
           right={(props) => <List.Icon {...props} icon="chevron-right" />}
           onPress={() => router.push('/settings/profile')}
         />
+        {canEarnPay && (
+          <List.Item
+            title="Моя зарплата"
+            description="Калькуляция: часы × ставка"
+            left={(props) => <List.Icon {...props} icon="cash-multiple" />}
+            right={(props) => <List.Icon {...props} icon="chevron-right" />}
+            onPress={() => router.push('/settings/pay-estimate')}
+          />
+        )}
+        {isDriver && (
+          <List.Item
+            title="Мой отчёт"
+            description="Заказы дня, расходы, топливо, касса"
+            left={(props) => <List.Icon {...props} icon="clipboard-text-outline" />}
+            right={(props) => <List.Icon {...props} icon="chevron-right" />}
+            onPress={() => router.push('/settings/driver-report')}
+          />
+        )}
         {isAdmin && (
           <>
             <List.Item
@@ -47,6 +67,13 @@ export default function SettingsScreen() {
               left={(props) => <List.Icon {...props} icon="bell-outline" />}
               right={(props) => <List.Icon {...props} icon="chevron-right" />}
               onPress={() => router.push('/settings/reminders')}
+            />
+            <List.Item
+              title="Отчёты водителей"
+              description="Касса, расходы, топливо — подтверждение"
+              left={(props) => <List.Icon {...props} icon="clipboard-check-outline" />}
+              right={(props) => <List.Icon {...props} icon="chevron-right" />}
+              onPress={() => router.push('/settings/driver-reports')}
             />
             <List.Item
               title="Техподдержка"
