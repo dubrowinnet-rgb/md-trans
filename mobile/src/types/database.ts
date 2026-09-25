@@ -7,8 +7,13 @@
 // в отличие от роли входа (AccountRole), которая шире.
 export type EmployeeRole = 'driver' | 'loader';
 // Роль входа в приложение: у каждой — свой набор экранов (см. app/_layout.tsx).
-export type AccountRole = 'admin' | 'dispatcher' | 'driver' | 'loader';
+// 'owner' — владелец сервиса (миграция 0013): не привязан к компании,
+// своего набора экранов в мобильном приложении не получает (см.
+// _layout.tsx) — заведён здесь только затем, чтобы employees.role и
+// company_id-логика типизировались на него полностью, без пропусков.
+export type AccountRole = 'owner' | 'admin' | 'dispatcher' | 'driver' | 'loader';
 export type AccountStatus = 'active' | 'pending_payment' | 'suspended';
+export type TicketStatus = 'open' | 'in_progress' | 'resolved';
 export type OrderStatus = 'new' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled';
 export type StopType = 'pickup' | 'dropoff';
 export type CrewStatus = 'notified' | 'read' | 'confirmed';
@@ -45,6 +50,9 @@ export interface Database {
           address: string | null;
           personal_vehicle_make: string | null;
           personal_vehicle_plate: string | null;
+          // null только у роли 'owner' — остальные роли всегда привязаны
+          // к компании (миграция 0013, employees_company_id_by_role).
+          company_id: string | null;
           created_at: string;
         };
         Insert: {
@@ -70,8 +78,69 @@ export interface Database {
           address?: string | null;
           personal_vehicle_make?: string | null;
           personal_vehicle_plate?: string | null;
+          company_id?: string | null;
         };
         Update: Partial<Database['public']['Tables']['employees']['Insert']>;
+        Relationships: [];
+      };
+      companies: {
+        Row: {
+          id: string;
+          name: string;
+          subscription_status: AccountStatus;
+          subscription_plan: string | null;
+          subscription_price: number | null;
+          subscription_expires_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          subscription_status?: AccountStatus;
+          subscription_plan?: string | null;
+          subscription_price?: number | null;
+          subscription_expires_at?: string | null;
+        };
+        Update: Partial<Database['public']['Tables']['companies']['Insert']>;
+        Relationships: [];
+      };
+      support_tickets: {
+        Row: {
+          id: string;
+          company_id: string;
+          created_by: string;
+          subject: string;
+          status: TicketStatus;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          created_by: string;
+          subject: string;
+          status?: TicketStatus;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['support_tickets']['Insert']>;
+        Relationships: [];
+      };
+      support_ticket_messages: {
+        Row: {
+          id: string;
+          ticket_id: string;
+          sender_id: string;
+          body: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          ticket_id: string;
+          sender_id: string;
+          body: string;
+        };
+        Update: Partial<Database['public']['Tables']['support_ticket_messages']['Insert']>;
         Relationships: [];
       };
       clients: {
@@ -81,6 +150,7 @@ export interface Database {
           phone: string | null;
           discount_percent: number;
           notes: string | null;
+          company_id: string;
           created_at: string;
         };
         Insert: {
@@ -89,6 +159,7 @@ export interface Database {
           phone?: string | null;
           discount_percent?: number;
           notes?: string | null;
+          company_id?: string;
         };
         Update: Partial<Database['public']['Tables']['clients']['Insert']>;
         Relationships: [];
@@ -101,6 +172,7 @@ export interface Database {
           base_price: number | null;
           category: string | null;
           color: string;
+          company_id: string;
           created_at: string;
         };
         Insert: {
@@ -110,6 +182,7 @@ export interface Database {
           base_price?: number | null;
           category?: string | null;
           color?: string;
+          company_id?: string;
         };
         Update: Partial<Database['public']['Tables']['services']['Insert']>;
         Relationships: [];
@@ -128,6 +201,7 @@ export interface Database {
           created_by: string | null;
           vehicle_id: string | null;
           client_sms_sent_at: string | null;
+          company_id: string;
           created_at: string;
           updated_at: string;
         };
@@ -143,6 +217,7 @@ export interface Database {
           photos?: string[];
           created_by?: string | null;
           vehicle_id?: string | null;
+          company_id?: string;
         };
         Update: Partial<Database['public']['Tables']['orders']['Insert']>;
         Relationships: [];
