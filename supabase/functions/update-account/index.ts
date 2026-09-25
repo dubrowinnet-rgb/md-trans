@@ -122,6 +122,8 @@ Deno.serve(async (req) => {
       birth_date: body.birth_date ? String(body.birth_date) : null,
       hire_date: body.hire_date ? String(body.hire_date) : null,
       address: body.address ? String(body.address).trim() : null,
+      personal_vehicle_make: body.personal_vehicle_make ? String(body.personal_vehicle_make).trim() : null,
+      personal_vehicle_plate: body.personal_vehicle_plate ? String(body.personal_vehicle_plate).trim() : null,
     })
     .eq('id', id)
     .select()

@@ -43,6 +43,8 @@ export interface Database {
           birth_date: string | null;
           hire_date: string | null;
           address: string | null;
+          personal_vehicle_make: string | null;
+          personal_vehicle_plate: string | null;
           created_at: string;
         };
         Insert: {
@@ -66,6 +68,8 @@ export interface Database {
           birth_date?: string | null;
           hire_date?: string | null;
           address?: string | null;
+          personal_vehicle_make?: string | null;
+          personal_vehicle_plate?: string | null;
         };
         Update: Partial<Database['public']['Tables']['employees']['Insert']>;
         Relationships: [];

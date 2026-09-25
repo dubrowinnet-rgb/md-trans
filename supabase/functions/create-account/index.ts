@@ -99,6 +99,8 @@ Deno.serve(async (req) => {
   const birthDate = body.birth_date ? String(body.birth_date) : null;
   const hireDate = body.hire_date ? String(body.hire_date) : null;
   const address = body.address ? String(body.address).trim() : null;
+  const personalVehicleMake = body.personal_vehicle_make ? String(body.personal_vehicle_make).trim() : null;
+  const personalVehiclePlate = body.personal_vehicle_plate ? String(body.personal_vehicle_plate).trim() : null;
 
   const isAdminRole = role === 'admin';
   const email = loginToEmail(login);
@@ -126,6 +128,8 @@ Deno.serve(async (req) => {
       birth_date: birthDate,
       hire_date: hireDate,
       address,
+      personal_vehicle_make: personalVehicleMake,
+      personal_vehicle_plate: personalVehiclePlate,
       role,
       account_status: 'active',
       can_manage_orders: isAdminRole ? true : Boolean(permissions.can_manage_orders ?? true),

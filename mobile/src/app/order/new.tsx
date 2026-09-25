@@ -446,6 +446,7 @@ export default function NewOrderScreen() {
           {drivers.length === 0 && <Text variant="bodySmall">Нет ни одного водителя</Text>}
           <Text variant="bodySmall" style={styles.muted}>
             Точка у имени: зелёная — свободен, жёлтая — другой заказ, красная — выходной или не по графику.
+            С красной точкой выбрать нельзя — с жёлтой водителя можно (сборный груз).
           </Text>
           <View style={styles.chips}>
             {sortByAvailability(drivers, availability).map((driver) => {
@@ -456,6 +457,7 @@ export default function NewOrderScreen() {
                   icon={dotIcon(TIER_COLOR[tier])}
                   selected={driverId === driver.id}
                   showSelectedOverlay
+                  disabled={tier === 'dayoff' && driverId !== driver.id}
                   onPress={() => selectDriver(driverId === driver.id ? null : driver.id)}
                 >
                   {`${driver.name}${suffix}`}
@@ -503,7 +505,7 @@ export default function NewOrderScreen() {
                     icon={dotIcon(TIER_COLOR[tier])}
                     selected={loaderIds.includes(person.id)}
                     showSelectedOverlay
-                    disabled={tier === 'busy'}
+                    disabled={tier !== 'available' && !loaderIds.includes(person.id)}
                     onPress={() => toggleLoader(person.id)}
                   >
                     {`${person.name}${isDriver ? ' (водитель)' : ''}${suffix}`}

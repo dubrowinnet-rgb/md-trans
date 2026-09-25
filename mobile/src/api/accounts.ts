@@ -38,6 +38,8 @@ export interface CreateAccountInput {
   birth_date?: string | null;
   hire_date?: string | null;
   address?: string;
+  personal_vehicle_make?: string;
+  personal_vehicle_plate?: string;
   role: AccountRole;
   permissions: AccountPermissions;
   default_vehicle_id?: string | null;
@@ -114,6 +116,8 @@ export interface UpdateAccountProfileInput {
   birth_date?: string | null;
   hire_date?: string | null;
   address?: string;
+  personal_vehicle_make?: string;
+  personal_vehicle_plate?: string;
 }
 
 // Логин, пароль и остальной профиль уже существующего сотрудника — тоже
