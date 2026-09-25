@@ -1,12 +1,20 @@
 // Правка уже существующего аккаунта сотрудника: логин, пароль и профиль
 // (раздел «Команда» — админ должен видеть и менять логин/пароль и всю
-// информацию о сотруднике).
+// информацию о сотруднике). С доработки «Настройки» этой же функцией
+// пользуется и сам сотрудник — правит СВОЙ логин/телефон/пароль (раздел
+// «Мой профиль»): вызывающий либо администратор, либо id === он сам.
 //
 // Отдельная функция, а не часть create-account: смена логина меняет email
 // в auth.users, а смена пароля — это auth.admin.updateUserById, и то, и
 // другое требует service role key по той же причине, что и создание
 // аккаунта (см. create-account/index.ts) — с телефона напрямую это
 // сделать нельзя.
+//
+// Тело запроса — частичное обновление: поле, которого нет в body,
+// остаётся как было (берётся из текущей строки), а не затирается пустым.
+// Это важно для самообслуживания — экран «Мой профиль» отправляет только
+// login/phone/password, и не должен случайно стереть фамилию/адрес/etc,
+// которые заполнял администратор.
 //
 // Деплой (после `supabase link`, см. supabase/README.md):
 //   supabase functions deploy update-account
@@ -61,31 +69,35 @@ Deno.serve(async (req) => {
 
   const { data: caller } = await admin
     .from('employees')
-    .select('role')
+    .select('id, role')
     .eq('auth_user_id', userData.user.id)
     .maybeSingle();
-  if (!caller || caller.role !== 'admin') {
-    return fail(403, 'Менять сотрудников может только администратор', headers);
-  }
+  if (!caller) return fail(403, 'Недостаточно прав', headers);
 
   const id = String(body.id ?? '');
   if (!id) return fail(400, 'Не указан сотрудник', headers);
 
-  const { data: target } = await admin
-    .from('employees')
-    .select('auth_user_id, login')
-    .eq('id', id)
-    .maybeSingle();
+  const isSelf = caller.id === id;
+  if (caller.role !== 'admin' && !isSelf) {
+    return fail(403, 'Менять данные другого сотрудника может только администратор', headers);
+  }
+
+  const { data: target } = await admin.from('employees').select('*').eq('id', id).maybeSingle();
   if (!target) return fail(404, 'Сотрудник не найден', headers);
 
-  const name = String(body.name ?? '').trim();
+  // Частичное обновление: трогаем только те поля, которые реально пришли
+  // в body (см. комментарий вверху файла) — has() отличает «поле не
+  // передали» от «поле передали пустым».
+  const has = (key: string) => Object.prototype.hasOwnProperty.call(body, key);
+
+  const name = has('name') ? String(body.name ?? '').trim() : (target.name as string);
   if (!name) return fail(400, 'Укажите имя', headers);
 
   // Логин необязателен на редактировании: у сотрудников, заведённых
   // напрямую в Supabase до входа по логину, он может быть пустым, и
   // администратор не обязан заводить его прямо сейчас, если просто
   // правит другое поле — пустое значение оставляет логин как был.
-  const loginInput = String(body.login ?? '').trim();
+  const loginInput = has('login') ? String(body.login ?? '').trim() : '';
   let login = target.login as string | null;
   if (loginInput) {
     if (!LOGIN_RE.test(loginInput)) {
@@ -116,14 +128,22 @@ Deno.serve(async (req) => {
     .from('employees')
     .update({
       name,
-      last_name: body.last_name ? String(body.last_name).trim() : null,
-      phone: body.phone ? String(body.phone).trim() : null,
+      last_name: has('last_name') ? (body.last_name ? String(body.last_name).trim() : null) : target.last_name,
+      phone: has('phone') ? (body.phone ? String(body.phone).trim() : null) : target.phone,
       login,
-      birth_date: body.birth_date ? String(body.birth_date) : null,
-      hire_date: body.hire_date ? String(body.hire_date) : null,
-      address: body.address ? String(body.address).trim() : null,
-      personal_vehicle_make: body.personal_vehicle_make ? String(body.personal_vehicle_make).trim() : null,
-      personal_vehicle_plate: body.personal_vehicle_plate ? String(body.personal_vehicle_plate).trim() : null,
+      birth_date: has('birth_date') ? (body.birth_date ? String(body.birth_date) : null) : target.birth_date,
+      hire_date: has('hire_date') ? (body.hire_date ? String(body.hire_date) : null) : target.hire_date,
+      address: has('address') ? (body.address ? String(body.address).trim() : null) : target.address,
+      personal_vehicle_make: has('personal_vehicle_make')
+        ? body.personal_vehicle_make
+          ? String(body.personal_vehicle_make).trim()
+          : null
+        : target.personal_vehicle_make,
+      personal_vehicle_plate: has('personal_vehicle_plate')
+        ? body.personal_vehicle_plate
+          ? String(body.personal_vehicle_plate).trim()
+          : null
+        : target.personal_vehicle_plate,
     })
     .eq('id', id)
     .select()

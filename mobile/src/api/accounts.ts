@@ -148,3 +148,40 @@ export function useUpdateAccountProfile() {
     },
   });
 }
+
+export interface UpdateOwnProfileInput {
+  id: string;
+  login?: string;
+  phone?: string;
+  password?: string;
+}
+
+// «Мой профиль» в Настройках (доработки 1, п.2) — сотрудник правит СВОЙ
+// логин/телефон/пароль через ту же Edge Function, что и админ (теперь
+// она разрешает id === себя, см. update-account/index.ts). Поля, которых
+// нет в input, функция не тронет — имя/фамилию/адрес и т.д. можно не
+// передавать.
+export function useUpdateOwnProfile() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: UpdateOwnProfileInput) => {
+      const { data, error } = await supabase.functions.invoke<{ employee: Account; error?: string }>(
+        'update-account',
+        { body: input }
+      );
+      if (error) {
+        if (error instanceof FunctionsHttpError) {
+          const body = await error.context.json().catch(() => null);
+          throw new Error(body?.error || error.message);
+        }
+        throw new Error(error.message);
+      }
+      if (data && 'error' in data && data.error) throw new Error(data.error);
+      return data!.employee;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['current-employee'] });
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+    },
+  });
+}

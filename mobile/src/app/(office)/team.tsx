@@ -3,6 +3,7 @@ import { FlatList, StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Appbar, Divider, FAB, HelperText, List, Text } from 'react-native-paper';
 import { useAllAccounts, type Account } from '../../api/accounts';
 import { AccountDialog } from '../../components/accounts/AccountDialog';
+import { AccountMenu } from '../../components/layout/AccountMenu';
 import { ACCOUNT_ROLE_ICONS, ACCOUNT_ROLE_LABELS } from '../../theme';
 
 // Экран администратора: все аккаунты (свои же админы, диспетчеры,
@@ -16,6 +17,7 @@ export default function TeamScreen() {
     <View style={styles.container}>
       <Appbar.Header>
         <Appbar.Content title="Команда" />
+        <AccountMenu />
       </Appbar.Header>
       {accountsQuery.isLoading ? (
         <ActivityIndicator style={styles.loader} />

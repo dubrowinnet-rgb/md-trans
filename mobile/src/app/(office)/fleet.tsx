@@ -3,6 +3,7 @@ import { FlatList, StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Appbar, Divider, FAB, HelperText, List, Text } from 'react-native-paper';
 import { useVehicles, type Vehicle } from '../../api/vehicles';
 import { VehicleDialog } from '../../components/vehicles/VehicleDialog';
+import { AccountMenu } from '../../components/layout/AccountMenu';
 
 function describeVehicle(vehicle: Vehicle) {
   const parts: string[] = [];
@@ -28,6 +29,7 @@ export default function FleetScreen() {
     <View style={styles.container}>
       <Appbar.Header>
         <Appbar.Content title="Автопарк" />
+        <AccountMenu />
       </Appbar.Header>
       {vehiclesQuery.isLoading ? (
         <ActivityIndicator style={styles.loader} />

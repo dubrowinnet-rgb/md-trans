@@ -163,6 +163,14 @@ export function useCreateOrder() {
         await sendPushNotifications(tokens, 'Новый заказ', 'Вам назначен новый заказ', { orderId });
       }
 
+      // Смс клиенту о принятом заказе (доработки 1, п.0) — тоже
+      // best-effort, как push выше: заказ уже создан и не должен
+      // зависеть от смс-провайдера. Пока провайдер не подключён (нет
+      // ключа SMS_RU_API_ID), функция сама тихо ничего не отправит.
+      supabase.functions.invoke('send-order-sms', { body: { order_id: orderId } }).catch((err) => {
+        console.warn('Не удалось отправить смс клиенту', err);
+      });
+
       return orderId;
     },
     onSuccess: () => {

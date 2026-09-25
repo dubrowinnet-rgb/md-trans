@@ -2,6 +2,7 @@ import { ScrollView, StyleSheet, View } from 'react-native';
 import { Appbar, Chip, Text } from 'react-native-paper';
 import { useState } from 'react';
 import { useEmployees } from '../../api/employees';
+import { AccountMenu } from '../../components/layout/AccountMenu';
 import { useSession } from '../../providers/SessionProvider';
 import { canManageOrders } from '../../lib/permissions';
 import { ScheduleCalendar } from '../../components/schedule/ScheduleCalendar';
@@ -22,6 +23,7 @@ export default function OfficeScheduleScreen() {
     <View style={styles.container}>
       <Appbar.Header>
         <Appbar.Content title="График" />
+        <AccountMenu />
       </Appbar.Header>
 
       {employees.length === 0 ? (
