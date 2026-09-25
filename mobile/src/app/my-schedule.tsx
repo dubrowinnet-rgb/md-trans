@@ -1,5 +1,5 @@
 import { ScrollView, StyleSheet, View } from 'react-native';
-import { Text } from 'react-native-paper';
+import { HelperText, Text } from 'react-native-paper';
 import { useSession } from '../providers/SessionProvider';
 import { ScheduleCalendar } from '../components/schedule/ScheduleCalendar';
 import { useSetScheduleMode } from '../api/schedule';
@@ -39,6 +39,7 @@ export default function SelfScheduleScreen() {
         canEditMode={employee.can_manage_own_schedule}
         onSetMode={(mode: ScheduleMode) => setScheduleMode.mutate({ employeeId: employee.id, mode })}
       />
+      {setScheduleMode.error && <HelperText type="error">{setScheduleMode.error.message}</HelperText>}
     </ScrollView>
   );
 }

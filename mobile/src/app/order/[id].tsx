@@ -7,7 +7,9 @@ import {
   Chip,
   Dialog,
   Divider,
+  FAB,
   HelperText,
+  IconButton,
   List,
   Portal,
   Text,
@@ -31,6 +33,8 @@ import {
   canViewOrderAmount,
 } from '../../lib/permissions';
 import { DateTimeField } from '../../components/form/DateTimeField';
+import { DismissKeyboardView } from '../../components/form/DismissKeyboardView';
+import { CrewDialog } from '../../components/orders/CrewDialog';
 import { yandexMapsRouteUrl } from '../../lib/yandexMaps';
 import { CREW_STATUS_LABELS, ORDER_STATUS_COLORS, ORDER_STATUS_LABELS } from '../../theme';
 import { formatDayLabel, formatTime } from '../../utils/date';
@@ -72,6 +76,7 @@ export default function OrderScreen() {
   const updateSchedulePrice = useUpdateOrderScheduleAndPrice();
   const [showExtraStops, setShowExtraStops] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [crewDialogOpen, setCrewDialogOpen] = useState(false);
 
   const [editDate, setEditDate] = useState<Date | null>(null);
   const [editStart, setEditStart] = useState<Date | null>(null);
@@ -169,8 +174,22 @@ export default function OrderScreen() {
   }
 
   return (
+    <View style={styles.screen}>
+    <DismissKeyboardView>
     <ScrollView contentContainerStyle={styles.content}>
-      <Text variant="titleLarge">{order.clients?.name ?? 'Без клиента'}</Text>
+      <View style={styles.titleRow}>
+        <Text variant="titleLarge" style={styles.flex}>
+          {order.clients?.name ?? 'Без клиента'}
+        </Text>
+        {clientPhone && (
+          <IconButton
+            icon="phone"
+            mode="contained-tonal"
+            accessibilityLabel={`Позвонить клиенту: ${clientPhone}`}
+            onPress={() => Linking.openURL(`tel:${clientPhone}`)}
+          />
+        )}
+      </View>
       <Text variant="bodyMedium" style={styles.when}>
         {formatDayLabel(start)}, {formatTime(start)}–{formatTime(end)}
       </Text>
@@ -224,16 +243,6 @@ export default function OrderScreen() {
         </HelperText>
       )}
 
-      {clientPhone ? (
-        <Button
-          mode="outlined"
-          icon="phone"
-          style={styles.action}
-          onPress={() => Linking.openURL(`tel:${clientPhone}`)}
-        >
-          {`Позвонить клиенту · ${clientPhone}`}
-        </Button>
-      ) : null}
       {order.clients?.discount_percent ? (
         <Text variant="bodySmall">Скидка клиента: {order.clients.discount_percent}%</Text>
       ) : null}
@@ -256,16 +265,18 @@ export default function OrderScreen() {
             <DateTimeField label="Начало" value={editStart} mode="time" onChange={setEditStart} />
             <DateTimeField label="Окончание" value={editEnd} mode="time" onChange={setEditEnd} />
           </View>
-          <TextInput
-            mode="outlined"
-            label="Сумма"
-            accessibilityLabel="Сумма заказа"
-            placeholder="Например: 14500"
-            value={editPriceText}
-            onChangeText={setEditPriceText}
-            keyboardType="numeric"
-            right={<TextInput.Affix text="₽" />}
-          />
+          {showAmount && (
+            <TextInput
+              mode="outlined"
+              label="Сумма"
+              accessibilityLabel="Сумма заказа"
+              placeholder="Например: 14500"
+              value={editPriceText}
+              onChangeText={setEditPriceText}
+              keyboardType="numeric"
+              right={<TextInput.Affix text="₽" />}
+            />
+          )}
           {updateSchedulePrice.error && (
             <HelperText type="error">{updateSchedulePrice.error.message}</HelperText>
           )}
@@ -341,6 +352,16 @@ export default function OrderScreen() {
             )}
           </View>
         ))}
+        {canManage && (
+          <Button
+            mode="text"
+            icon="account-edit-outline"
+            style={styles.action}
+            onPress={() => setCrewDialogOpen(true)}
+          >
+            Изменить экипаж
+          </Button>
+        )}
       </List.Section>
       <Divider />
 
@@ -408,7 +429,11 @@ export default function OrderScreen() {
           </Dialog.Actions>
         </Dialog>
       </Portal>
+      {crewDialogOpen && <CrewDialog order={order} onClose={() => setCrewDialogOpen(false)} />}
     </ScrollView>
+    </DismissKeyboardView>
+    <FAB icon="check" style={styles.doneFab} accessibilityLabel="Готово, назад к заказам" onPress={() => router.back()} />
+    </View>
   );
 }
 
@@ -416,9 +441,25 @@ const styles = StyleSheet.create({
   loader: {
     marginTop: 32,
   },
+  screen: {
+    flex: 1,
+  },
   content: {
     padding: 16,
-    paddingBottom: 40,
+    paddingBottom: 88,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  flex: {
+    flex: 1,
+  },
+  doneFab: {
+    position: 'absolute',
+    alignSelf: 'center',
+    bottom: 16,
   },
   when: {
     textTransform: 'capitalize',

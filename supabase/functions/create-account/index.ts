@@ -83,6 +83,7 @@ Deno.serve(async (req) => {
   const login = String(body.login ?? '').trim();
   const password = String(body.password ?? '');
   const name = String(body.name ?? '').trim();
+  const lastName = body.last_name ? String(body.last_name).trim() : null;
   const phone = body.phone ? String(body.phone).trim() : null;
   const role = String(body.role ?? '');
   const permissions = (body.permissions as Record<string, unknown>) ?? {};
@@ -94,6 +95,10 @@ Deno.serve(async (req) => {
   if (password.length < 6) return fail(400, 'Пароль — минимум 6 символов', headers);
   if (!name) return fail(400, 'Укажите имя', headers);
   if (!ROLES.includes(role)) return fail(400, 'Неизвестная роль', headers);
+
+  const birthDate = body.birth_date ? String(body.birth_date) : null;
+  const hireDate = body.hire_date ? String(body.hire_date) : null;
+  const address = body.address ? String(body.address).trim() : null;
 
   const isAdminRole = role === 'admin';
   const email = loginToEmail(login);
@@ -116,7 +121,11 @@ Deno.serve(async (req) => {
       auth_user_id: created.user.id,
       login,
       name,
+      last_name: lastName,
       phone,
+      birth_date: birthDate,
+      hire_date: hireDate,
+      address,
       role,
       account_status: 'active',
       can_manage_orders: isAdminRole ? true : Boolean(permissions.can_manage_orders ?? true),

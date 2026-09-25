@@ -1,26 +1,24 @@
 import { useState } from 'react';
-import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { Button, Dialog, Divider, HelperText, Portal, Text, TextInput } from 'react-native-paper';
 import { useClientOrderStats, useCreateClient, useUpdateClient, type Client } from '../../api/clients';
-import { pickPhoneContact, type PickedContact } from '../../lib/phoneContacts';
+import { pickPhoneContact } from '../../lib/phoneContacts';
+import { DismissKeyboardView } from '../form/DismissKeyboardView';
 
 // Карточка клиента: создание и правка. Для нового клиента имя и телефон
-// можно взять из записной книжки телефона. canViewContacts/canViewStats
-// сужают карточку для диспетчера с ограниченными правами (раздел «права
-// доступа»): у нового клиента телефон вводит тот же человек, поэтому его
-// скрывают только при просмотре уже существующего.
+// можно взять из записной книжки телефона кнопкой «Выбрать из контактов».
+// canViewContacts/canViewStats сужают карточку для диспетчера с
+// ограниченными правами (раздел «права доступа»): у нового клиента телефон
+// вводит тот же человек, поэтому его скрывают только при просмотре уже
+// существующего.
 export function ClientDialog({
   client,
-  initial,
-  notice,
   canViewContacts = true,
   canViewStats = true,
   onClose,
   onSaved,
 }: {
   client: Client | null;
-  initial?: PickedContact | null;
-  notice?: string | null;
   canViewContacts?: boolean;
   canViewStats?: boolean;
   onClose: () => void;
@@ -30,15 +28,17 @@ export function ClientDialog({
   const updateClient = useUpdateClient();
   const showContacts = canViewContacts || !client;
   const statsQuery = useClientOrderStats(canViewStats && client ? client.id : undefined);
-  const [name, setName] = useState(client?.name ?? initial?.name ?? '');
-  const [phone, setPhone] = useState(client?.phone ?? initial?.phone ?? '');
+  const [name, setName] = useState(client?.name ?? '');
+  const [phone, setPhone] = useState(client?.phone ?? '');
   const [discountText, setDiscountText] = useState(client?.discount_percent ? String(client.discount_percent) : '');
   const [notes, setNotes] = useState(client?.notes ?? '');
-  const [error, setError] = useState<string | null>(notice ?? null);
+  const [error, setError] = useState<string | null>(null);
+  const [picking, setPicking] = useState(false);
   const saving = createClient.isPending || updateClient.isPending;
 
   const fillFromContacts = async () => {
     setError(null);
+    setPicking(true);
     try {
       const picked = await pickPhoneContact();
       if (!picked) return;
@@ -46,6 +46,8 @@ export function ClientDialog({
       if (picked.phone) setPhone(picked.phone);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось открыть контакты');
+    } finally {
+      setPicking(false);
     }
   };
 
@@ -79,9 +81,10 @@ export function ClientDialog({
       <Dialog visible onDismiss={onClose}>
         <Dialog.Title>{client ? 'Клиент' : 'Новый клиент'}</Dialog.Title>
         <Dialog.ScrollArea style={styles.area}>
-          <View style={styles.content}>
+          <DismissKeyboardView>
+          <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
             {!client && Platform.OS !== 'web' && (
-              <Button mode="text" icon="contacts" onPress={fillFromContacts} style={styles.contacts}>
+              <Button mode="text" icon="contacts" onPress={fillFromContacts} loading={picking} style={styles.contacts}>
                 Выбрать из контактов
               </Button>
             )}
@@ -132,7 +135,8 @@ export function ClientDialog({
               </>
             )}
             {error && <HelperText type="error">{error}</HelperText>}
-          </View>
+          </ScrollView>
+          </DismissKeyboardView>
         </Dialog.ScrollArea>
         <Dialog.Actions>
           <Button onPress={onClose}>Отмена</Button>
@@ -149,10 +153,17 @@ const styles = StyleSheet.create({
   area: {
     paddingHorizontal: 0,
   },
+  scroll: {
+    flexGrow: 1,
+    flexShrink: 1,
+  },
   content: {
     gap: 12,
     paddingHorizontal: 24,
-    paddingVertical: 8,
+    paddingTop: 8,
+    // Больше воздуха снизу, чем сверху: иначе последнее поле упирается в
+    // «Сохранить»/«Отмена» вплотную под ним (раздел «баги», п.8).
+    paddingBottom: 24,
   },
   contacts: {
     alignSelf: 'flex-start',

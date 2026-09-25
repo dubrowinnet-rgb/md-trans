@@ -13,26 +13,27 @@ import {
   Text,
   TextInput,
 } from 'react-native-paper';
-import { useEmployees, type Employee } from '../../api/employees';
+import { useEmployees } from '../../api/employees';
 import { useClients, type Client } from '../../api/clients';
 import { ClientDialog } from '../../components/clients/ClientDialog';
 import { useNewClientFromContacts } from '../../hooks/useNewClientFromContacts';
 import { useBusyEmployeeIds, useCreateOrder, useOrder, type CreateOrderStopInput } from '../../api/orders';
 import { useServices } from '../../api/services';
 import { useVehicles } from '../../api/vehicles';
-import {
-  effectiveScheduleStatus,
-  formatTimeShort,
-  isWorkingAt,
-  toDateKey,
-  useScheduleDaysOn,
-  type ScheduleDay,
-} from '../../api/schedule';
+import { toDateKey, useScheduleDaysOn, type ScheduleDay } from '../../api/schedule';
 import { ServicePicker, formatServiceMeta } from '../../components/form/ServicePicker';
 import { DateTimeField } from '../../components/form/DateTimeField';
 import { FormSection } from '../../components/form/FormSection';
+import { DismissKeyboardView } from '../../components/form/DismissKeyboardView';
 import { useSession } from '../../providers/SessionProvider';
-import { canManageOrders, canViewClientPhone } from '../../lib/permissions';
+import { canManageOrders, canViewClientPhone, canViewOrderAmount } from '../../lib/permissions';
+import {
+  evaluateAvailability,
+  sortByAvailability,
+  TIER_COLOR,
+  type AvailabilityTier,
+} from '../../lib/crewAvailability';
+import { serviceNeedsLoaders } from '../../lib/services';
 
 interface ExtraStop {
   key: string;
@@ -48,40 +49,6 @@ function atHour(base: Date, hour: number) {
   const d = new Date(base);
   d.setHours(hour, 0, 0, 0);
   return d;
-}
-
-// Доступность исполнителя на выбранное время (раздел «рабочий график»):
-// сперва выходной/не по графику (красная точка), потом другой заказ
-// (жёлтая), иначе свободен (зелёная) — этот же порядок используется для
-// сортировки списка. Выходной день или часы вне графика — из
-// employee_schedule_days с учётом режима сотрудника (schedule_mode); это
-// подсказка, не жёсткий запрет (см. isWorkingAt).
-type AvailabilityTier = 'available' | 'busy' | 'dayoff';
-
-const TIER_ORDER: Record<AvailabilityTier, number> = { available: 0, busy: 1, dayoff: 2 };
-const TIER_COLOR: Record<AvailabilityTier, string> = { available: '#22c55e', busy: '#f59e0b', dayoff: '#ef4444' };
-
-function evaluateAvailability(
-  employee: Employee,
-  busyIds: Set<string>,
-  scheduleOn: Map<string, ScheduleDay>,
-  orderStart: Date,
-  orderEnd: Date
-): { tier: AvailabilityTier; suffix: string } {
-  const row = scheduleOn.get(employee.id);
-  const status = effectiveScheduleStatus(employee.schedule_mode, row);
-  if (status === 'off') return { tier: 'dayoff', suffix: ' · выходной' };
-  if (row?.start_time && row?.end_time && !isWorkingAt(employee.schedule_mode, row, orderStart, orderEnd)) {
-    return { tier: 'dayoff', suffix: ` · работает ${formatTimeShort(row.start_time)}–${formatTimeShort(row.end_time)}` };
-  }
-  if (busyIds.has(employee.id)) return { tier: 'busy', suffix: ' · другой заказ' };
-  return { tier: 'available', suffix: '' };
-}
-
-function sortByAvailability<T extends { id: string }>(list: T[], availability: Map<string, { tier: AvailabilityTier }>) {
-  return [...list].sort(
-    (a, b) => TIER_ORDER[availability.get(a.id)?.tier ?? 'available'] - TIER_ORDER[availability.get(b.id)?.tier ?? 'available']
-  );
 }
 
 function dotIcon(color: string) {
@@ -137,6 +104,17 @@ export default function NewOrderScreen() {
   const loaders = employees.filter((e) => e.role === 'loader');
   const vehiclesQuery = useVehicles();
 
+  const servicesQuery = useServices();
+  const services = servicesQuery.data ?? [];
+  const selectedServices = serviceIds
+    .map((id) => services.find((s) => s.id === id))
+    .filter((s): s is NonNullable<typeof s> => Boolean(s));
+  // «Грузчики выбираются только в услугах, где есть слово „грузчики“ в
+  // названии» (репорт с реального устройства) — пока такая услуга не
+  // выбрана, раздел «Грузчики» скрыт и водитель не подставляется в него
+  // автоматически.
+  const needsLoaders = selectedServices.some((s) => serviceNeedsLoaders(s.name));
+
   // Водитель на заказе по умолчанию значится и в списке грузчиков — он же
   // часто и есть напарник («совмещает функции», раздел «рабочий график»).
   // Диспетчер может убрать его оттуда отдельной галочкой. Раздел
@@ -145,15 +123,18 @@ export default function NewOrderScreen() {
   const selectedDriver = drivers.find((d) => d.id === driverId) ?? null;
   const loaderCandidates = selectedDriver ? [selectedDriver, ...loaders] : loaders;
 
-  // При выборе водителя подставляем его в список грузчиков и его машину по
-  // умолчанию — машину не трогаем, если диспетчер уже выбрал другую руками.
+  // При выборе водителя подставляем его в список грузчиков (только если
+  // услуга вообще предполагает грузчиков) и его машину по умолчанию —
+  // машину не трогаем, если диспетчер уже выбрал другую руками.
   const selectDriver = (id: string | null) => {
-    setLoaderIds((prev) => {
-      let next = prev;
-      if (driverId && next.includes(driverId)) next = next.filter((x) => x !== driverId);
-      if (id && !next.includes(id)) next = [...next, id];
-      return next;
-    });
+    if (needsLoaders) {
+      setLoaderIds((prev) => {
+        let next = prev;
+        if (driverId && next.includes(driverId)) next = next.filter((x) => x !== driverId);
+        if (id && !next.includes(id)) next = [...next, id];
+        return next;
+      });
+    }
     const fallbackVehicle = drivers.find((d) => d.id === id)?.default_vehicle_id ?? null;
     if (vehicleId === null || vehicleId === autoVehicleId.current) {
       autoVehicleId.current = fallbackVehicle;
@@ -215,6 +196,7 @@ export default function NewOrderScreen() {
   const { employee } = useSession();
   const canManage = canManageOrders(employee);
   const canViewContacts = canViewClientPhone(employee);
+  const showAmount = canViewOrderAmount(employee);
 
   const clientsQuery = useClients(clientSearch);
   const busyQuery = useBusyEmployeeIds(scheduledStart, scheduledEnd);
@@ -225,11 +207,6 @@ export default function NewOrderScreen() {
     employees.map((e) => [e.id, evaluateAvailability(e, busyIds, scheduleOn, scheduledStart, scheduledEnd)])
   );
   const createOrder = useCreateOrder();
-  const servicesQuery = useServices();
-  const services = servicesQuery.data ?? [];
-  const selectedServices = serviceIds
-    .map((id) => services.find((s) => s.id === id))
-    .filter((s): s is NonNullable<typeof s> => Boolean(s));
 
   // Как в Bumpix: выбранные услуги задают длительность и подставляют сумму.
   const applyServices = (ids: string[]) => {
@@ -281,7 +258,7 @@ export default function NewOrderScreen() {
 
     const crew = [
       ...(driverId ? [{ employee_id: driverId, role: 'driver' as const }] : []),
-      ...loaderIds.map((id) => ({ employee_id: id, role: 'loader' as const })),
+      ...(needsLoaders ? loaderIds.map((id) => ({ employee_id: id, role: 'loader' as const })) : []),
     ];
 
     try {
@@ -313,6 +290,7 @@ export default function NewOrderScreen() {
 
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <DismissKeyboardView>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {duplicateFrom && (
           <HelperText type="info" visible>
@@ -336,7 +314,7 @@ export default function NewOrderScreen() {
                 description={
                   selectedClient.discount_percent
                     ? `Скидка ${selectedClient.discount_percent}%`
-                    : selectedClient.phone ?? undefined
+                    : (canViewContacts ? selectedClient.phone : null) ?? undefined
                 }
                 right={() => <Button onPress={() => setSelectedClient(null)}>Изменить</Button>}
               />
@@ -363,22 +341,14 @@ export default function NewOrderScreen() {
                   onPress={() => setSelectedClient(client)}
                 />
               ))}
-              <Button mode="outlined" icon="account-plus" onPress={newClient.start} loading={newClient.picking}>
+              <Button mode="outlined" icon="account-plus" onPress={newClient.start}>
                 Добавить клиента
               </Button>
             </>
           )}
         </FormSection>
 
-        {newClient.draft && (
-          <ClientDialog
-            client={null}
-            initial={newClient.draft}
-            notice={newClient.notice}
-            onClose={newClient.close}
-            onSaved={setSelectedClient}
-          />
-        )}
+        {newClient.open && <ClientDialog client={null} onClose={newClient.close} onSaved={setSelectedClient} />}
 
         <FormSection title="Услуги">
           {selectedServices.map((service) => (
@@ -520,41 +490,45 @@ export default function NewOrderScreen() {
           )}
         </FormSection>
 
-        <FormSection title="Грузчики">
-          {loaderCandidates.length === 0 && <Text variant="bodySmall">Нет ни одного грузчика</Text>}
-          <View style={styles.chips}>
-            {sortByAvailability(loaderCandidates, availability).map((person) => {
-              const { tier, suffix } = availability.get(person.id) ?? { tier: 'available' as const, suffix: '' };
-              const isDriver = person.id === driverId;
-              return (
-                <Chip
-                  key={person.id}
-                  icon={dotIcon(TIER_COLOR[tier])}
-                  selected={loaderIds.includes(person.id)}
-                  showSelectedOverlay
-                  disabled={tier === 'busy'}
-                  onPress={() => toggleLoader(person.id)}
-                >
-                  {`${person.name}${isDriver ? ' (водитель)' : ''}${suffix}`}
-                </Chip>
-              );
-            })}
-          </View>
-        </FormSection>
+        {needsLoaders && (
+          <FormSection title="Грузчики">
+            {loaderCandidates.length === 0 && <Text variant="bodySmall">Нет ни одного грузчика</Text>}
+            <View style={styles.chips}>
+              {sortByAvailability(loaderCandidates, availability).map((person) => {
+                const { tier, suffix } = availability.get(person.id) ?? { tier: 'available' as const, suffix: '' };
+                const isDriver = person.id === driverId;
+                return (
+                  <Chip
+                    key={person.id}
+                    icon={dotIcon(TIER_COLOR[tier])}
+                    selected={loaderIds.includes(person.id)}
+                    showSelectedOverlay
+                    disabled={tier === 'busy'}
+                    onPress={() => toggleLoader(person.id)}
+                  >
+                    {`${person.name}${isDriver ? ' (водитель)' : ''}${suffix}`}
+                  </Chip>
+                );
+              })}
+            </View>
+          </FormSection>
+        )}
 
-        <FormSection title="Сумма (вручную)">
-          <TextInput
-            mode="outlined"
-            placeholder="Например: 14500"
-            value={priceText}
-            onChangeText={setPriceText}
-            keyboardType="numeric"
-            right={<TextInput.Affix text="₽" />}
-          />
-          {selectedClient?.discount_percent ? (
-            <HelperText type="info">Скидка клиента {selectedClient.discount_percent}%</HelperText>
-          ) : null}
-        </FormSection>
+        {showAmount && (
+          <FormSection title="Сумма (вручную)">
+            <TextInput
+              mode="outlined"
+              placeholder="Например: 14500"
+              value={priceText}
+              onChangeText={setPriceText}
+              keyboardType="numeric"
+              right={<TextInput.Affix text="₽" />}
+            />
+            {selectedClient?.discount_percent ? (
+              <HelperText type="info">Скидка клиента {selectedClient.discount_percent}%</HelperText>
+            ) : null}
+          </FormSection>
+        )}
 
         <FormSection title="Комментарий">
           <TextInput mode="outlined" multiline value={comment} onChangeText={setComment} />
@@ -571,6 +545,7 @@ export default function NewOrderScreen() {
           Создать заказ
         </Button>
       </ScrollView>
+      </DismissKeyboardView>
     </KeyboardAvoidingView>
   );
 }
