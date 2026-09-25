@@ -4,13 +4,15 @@ import { Button, Dialog, HelperText, Portal, Switch, Text, TextInput } from 'rea
 import { useCreateVehicle, useDeleteVehicle, useUpdateVehicle, type Vehicle, type VehicleInput } from '../../api/vehicles';
 import { DismissKeyboardView } from '../form/DismissKeyboardView';
 
-// Размер кузова хранится одной строкой («Д 400 х Ш 200 х В 180 см», в
-// сантиметрах) — тот же формат читает и пишет веб-кабинет, чтобы поле
-// выглядело одинаково в обоих приложениях. Старое значение в другом
-// формате (например, в метрах, без букв Д/Ш/В) обратно на три поля не
-// разбираем: перепутать метры с сантиметрами хуже, чем попросить ввести
-// заново.
-const DIMENSIONS_RE = /Д\s*(\d+)\s*х\s*Ш\s*(\d+)\s*х\s*В\s*(\d+)\s*см/i;
+// Размер кузова хранится одной строкой («Д 4.2 х Ш 2.1 х В 2.3 м», в метрах
+// — доработки 2, п.4: раньше было в сантиметрах, Максим попросил метры,
+// та же маска Д/Ш/В, что и раньше) — тот же формат читает и пишет
+// веб-кабинет (сверено с web/src/components/fleet/VehicleModal.tsx,
+// коммит f2bf2d9), чтобы поле выглядело одинаково в обоих приложениях.
+// Старое значение в сантиметрах (формат «... см») на три поля не
+// разбираем: перепутать см с метрами хуже, чем попросить ввести заново —
+// тот же приём, что уже был на этом поле при вводе маски.
+const DIMENSIONS_RE = /Д\s*([\d.,]+)\s*х\s*Ш\s*([\d.,]+)\s*х\s*В\s*([\d.,]+)\s*м/i;
 
 function parseBodyDimensions(text: string): { length: string; width: string; height: string } {
   const m = text.match(DIMENSIONS_RE);
@@ -22,7 +24,7 @@ function composeBodyDimensions(length: string, width: string, height: string) {
   if (length.trim()) parts.push(`Д ${length.trim()}`);
   if (width.trim()) parts.push(`Ш ${width.trim()}`);
   if (height.trim()) parts.push(`В ${height.trim()}`);
-  return parts.length ? `${parts.join(' х ')} см` : '';
+  return parts.length ? `${parts.join(' х ')} м` : '';
 }
 
 // Создание и правка машины автопарка (раздел «автопарк»). Обязательны
@@ -123,7 +125,7 @@ export function VehicleDialog({
               keyboardType="numeric"
             />
             <Text variant="bodySmall" style={styles.muted}>
-              Размеры кузова, см
+              Размеры кузова, м
             </Text>
             <View style={styles.dimsRow}>
               <TextInput

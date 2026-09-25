@@ -16,6 +16,7 @@ import {
   TextInput,
 } from 'react-native-paper';
 import {
+  ACTIVE_ORDER_STATUS,
   useConfirmCrew,
   useDeleteOrder,
   useMarkCrewRead,
@@ -23,7 +24,6 @@ import {
   useUpdateOrderScheduleAndPrice,
   useUpdateOrderStatus,
   type CrewStatus,
-  type OrderStatus,
 } from '../../api/orders';
 import { useSession } from '../../providers/SessionProvider';
 import {
@@ -37,10 +37,8 @@ import { DismissKeyboardView } from '../../components/form/DismissKeyboardView';
 import { CrewDialog } from '../../components/orders/CrewDialog';
 import { yandexMapsRouteUrl } from '../../lib/yandexMaps';
 import { formatPhone, normalizePhone } from '../../lib/phone';
-import { CREW_STATUS_LABELS, ORDER_STATUS_COLORS, ORDER_STATUS_LABELS } from '../../theme';
+import { CREW_STATUS_LABELS } from '../../theme';
 import { formatDayLabel, formatTime } from '../../utils/date';
-
-const STATUS_ORDER: OrderStatus[] = ['new', 'confirmed', 'in_progress', 'completed', 'cancelled'];
 
 function combine(date: Date, time: Date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate(), time.getHours(), time.getMinutes());
@@ -156,7 +154,8 @@ export default function OrderScreen() {
   // не «красивую» строку со скобками и дефисами.
   const clientPhoneCore = normalizePhone(clientPhone);
   const clientPhoneDial = clientPhoneCore?.length === 10 ? `+7${clientPhoneCore}` : clientPhone;
-  const showAmount = canViewOrderAmount(employee);
+  const showAmount = canViewOrderAmount(employee, order);
+  const cancelled = order.status === 'cancelled';
 
   // Сводим возможные две строки order_crew одного сотрудника (водитель,
   // совмещающий функции грузчика) в одну запись для списка.
@@ -201,30 +200,26 @@ export default function OrderScreen() {
       </Text>
 
       {showFullStatusUI ? (
-        <View style={styles.statusRow}>
-          {STATUS_ORDER.map((status) => (
-            <Chip
-              key={status}
-              compact
-              selected={order.status === status}
-              showSelectedOverlay
-              disabled={!canManage || updateStatus.isPending}
-              style={order.status === status && { backgroundColor: ORDER_STATUS_COLORS[status].bg }}
-              onPress={() => updateStatus.mutate({ orderId: order.id, status })}
-            >
-              {ORDER_STATUS_LABELS[status]}
-            </Chip>
-          ))}
-        </View>
+        <Chip
+          compact
+          icon={cancelled ? 'refresh' : 'cancel'}
+          disabled={!canManage || updateStatus.isPending}
+          style={cancelled ? styles.cancelledChip : undefined}
+          textStyle={cancelled ? styles.cancelledChipText : undefined}
+          onPress={() =>
+            updateStatus.mutate({ orderId: order.id, status: cancelled ? ACTIVE_ORDER_STATUS : 'cancelled' })
+          }
+        >
+          {cancelled ? 'Восстановить заказ' : 'Отменить заказ'}
+        </Chip>
       ) : (
         <>
-          <Chip
-            style={[styles.statusChip, { backgroundColor: ORDER_STATUS_COLORS[order.status].bg }]}
-            compact
-          >
-            {ORDER_STATUS_LABELS[order.status]}
-          </Chip>
-          {myCrew && myCrew.status !== 'confirmed' && (
+          {cancelled && (
+            <Chip style={styles.cancelledChip} textStyle={styles.cancelledChipText} compact>
+              Заказ отменён
+            </Chip>
+          )}
+          {!cancelled && myCrew && myCrew.status !== 'confirmed' && (
             <Button
               mode="contained"
               icon="check"
@@ -236,7 +231,7 @@ export default function OrderScreen() {
               Принять заказ
             </Button>
           )}
-          {myCrew?.status === 'confirmed' && (
+          {!cancelled && myCrew?.status === 'confirmed' && (
             <Text variant="labelLarge" style={styles.accepted}>
               Вы приняли заказ
             </Text>
@@ -472,13 +467,12 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginBottom: 12,
   },
-  statusChip: {
+  cancelledChip: {
     alignSelf: 'flex-start',
+    backgroundColor: '#fee2e2',
   },
-  statusRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
+  cancelledChipText: {
+    color: '#ef4444',
   },
   action: {
     marginTop: 8,

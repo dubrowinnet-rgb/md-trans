@@ -54,21 +54,24 @@ export function OrderBlock({
           left: lane * laneWidth + 1,
           width: laneWidth - 2,
           backgroundColor: orderColor(order, now),
-          opacity: cancelled ? 0.45 : 1,
         },
       ]}
     >
-      <Text style={[styles.text, compact && styles.compact]}>
+      {cancelled && (
+        <Text style={[styles.text, compact && styles.compact, styles.cancelledLabel]}>заказ отменен</Text>
+      )}
+      <Text style={[styles.text, compact && styles.compact, cancelled && styles.strikethrough]}>
         {formatTime(start)} - {formatTime(end)},{' '}
         <Text style={styles.bold}>{order.clients?.name ?? 'Без клиента'}</Text>
         {service ? `, ${service}` : ''}
-        {cancelled ? ' · отменён' : ''}
       </Text>
       {route.length > 0 && (
-        <Text style={[styles.text, compact && styles.compact, styles.detail]}>{route}</Text>
+        <Text style={[styles.text, compact && styles.compact, styles.detail, cancelled && styles.strikethrough]}>
+          {route}
+        </Text>
       )}
       {order.cargo_description && !compact && (
-        <Text style={[styles.text, styles.detail]}>{`Груз: ${order.cargo_description}`}</Text>
+        <Text style={[styles.text, styles.detail, cancelled && styles.strikethrough]}>{`Груз: ${order.cargo_description}`}</Text>
       )}
       {confirmation && !compact && <Text style={[styles.text, styles.confirmation]}>{confirmation}</Text>}
     </Pressable>
@@ -94,6 +97,13 @@ const styles = StyleSheet.create({
   },
   bold: {
     fontWeight: '700',
+  },
+  cancelledLabel: {
+    fontWeight: '700',
+    color: '#f87171',
+  },
+  strikethrough: {
+    textDecorationLine: 'line-through',
   },
   detail: {
     marginTop: 1,

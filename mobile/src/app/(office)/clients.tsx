@@ -4,6 +4,7 @@ import { ActivityIndicator, Appbar, Divider, FAB, HelperText, List, Searchbar, T
 import { useClients, type Client } from '../../api/clients';
 import { ClientDialog } from '../../components/clients/ClientDialog';
 import { AccountMenu } from '../../components/layout/AccountMenu';
+import { NotificationBell } from '../../components/layout/NotificationBell';
 import { useNewClientFromContacts } from '../../hooks/useNewClientFromContacts';
 import { useSession } from '../../providers/SessionProvider';
 import { canViewClientPhone, canViewClientStats } from '../../lib/permissions';
@@ -23,6 +24,7 @@ export default function ClientsScreen() {
     <View style={styles.container}>
       <Appbar.Header>
         <Appbar.Content title="Клиенты" />
+        <NotificationBell />
         <AccountMenu />
       </Appbar.Header>
       <Searchbar

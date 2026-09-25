@@ -8,12 +8,15 @@ import { useCalendarNav } from '../../hooks/useCalendarNav';
 import { PagedCalendar } from '../../components/calendar/PagedCalendar';
 import { CalendarToolbar } from '../../components/calendar/CalendarToolbar';
 import { AccountMenu } from '../../components/layout/AccountMenu';
-import { formatHeaderDate } from '../../utils/date';
+import { formatHeaderDate, startOfMonth } from '../../utils/date';
 
-// Календарь водителя/грузчика: та же сетка, только собственные заказы и без создания.
+// Календарь водителя/грузчика: та же сетка, только собственные заказы и без
+// создания. minAnchor — назад можно листать только в пределах текущего
+// календарного месяца (доработки 2, п.1); у диспетчера/админа (calendar.tsx)
+// такого ограничения нет.
 export default function EmployeeCalendarScreen() {
   const { employee } = useSession();
-  const nav = useCalendarNav();
+  const nav = useCalendarNav({ minAnchor: startOfMonth(new Date()) });
 
   const ordersQuery = useOrdersForRange(nav.rangeStart, nav.rangeEnd);
   const orders = (ordersQuery.data ?? []).filter((o) =>
@@ -39,7 +42,7 @@ export default function EmployeeCalendarScreen() {
         <AccountMenu />
       </Appbar.Header>
 
-      <CalendarToolbar mode={nav.mode} onPrev={nav.goPrev} onNext={nav.goNext} onSetMode={nav.setMode} />
+      <CalendarToolbar mode={nav.mode} onPrev={nav.goPrev} onNext={nav.goNext} onSetMode={nav.setMode} disablePrev={nav.atMinAnchor} />
 
       <Banner visible={ordersQuery.isError} icon="alert-circle-outline">
         {`Ошибка загрузки заказов: ${ordersQuery.error?.message ?? ''}`}

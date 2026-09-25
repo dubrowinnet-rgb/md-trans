@@ -6,7 +6,9 @@ import {
   endOfDay,
   format,
   isSameDay,
+  setYear,
   startOfDay,
+  startOfMonth,
   startOfWeek,
 } from 'date-fns';
 import { ru } from 'date-fns/locale';
@@ -46,6 +48,8 @@ export {
   differenceInCalendarDays,
   endOfDay,
   isSameDay,
+  setYear,
   startOfDay,
+  startOfMonth,
   startOfWeek,
 };

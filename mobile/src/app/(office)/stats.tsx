@@ -2,6 +2,7 @@ import { StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Appbar, Divider, HelperText, List, Text } from 'react-native-paper';
 import { useStatsOverview } from '../../api/stats';
 import { AccountMenu } from '../../components/layout/AccountMenu';
+import { NotificationBell } from '../../components/layout/NotificationBell';
 import { ACCOUNT_ROLE_LABELS, ORDER_STATUS_LABELS } from '../../theme';
 import type { OrderStatus } from '../../types/database';
 
@@ -17,6 +18,7 @@ export default function StatsScreen() {
     <View style={styles.container}>
       <Appbar.Header>
         <Appbar.Content title="Статистика" />
+        <NotificationBell />
         <AccountMenu />
       </Appbar.Header>
 

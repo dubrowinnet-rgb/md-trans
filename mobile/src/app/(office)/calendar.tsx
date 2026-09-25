@@ -5,6 +5,7 @@ import { Appbar, Banner, FAB, ProgressBar } from 'react-native-paper';
 import { useEmployees } from '../../api/employees';
 import { useOrdersForRange, type OrderWithDetails } from '../../api/orders';
 import { AccountMenu } from '../../components/layout/AccountMenu';
+import { NotificationBell } from '../../components/layout/NotificationBell';
 import { useSession } from '../../providers/SessionProvider';
 import { canManageOrders } from '../../lib/permissions';
 import { useCalendarNav } from '../../hooks/useCalendarNav';
@@ -53,6 +54,7 @@ export default function DispatcherCalendarScreen() {
       <Appbar.Header>
         <Appbar.Content title={formatHeaderDate(nav.anchor)} titleStyle={styles.title} />
         <Appbar.Action icon="calendar-today" onPress={nav.goToday} accessibilityLabel="Сегодня" />
+        <NotificationBell />
         <AccountMenu />
       </Appbar.Header>
 
