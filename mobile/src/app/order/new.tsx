@@ -169,7 +169,7 @@ export default function NewOrderScreen() {
     setStartTime(new Date(src.scheduled_start));
     setEndTime(new Date(src.scheduled_end));
 
-    if (src.clients) setSelectedClient({ ...src.clients, notes: null, created_at: '' });
+    if (src.clients) setSelectedClient({ ...src.clients, company_id: '', notes: null, created_at: '' });
 
     const stops = [...src.order_stops].sort((a, b) => a.order_index - b.order_index);
     const primary = stops.filter((s) => s.is_primary);

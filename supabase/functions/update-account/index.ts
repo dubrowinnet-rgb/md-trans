@@ -2,7 +2,8 @@
 // (раздел «Команда» — админ должен видеть и менять логин/пароль и всю
 // информацию о сотруднике). С доработки «Настройки» этой же функцией
 // пользуется и сам сотрудник — правит СВОЙ логин/телефон/пароль (раздел
-// «Мой профиль»): вызывающий либо администратор, либо id === он сам.
+// «Мой профиль»): вызывающий либо администратор СВОЕЙ ЖЕ компании, либо
+// владелец сервиса (любой компании — для поддержки), либо id === он сам.
 //
 // Отдельная функция, а не часть create-account: смена логина меняет email
 // в auth.users, а смена пароля — это auth.admin.updateUserById, и то, и
@@ -79,7 +80,7 @@ Deno.serve(async (req) => {
 
   const { data: caller } = await admin
     .from('employees')
-    .select('id, role')
+    .select('id, role, company_id')
     .eq('auth_user_id', userData.user.id)
     .maybeSingle();
   if (!caller) return fail(403, 'Недостаточно прав', headers);
@@ -87,13 +88,18 @@ Deno.serve(async (req) => {
   const id = String(body.id ?? '');
   if (!id) return fail(400, 'Не указан сотрудник', headers);
 
-  const isSelf = caller.id === id;
-  if (caller.role !== 'admin' && !isSelf) {
-    return fail(403, 'Менять данные другого сотрудника может только администратор', headers);
-  }
-
   const { data: target } = await admin.from('employees').select('*').eq('id', id).maybeSingle();
   if (!target) return fail(404, 'Сотрудник не найден', headers);
+
+  // Самого себя менять можно всегда (профиль в «Настройках»). Иначе —
+  // владелец сервиса (любого сотрудника, для поддержки) или администратор,
+  // но только своей же компании: без проверки company_id администратор
+  // одной компании мог бы по id поменять логин/пароль сотруднику ДРУГОЙ.
+  const isSelf = caller.id === id;
+  const canManageOther = caller.role === 'owner' || (caller.role === 'admin' && target.company_id === caller.company_id);
+  if (!isSelf && !canManageOther) {
+    return fail(403, 'Менять данные другого сотрудника может только администратор его компании', headers);
+  }
 
   // Частичное обновление: трогаем только те поля, которые реально пришли
   // в body (см. комментарий вверху файла) — has() отличает «поле не

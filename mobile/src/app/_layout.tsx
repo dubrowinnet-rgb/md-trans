@@ -9,6 +9,7 @@ import { registerTranslation, ru } from 'react-native-paper-dates';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { SessionProvider, useSession } from '../providers/SessionProvider';
 import { supabase } from '../lib/supabase';
+import { registerForPushNotifications } from '../lib/pushNotifications';
 import { theme } from '../theme';
 
 SplashScreen.preventAutoHideAsync();
@@ -47,9 +48,16 @@ function RootNavigator() {
 
   const isOffice = Boolean(session && (employee?.role === 'admin' || employee?.role === 'dispatcher'));
   const isCrew = Boolean(session && (employee?.role === 'driver' || employee?.role === 'loader'));
+  const isOwner = Boolean(session && employee?.role === 'owner');
   const noAccess = Boolean(session && !employee);
 
   if (noAccess) return <NoAccessScreen />;
+  // Кабинет владельца сервиса — только в веб-версии (раздел «владелец
+  // сервиса», 2026-09-25). У роли 'owner' в мобильном приложении нет
+  // своих экранов, но вход должен всё равно зарегистрировать push-токен
+  // (тем же способом, что и (employee)/_layout.tsx) — иначе пуш о новом
+  // обращении в поддержку получать было бы некуда.
+  if (isOwner) return <OwnerStubScreen employeeId={employee!.id} />;
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
@@ -96,6 +104,29 @@ function RootNavigator() {
         <Stack.Screen name="settings" options={{ presentation: 'containedModal' }} />
       </Stack.Protected>
     </Stack>
+  );
+}
+
+function OwnerStubScreen({ employeeId }: { employeeId: string }) {
+  useEffect(() => {
+    registerForPushNotifications(employeeId);
+  }, [employeeId]);
+
+  return (
+    <SafeAreaView style={styles.safe}>
+      <View style={styles.content}>
+        <Text variant="titleMedium" style={styles.text}>
+          Кабинет владельца сервиса открывается в веб-версии.
+        </Text>
+        <Text variant="bodyMedium" style={styles.text}>
+          Здесь, в мобильном приложении, этот вход нужен только для того, чтобы приходили push-уведомления о новых
+          обращениях в поддержку.
+        </Text>
+        <Button mode="outlined" onPress={() => supabase.auth.signOut()}>
+          Выйти
+        </Button>
+      </View>
+    </SafeAreaView>
   );
 }
 

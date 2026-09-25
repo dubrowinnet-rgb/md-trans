@@ -1,5 +1,10 @@
 // Создание аккаунта сотрудника (админ/диспетчер/водитель/грузчик) с
-// логином и паролем, которые задаёт администратор.
+// логином и паролем. Обычно вызывающий — администратор своей компании
+// (company_id всегда его собственный, id из тела запроса не принимаем).
+// Владелец сервиса тоже может вызвать эту функцию, но только чтобы
+// завести администратора НОВОЙ компании (role='admin' + обязательный
+// company_id в теле запроса) — роль 'owner' через эту функцию завести
+// нельзя (см. supabase/README.md, «Стать владельцем сервиса»).
 //
 // Почему это отдельная серверная функция, а не просто INSERT из
 // приложения: пароль можно задать только через Supabase Admin API
@@ -83,11 +88,13 @@ Deno.serve(async (req) => {
 
   const { data: caller } = await admin
     .from('employees')
-    .select('role')
+    .select('role, company_id')
     .eq('auth_user_id', userData.user.id)
     .maybeSingle();
-  if (!caller || caller.role !== 'admin') {
-    return fail(403, 'Добавлять сотрудников может только администратор', headers);
+  const callerIsOwner = caller?.role === 'owner';
+  const callerIsAdmin = caller?.role === 'admin';
+  if (!caller || (!callerIsOwner && !callerIsAdmin)) {
+    return fail(403, 'Недостаточно прав для добавления сотрудника', headers);
   }
 
   const login = String(body.login ?? '').trim();
@@ -98,6 +105,24 @@ Deno.serve(async (req) => {
   const role = String(body.role ?? '');
   const permissions = (body.permissions as Record<string, unknown>) ?? {};
   const defaultVehicleId = body.default_vehicle_id ? String(body.default_vehicle_id) : null;
+
+  // Владелец сервиса заводит только администраторов (новых «клиентов
+  // сервиса») и обязательно указывает, для какой компании; обычный
+  // администратор заводит только свою команду — компания всегда его
+  // собственная, id компании от клиента не принимаем (иначе можно было бы
+  // подставить чужую компанию в запросе).
+  let companyId: string;
+  if (callerIsOwner) {
+    if (role !== 'admin') {
+      return fail(400, 'Владелец сервиса может создавать только администраторов компаний', headers);
+    }
+    const requestedCompanyId = body.company_id ? String(body.company_id) : '';
+    if (!requestedCompanyId) return fail(400, 'Не указана компания', headers);
+    companyId = requestedCompanyId;
+  } else {
+    if (!caller.company_id) return fail(400, 'У вашей учётной записи не задана компания', headers);
+    companyId = caller.company_id;
+  }
 
   if (!LOGIN_RE.test(login)) {
     return fail(400, 'Логин — 3–32 символа: латинские буквы, цифры, точка, дефис или подчёркивание', headers);
@@ -131,6 +156,7 @@ Deno.serve(async (req) => {
     .from('employees')
     .insert({
       auth_user_id: created.user.id,
+      company_id: companyId,
       login,
       name,
       last_name: lastName,

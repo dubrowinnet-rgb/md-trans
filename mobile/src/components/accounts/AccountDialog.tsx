@@ -40,7 +40,18 @@ const ROLE_OPTIONS: { value: AccountRole; label: string }[] = [
 // заказами (у него своё, более узкое право — редактировать время и
 // сумму, оно не выключается галочкой, см. lib/permissions.ts), грузчику —
 // только просмотр. Админ может донастроить это на конкретном аккаунте.
+// 'owner' в ROLE_OPTIONS нет и через эту карточку не заводится (см.
+// supabase/functions/create-account, «Стать владельцем сервиса» в
+// supabase/README.md) — запись ниже нужна только для полноты Record'а по
+// AccountRole (account.role теоретически типизирован шире ROLE_OPTIONS),
+// в интерфейсе она недостижима.
 const ROLE_DEFAULT_PERMISSIONS: Record<AccountRole, AccountPermissions> = {
+  owner: {
+    can_manage_orders: false,
+    can_view_client_stats: false,
+    can_view_contacts_and_amounts: false,
+    can_manage_own_schedule: false,
+  },
   admin: {
     can_manage_orders: true,
     can_view_client_stats: true,

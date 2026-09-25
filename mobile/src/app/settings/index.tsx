@@ -48,6 +48,13 @@ export default function SettingsScreen() {
               right={(props) => <List.Icon {...props} icon="chevron-right" />}
               onPress={() => router.push('/settings/reminders')}
             />
+            <List.Item
+              title="Техподдержка"
+              description="Обращения к владельцу сервиса"
+              left={(props) => <List.Icon {...props} icon="headset" />}
+              right={(props) => <List.Icon {...props} icon="chevron-right" />}
+              onPress={() => router.push('/settings/support')}
+            />
           </>
         )}
       </List.Section>
