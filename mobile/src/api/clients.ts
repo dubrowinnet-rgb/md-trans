@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
+import { formatPhone } from '../lib/phone';
 import type { Database } from '../types/database';
 
 export type Client = Database['public']['Tables']['clients']['Row'];
@@ -34,7 +35,7 @@ export function useCreateClient() {
         .from('clients')
         .insert({
           name: input.name,
-          phone: input.phone || null,
+          phone: formatPhone(input.phone) || null,
           discount_percent: input.discount_percent ?? 0,
           notes: input.notes || null,
         })
@@ -81,7 +82,7 @@ export function useUpdateClient() {
         .from('clients')
         .update({
           name: input.name,
-          phone: input.phone || null,
+          phone: formatPhone(input.phone) || null,
           discount_percent: input.discount_percent ?? 0,
           notes: input.notes || null,
         })

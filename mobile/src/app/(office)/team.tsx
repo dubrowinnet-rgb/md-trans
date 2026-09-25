@@ -4,6 +4,7 @@ import { ActivityIndicator, Appbar, Divider, FAB, HelperText, List, Text } from 
 import { useAllAccounts, type Account } from '../../api/accounts';
 import { AccountDialog } from '../../components/accounts/AccountDialog';
 import { AccountMenu } from '../../components/layout/AccountMenu';
+import { formatPhone } from '../../lib/phone';
 import { ACCOUNT_ROLE_ICONS, ACCOUNT_ROLE_LABELS } from '../../theme';
 
 // Экран администратора: все аккаунты (свои же админы, диспетчеры,
@@ -34,7 +35,7 @@ export default function TeamScreen() {
           renderItem={({ item }) => (
             <List.Item
               title={[item.name, item.last_name].filter(Boolean).join(' ')}
-              description={`${ACCOUNT_ROLE_LABELS[item.role]}${item.login ? ` · ${item.login}` : ''}${item.phone ? ` · ${item.phone}` : ''}`}
+              description={`${ACCOUNT_ROLE_LABELS[item.role]}${item.login ? ` · ${item.login}` : ''}${item.phone ? ` · ${formatPhone(item.phone)}` : ''}`}
               left={(props) => <List.Icon {...props} icon={ACCOUNT_ROLE_ICONS[item.role]} />}
               onPress={() => setEditing(item)}
             />

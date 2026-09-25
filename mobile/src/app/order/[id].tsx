@@ -36,6 +36,7 @@ import { DateTimeField } from '../../components/form/DateTimeField';
 import { DismissKeyboardView } from '../../components/form/DismissKeyboardView';
 import { CrewDialog } from '../../components/orders/CrewDialog';
 import { yandexMapsRouteUrl } from '../../lib/yandexMaps';
+import { formatPhone, normalizePhone } from '../../lib/phone';
 import { CREW_STATUS_LABELS, ORDER_STATUS_COLORS, ORDER_STATUS_LABELS } from '../../theme';
 import { formatDayLabel, formatTime } from '../../utils/date';
 
@@ -150,6 +151,11 @@ export default function OrderScreen() {
   const primaryStops = sortedStops.filter((s) => s.is_primary);
   const extraStops = sortedStops.filter((s) => !s.is_primary);
   const clientPhone = canViewClientPhone(employee, order) ? order.clients?.phone : null;
+  const clientPhoneDisplay = clientPhone ? formatPhone(clientPhone) : null;
+  // tel: должен звонить, а не показывать текст — берём чистое +7XXXXXXXXXX,
+  // не «красивую» строку со скобками и дефисами.
+  const clientPhoneCore = normalizePhone(clientPhone);
+  const clientPhoneDial = clientPhoneCore?.length === 10 ? `+7${clientPhoneCore}` : clientPhone;
   const showAmount = canViewOrderAmount(employee);
 
   // Сводим возможные две строки order_crew одного сотрудника (водитель,
@@ -181,12 +187,12 @@ export default function OrderScreen() {
         <Text variant="titleLarge" style={styles.flex}>
           {order.clients?.name ?? 'Без клиента'}
         </Text>
-        {clientPhone && (
+        {clientPhoneDisplay && (
           <IconButton
             icon="phone"
             mode="contained-tonal"
-            accessibilityLabel={`Позвонить клиенту: ${clientPhone}`}
-            onPress={() => Linking.openURL(`tel:${clientPhone}`)}
+            accessibilityLabel={`Позвонить клиенту: ${clientPhoneDisplay}`}
+            onPress={() => Linking.openURL(`tel:${clientPhoneDial}`)}
           />
         )}
       </View>

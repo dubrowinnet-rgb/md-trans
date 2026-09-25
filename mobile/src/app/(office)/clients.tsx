@@ -7,6 +7,7 @@ import { AccountMenu } from '../../components/layout/AccountMenu';
 import { useNewClientFromContacts } from '../../hooks/useNewClientFromContacts';
 import { useSession } from '../../providers/SessionProvider';
 import { canViewClientPhone, canViewClientStats } from '../../lib/permissions';
+import { formatPhone } from '../../lib/phone';
 
 // База клиентов (раздел 5 ТЗ): поиск, карточка с телефоном и персональной скидкой.
 export default function ClientsScreen() {
@@ -48,7 +49,7 @@ export default function ClientsScreen() {
             <List.Item
               title={item.name}
               description={[
-                canViewContacts ? item.phone : null,
+                canViewContacts ? formatPhone(item.phone) || null : null,
                 item.discount_percent ? `скидка ${item.discount_percent}%` : null,
               ]
                 .filter(Boolean)
