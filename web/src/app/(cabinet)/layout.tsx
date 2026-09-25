@@ -16,6 +16,7 @@ import {
   IconTruck,
   IconCalendarOff,
   IconUsersGroup,
+  IconReportMoney,
 } from '@tabler/icons-react';
 import { supabase } from '@/lib/supabase';
 import { isOfficeRole, useSession } from '@/providers/SessionProvider';
@@ -31,6 +32,7 @@ const NAV = [
   { href: '/schedule/', label: 'График', icon: IconCalendarOff, adminOnly: false },
   { href: '/export/', label: 'Выгрузка', icon: IconDatabaseExport, adminOnly: false },
   { href: '/team/', label: 'Команда', icon: IconUsersGroup, adminOnly: true },
+  { href: '/driver-reports/', label: 'Отчёты водителей', icon: IconReportMoney, adminOnly: true },
   { href: '/stats/', label: 'Статистика', icon: IconChartBar, adminOnly: true },
   { href: '/support/', label: 'Техподдержка', icon: IconHeadset, adminOnly: true },
 ];

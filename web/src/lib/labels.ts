@@ -1,5 +1,6 @@
 import type { AccountRole, AccountStatus, CrewStatus, OrderStatus } from '@/types/database';
 import type { TicketStatus } from '@/api/supportTickets';
+import type { DriverReportStatus } from '@/api/driverReports';
 
 // Те же подписи и цвета, что в мобильном приложении (mobile/src/theme.ts).
 export const ORDER_STATUSES: OrderStatus[] = ['new', 'confirmed', 'in_progress', 'completed', 'cancelled'];
@@ -58,4 +59,16 @@ export const TICKET_STATUS_COLORS: Record<TicketStatus, string> = {
   open: 'red',
   in_progress: 'yellow',
   resolved: 'green',
+};
+
+export const DRIVER_REPORT_STATUS_LABELS: Record<DriverReportStatus, string> = {
+  draft: 'Заполняется',
+  submitted: 'Отправлен',
+  confirmed: 'Подтверждён',
+};
+
+export const DRIVER_REPORT_STATUS_COLORS: Record<DriverReportStatus, string> = {
+  draft: 'gray',
+  submitted: 'yellow',
+  confirmed: 'green',
 };
