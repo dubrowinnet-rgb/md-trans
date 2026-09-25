@@ -20,11 +20,20 @@ export function canEditOrderScheduleAndPrice(employee: Employee | null) {
 
 // Сумма заказа: как и раньше, отдельная от can_manage_orders галочка
 // can_view_contacts_and_amounts — админ может дать право редактировать
-// заказы, но не показывать суммы, и наоборот. Исключение — грузчик: ему
-// сумма не показывается никогда, независимо от галочек.
-export function canViewOrderAmount(employee: Employee | null) {
+// заказы, но не показывать суммы, и наоборот. Грузчику сумма не
+// показывается галочкой (её смысл для него — только телефон, см. подпись
+// в AccountDialog), но видна, если в бригаде заказа нет водителя — тогда
+// он сам, по сути, за него отвечает (доработки 2, п.5: например заказ на
+// погрузку/разгрузку или сборку мебели без водителя).
+export function canViewOrderAmount(
+  employee: Employee | null,
+  order?: { order_crew: { role: string }[] } | null
+) {
   if (employee?.role === 'admin') return true;
-  if (employee?.role === 'loader') return false;
+  if (employee?.role === 'loader') {
+    const hasDriver = order?.order_crew.some((c) => c.role === 'driver') ?? false;
+    return !hasDriver;
+  }
   return Boolean(employee?.can_view_contacts_and_amounts);
 }
 

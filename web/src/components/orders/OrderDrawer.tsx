@@ -127,7 +127,7 @@ export function OrderDrawer({ orderId, onClose }: { orderId: string | null; onCl
         <OrderDetails
           order={order}
           canManage={canManage}
-          showAmount={canViewOrderAmount(employee)}
+          showAmount={canViewOrderAmount(employee, order)}
           clientPhone={canViewClientPhone(employee, order) ? order.clients?.phone ?? null : null}
           statusPending={updateStatus.isPending}
           onStatus={(status) =>
