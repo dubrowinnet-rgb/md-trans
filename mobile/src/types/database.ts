@@ -14,6 +14,11 @@ export type EmployeeRole = 'driver' | 'loader';
 export type AccountRole = 'owner' | 'admin' | 'dispatcher' | 'driver' | 'loader';
 export type AccountStatus = 'active' | 'pending_payment' | 'suspended';
 export type TicketStatus = 'open' | 'in_progress' | 'resolved';
+// Режим ставки (миграция 0014): combined — одна hourly_rate на все роли в
+// заказе; split — своя ставка на вождение и на погрузку/разгрузку.
+export type RateMode = 'combined' | 'split';
+export type DriverReportStatus = 'draft' | 'submitted' | 'confirmed';
+export type FuelPaymentMethod = 'cash' | 'cashless';
 export type OrderStatus = 'new' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled';
 export type StopType = 'pickup' | 'dropoff';
 export type CrewStatus = 'notified' | 'read' | 'confirmed';
@@ -53,6 +58,10 @@ export interface Database {
           // null только у роли 'owner' — остальные роли всегда привязаны
           // к компании (миграция 0013, employees_company_id_by_role).
           company_id: string | null;
+          hourly_rate: number | null;
+          driving_hourly_rate: number | null;
+          loading_hourly_rate: number | null;
+          rate_mode: RateMode;
           created_at: string;
         };
         Insert: {
@@ -79,6 +88,10 @@ export interface Database {
           personal_vehicle_make?: string | null;
           personal_vehicle_plate?: string | null;
           company_id?: string | null;
+          hourly_rate?: number | null;
+          driving_hourly_rate?: number | null;
+          loading_hourly_rate?: number | null;
+          rate_mode?: RateMode;
         };
         Update: Partial<Database['public']['Tables']['employees']['Insert']>;
         Relationships: [];
@@ -352,6 +365,70 @@ export interface Database {
           enabled?: boolean;
         };
         Update: Partial<Database['public']['Tables']['reminder_rules']['Insert']>;
+        Relationships: [];
+      };
+      driver_reports: {
+        Row: {
+          id: string;
+          company_id: string;
+          employee_id: string;
+          report_date: string;
+          status: DriverReportStatus;
+          cash_handed_in: number | null;
+          confirmed_by: string | null;
+          confirmed_at: string | null;
+          fuel_amount: number | null;
+          fuel_payment_method: FuelPaymentMethod | null;
+          odometer_photo_url: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id?: string;
+          employee_id: string;
+          report_date: string;
+          status?: DriverReportStatus;
+          cash_handed_in?: number | null;
+          confirmed_by?: string | null;
+          confirmed_at?: string | null;
+          fuel_amount?: number | null;
+          fuel_payment_method?: FuelPaymentMethod | null;
+          odometer_photo_url?: string | null;
+        };
+        Update: Partial<Database['public']['Tables']['driver_reports']['Insert']>;
+        Relationships: [];
+      };
+      driver_report_orders: {
+        Row: {
+          id: string;
+          report_id: string;
+          order_id: string;
+          paid_by_transfer: boolean;
+        };
+        Insert: {
+          id?: string;
+          report_id: string;
+          order_id: string;
+          paid_by_transfer?: boolean;
+        };
+        Update: Partial<Database['public']['Tables']['driver_report_orders']['Insert']>;
+        Relationships: [];
+      };
+      driver_report_expenses: {
+        Row: {
+          id: string;
+          report_id: string;
+          description: string;
+          amount: number;
+        };
+        Insert: {
+          id?: string;
+          report_id: string;
+          description: string;
+          amount: number;
+        };
+        Update: Partial<Database['public']['Tables']['driver_report_expenses']['Insert']>;
         Relationships: [];
       };
     };

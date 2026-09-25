@@ -1,5 +1,5 @@
 import { MD3LightTheme, type MD3Theme } from 'react-native-paper';
-import type { AccountRole, CrewStatus, OrderStatus, TicketStatus } from './types/database';
+import type { AccountRole, CrewStatus, DriverReportStatus, OrderStatus, TicketStatus } from './types/database';
 
 export const theme: MD3Theme = {
   ...MD3LightTheme,
@@ -48,6 +48,18 @@ export const TICKET_STATUS_LABELS: Record<TicketStatus, string> = {
   open: 'Открыто',
   in_progress: 'В работе',
   resolved: 'Решено',
+};
+
+export const DRIVER_REPORT_STATUS_LABELS: Record<DriverReportStatus, string> = {
+  draft: 'Заполняется',
+  submitted: 'Отправлен',
+  confirmed: 'Подтверждён',
+};
+
+export const DRIVER_REPORT_STATUS_COLORS: Record<DriverReportStatus, string> = {
+  draft: '#9ca3af',
+  submitted: '#f59e0b',
+  confirmed: '#22c55e',
 };
 
 export const ACCOUNT_ROLE_ICONS: Record<AccountRole, string> = {
