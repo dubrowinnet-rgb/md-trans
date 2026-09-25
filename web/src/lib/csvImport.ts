@@ -1,10 +1,25 @@
-// Разбор CSV-файла для импорта клиентской базы (произвольный файл из
+// Разбор CSV/TXT-файла для импорта клиентской базы (произвольный файл из
 // другой CRM/Excel, не обязательно наша же выгрузка — см. downloadCsv в
 // exportData.ts, чей формат тоже понимаем как частный случай).
 
-// Строки и разделитель ";"/"," определяются по самому файлу, а не
+// Файл читаем как байты (не через File.text(), который всегда считает
+// UTF-8) — выгрузки из 1С/старого Excel часто в windows-1251, и тогда
+// «Имя» в заголовке превращается в нечитаемые байты и колонка не находится.
+// UTF-8 с fatal:true бросает исключение на первом же байте, который не
+// складывается в валидную UTF-8-последовательность — а строка в cp1251
+// почти всегда содержит такие байты, так что эта проверка на практике
+// надёжно отличает одну кодировку от другой.
+export function decodeText(buffer: ArrayBuffer): string {
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(buffer);
+  } catch {
+    return new TextDecoder('windows-1251').decode(buffer);
+  }
+}
+
+// Строки и разделитель ";" / "," / таб определяются по самому файлу, а не
 // фиксированы, как в своей же выгрузке — на входе может быть файл из
-// другой системы.
+// другой системы (в т.ч. .txt, выгруженный табуляцией из Excel).
 export function parseCsv(text: string): string[][] {
   const clean = text.replace(/^﻿/, '');
   const delimiter = detectDelimiter(clean);
@@ -66,9 +81,13 @@ export function parseCsv(text: string): string[][] {
 
 function detectDelimiter(text: string) {
   const firstLine = text.split(/\r?\n/, 1)[0] ?? '';
-  const semi = (firstLine.match(/;/g) ?? []).length;
-  const comma = (firstLine.match(/,/g) ?? []).length;
-  return semi >= comma ? ';' : ',';
+  const counts: [string, number][] = [
+    ['\t', (firstLine.match(/\t/g) ?? []).length],
+    [';', (firstLine.match(/;/g) ?? []).length],
+    [',', (firstLine.match(/,/g) ?? []).length],
+  ];
+  counts.sort((a, b) => b[1] - a[1]);
+  return counts[0][1] > 0 ? counts[0][0] : ',';
 }
 
 export type ClientField = 'name' | 'phone' | 'discount' | 'notes';
@@ -102,6 +121,119 @@ export function detectColumns(headerRow: string[]): Partial<Record<ClientField, 
     if (field) map[field] = idx;
   });
   return map;
+}
+
+// «Похоже на телефон»: 10-12 цифр после чистки от всего, что не цифра —
+// покрывает российские номера с кодом страны и без, городские и мобильные.
+function looksLikePhone(cell: string): boolean {
+  const digits = cell.replace(/\D/g, '');
+  return digits.length >= 10 && digits.length <= 12;
+}
+
+// «Похоже на имя/название»: есть буквы, они — большая часть содержимого
+// (не «12 шт.» и не число), и сама ячейка не похожа на телефон.
+function looksLikeName(cell: string): boolean {
+  const t = cell.trim();
+  if (!t || looksLikePhone(t)) return false;
+  const letters = (t.match(/\p{L}/gu) ?? []).length;
+  return letters >= 2 && letters >= t.length * 0.5;
+}
+
+const CONTENT_SAMPLE_ROWS = 30;
+const CONTENT_MIN_SCORE = 0.5;
+
+// Когда в файле нет узнаваемых заголовков — «база совершенно разной
+// структуры» — ищем имя и телефон по содержимому, а не по названию
+// колонки: колонка с наибольшей долей похожих на телефон ячеек — телефон,
+// а среди оставшихся колонка с наибольшей долей «текстовых» ячеек — имя.
+// exclude — индексы колонок, уже занятых полями, найденными по заголовку
+// (например «Скидка»), чтобы контент-поиск их не перезанял.
+export function detectColumnsByContent(
+  rows: string[][],
+  exclude: Set<number> = new Set()
+): Partial<Record<'name' | 'phone', number>> {
+  const sample = rows.slice(0, CONTENT_SAMPLE_ROWS);
+  const colCount = sample.reduce((max, r) => Math.max(max, r.length), 0);
+  const result: Partial<Record<'name' | 'phone', number>> = {};
+
+  let bestPhoneCol = -1;
+  let bestPhoneScore = 0;
+  for (let c = 0; c < colCount; c++) {
+    if (exclude.has(c)) continue;
+    let hits = 0;
+    let total = 0;
+    for (const row of sample) {
+      const cell = (row[c] ?? '').trim();
+      if (!cell) continue;
+      total++;
+      if (looksLikePhone(cell)) hits++;
+    }
+    if (total > 0 && hits / total > bestPhoneScore) {
+      bestPhoneScore = hits / total;
+      bestPhoneCol = c;
+    }
+  }
+  if (bestPhoneScore >= CONTENT_MIN_SCORE) result.phone = bestPhoneCol;
+
+  let bestNameCol = -1;
+  let bestNameScore = 0;
+  for (let c = 0; c < colCount; c++) {
+    if (exclude.has(c) || c === result.phone) continue;
+    let hits = 0;
+    let total = 0;
+    for (const row of sample) {
+      const cell = (row[c] ?? '').trim();
+      if (!cell) continue;
+      total++;
+      if (looksLikeName(cell)) hits++;
+    }
+    if (total > 0 && hits / total > bestNameScore) {
+      bestNameScore = hits / total;
+      bestNameCol = c;
+    }
+  }
+  if (bestNameScore >= CONTENT_MIN_SCORE) result.name = bestNameCol;
+
+  return result;
+}
+
+export interface ColumnDetection {
+  columns: Partial<Record<ClientField, number>>;
+  hasHeader: boolean;
+  // Какие поля определились не по заголовку, а по содержимому данных —
+  // чтобы в предпросмотре честно показать «найдено по содержимому», а не
+  // выдумывать для них название колонки.
+  contentFields: ('name' | 'phone')[];
+}
+
+// Итоговое определение колонок: сперва по заголовку первой строки (как
+// раньше), а для имени/телефона, которые так не нашлись, — по содержимому
+// данных. Если по заголовку не нашлось вообще ничего, значит заголовка,
+// скорее всего, и нет — тогда первую строку тоже считаем данными.
+export function detectColumnsSmart(rows: string[][]): ColumnDetection {
+  if (rows.length === 0) return { columns: {}, hasHeader: false, contentFields: [] };
+
+  const headerColumns = detectColumns(rows[0]);
+  const hasHeader = Object.keys(headerColumns).length > 0;
+  const body = hasHeader ? rows.slice(1) : rows;
+
+  const columns: Partial<Record<ClientField, number>> = { ...headerColumns };
+  const contentFields: ('name' | 'phone')[] = [];
+
+  if (columns.name === undefined || columns.phone === undefined) {
+    const claimed = new Set(Object.values(headerColumns));
+    const guess = detectColumnsByContent(body, claimed);
+    if (columns.name === undefined && guess.name !== undefined) {
+      columns.name = guess.name;
+      contentFields.push('name');
+    }
+    if (columns.phone === undefined && guess.phone !== undefined) {
+      columns.phone = guess.phone;
+      contentFields.push('phone');
+    }
+  }
+
+  return { columns, hasHeader, contentFields };
 }
 
 // К единому виду без кода страны — чтобы «+7 916 000-00-02», «8 (916)

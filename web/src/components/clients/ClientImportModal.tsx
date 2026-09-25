@@ -8,27 +8,33 @@ import { errorMessage } from '@/lib/errors';
 import { useImportClients, type ClientWithStats } from '@/api/clients';
 import {
   CLIENT_FIELD_LABELS,
-  detectColumns,
+  decodeText,
+  detectColumnsSmart,
   normalizePhone,
   parseCsv,
   parseDiscount,
   pluralClients,
   type ClientField,
 } from '@/lib/csvImport';
+import { parseXlsxFile } from '@/lib/xlsxImport';
 
 interface Parsed {
   fileName: string;
   headerRow: string[];
   dataRows: string[][];
   columns: Partial<Record<ClientField, number>>;
+  hasHeader: boolean;
+  contentFields: ('name' | 'phone')[];
 }
 
 const PREVIEW_ROWS = 8;
 
-// Импорт клиентской базы из CSV: колонки определяются по заголовку файла
-// (см. lib/csvImport.ts), совпадение с уже существующим клиентом — по
-// телефону (нормализованному, без кода страны). Найденных обновляем,
-// остальных заводим как новых; строки без имени пропускаем.
+// Импорт клиентской базы из CSV/TXT/XLSX: колонки определяются по
+// заголовку файла, а если заголовка нет или он не узнан — по содержимому
+// данных (см. detectColumnsSmart в lib/csvImport.ts: структура файла может
+// быть какой угодно). Совпадение с уже существующим клиентом — по телефону
+// (нормализованному, без кода страны). Найденных обновляем, остальных
+// заводим как новых; строки без имени пропускаем.
 export function ClientImportModal({
   clients,
   onClose,
@@ -46,21 +52,39 @@ export function ClientImportModal({
     setResult(null);
     setParsed(null);
     if (!file) return;
-    const text = await file.text();
-    const rows = parseCsv(text);
+    const ext = file.name.toLowerCase().split('.').pop() ?? '';
+    if (ext === 'xls') {
+      setError(
+        'Старый формат .xls (Excel 97-2003) не читаем. Откройте файл в Excel или Google Таблицах и сохраните как .xlsx — «Файл → Сохранить как» — и загрузите его.'
+      );
+      return;
+    }
+    let rows: string[][];
+    try {
+      rows = ext === 'xlsx' ? await parseXlsxFile(file) : parseCsv(decodeText(await file.arrayBuffer()));
+    } catch (err) {
+      setError(errorMessage(err, 'Не удалось прочитать файл'));
+      return;
+    }
     if (rows.length === 0) {
       setError('Файл пустой или не удалось его прочитать.');
       return;
     }
-    const [headerRow, ...dataRows] = rows;
-    const columns = detectColumns(headerRow);
-    if (columns.name === undefined) {
+    const detection = detectColumnsSmart(rows);
+    if (detection.columns.name === undefined) {
       setError(
-        'Не нашли колонку с именем клиента. Добавьте в файл колонку «Имя» или «Клиент» — по ней ищем название.'
+        'Не нашли в файле ни колонки «Имя»/«Клиент», ни столбца, похожего на имя по содержимому. Проверьте, что в файле есть имена или названия контактов.'
       );
       return;
     }
-    setParsed({ fileName: file.name, headerRow, dataRows, columns });
+    setParsed({
+      fileName: file.name,
+      headerRow: detection.hasHeader ? rows[0] : [],
+      dataRows: detection.hasHeader ? rows.slice(1) : rows,
+      columns: detection.columns,
+      hasHeader: detection.hasHeader,
+      contentFields: detection.contentFields,
+    });
   };
 
   const runImport = async () => {
@@ -128,16 +152,20 @@ export function ClientImportModal({
   };
 
   return (
-    <Modal opened onClose={onClose} size="lg" title={<Title order={4}>Импорт клиентов из CSV</Title>}>
+    <Modal opened onClose={onClose} size="lg" title={<Title order={4}>Импорт клиентов из файла</Title>}>
       <Stack>
         {!result && (
           <>
             <Text size="sm" c="dimmed">
-              Файл CSV с колонками «Имя» (или «Клиент»), «Телефон», «Скидка», «Заметки» — названия колонок могут
-              быть в любом порядке. Уже существующего клиента находим по телефону и обновляем, остальных заводим
-              новыми.
+              Файл CSV, TXT или XLSX с колонками «Имя» (или «Клиент»), «Телефон», «Скидка», «Заметки» — названия
+              колонок могут быть в любом порядке. Если заголовков нет или файл совсем другой структуры — попробуем
+              найти имя и телефон по содержимому. Уже существующего клиента находим по телефону и обновляем,
+              остальных заводим новыми.
             </Text>
-            <FileButton onChange={handleFile} accept=".csv,text/csv">
+            <FileButton
+              onChange={handleFile}
+              accept=".csv,.txt,.xlsx,.xls,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            >
               {(props) => (
                 <Button {...props} variant="light" leftSection={<IconUpload size={16} />}>
                   Выбрать файл
@@ -158,13 +186,24 @@ export function ClientImportModal({
               </Text>
               <Badge variant="light">{parsed.dataRows.length} строк</Badge>
             </Group>
+            {!parsed.hasHeader && (
+              <Text size="xs" c="dimmed">
+                Заголовков колонок в файле не нашли — определили нужные колонки по содержимому данных.
+              </Text>
+            )}
             <Group gap="xs">
-              {(Object.keys(CLIENT_FIELD_LABELS) as ClientField[]).map((f) => (
-                <Badge key={f} variant={parsed.columns[f] !== undefined ? 'filled' : 'outline'} color={parsed.columns[f] !== undefined ? 'violet' : 'gray'}>
-                  {CLIENT_FIELD_LABELS[f]}
-                  {parsed.columns[f] !== undefined ? ` → «${parsed.headerRow[parsed.columns[f]!]}»` : ': не найдена'}
-                </Badge>
-              ))}
+              {(Object.keys(CLIENT_FIELD_LABELS) as ClientField[]).map((f) => {
+                const idx = parsed.columns[f];
+                const byContent = (f === 'name' || f === 'phone') && parsed.contentFields.includes(f);
+                let suffix = ': не найдена';
+                if (idx !== undefined) suffix = byContent ? ' → по содержимому' : ` → «${parsed.headerRow[idx]}»`;
+                return (
+                  <Badge key={f} variant={idx !== undefined ? 'filled' : 'outline'} color={idx !== undefined ? 'violet' : 'gray'}>
+                    {CLIENT_FIELD_LABELS[f]}
+                    {suffix}
+                  </Badge>
+                );
+              })}
             </Group>
             <Table striped withTableBorder>
               <Table.Thead>
