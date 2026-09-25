@@ -62,11 +62,13 @@ export interface CreateAccountInput {
   login: string;
   password: string;
   name: string;
-  last_name?: string;
-  phone?: string;
+  last_name?: string | null;
+  phone?: string | null;
   birth_date?: string | null;
   hire_date?: string | null;
-  address?: string;
+  address?: string | null;
+  personal_vehicle_make?: string | null;
+  personal_vehicle_plate?: string | null;
   role: AccountRole;
   permissions: AccountPermissions;
   default_vehicle_id?: string | null;
@@ -138,11 +140,13 @@ export interface UpdateAccountProfileInput {
   login: string;
   password?: string;
   name: string;
-  last_name?: string;
-  phone?: string;
+  last_name?: string | null;
+  phone?: string | null;
   birth_date?: string | null;
   hire_date?: string | null;
-  address?: string;
+  address?: string | null;
+  personal_vehicle_make?: string | null;
+  personal_vehicle_plate?: string | null;
 }
 
 // Логин, пароль и остальной профиль уже существующего сотрудника — тоже

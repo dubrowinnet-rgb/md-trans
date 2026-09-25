@@ -71,6 +71,8 @@ export function AccountModal({ account, onClose }: { account: Account | null; on
   const [birthDate, setBirthDate] = useState<string | null>(account?.birth_date ?? null);
   const [hireDate, setHireDate] = useState<string | null>(account?.hire_date ?? null);
   const [address, setAddress] = useState(account?.address ?? '');
+  const [personalVehicleMake, setPersonalVehicleMake] = useState(account?.personal_vehicle_make ?? '');
+  const [personalVehiclePlate, setPersonalVehiclePlate] = useState(account?.personal_vehicle_plate ?? '');
   const [role, setRole] = useState<AccountRole>(account?.role ?? 'dispatcher');
   // Роль задаётся один раз при заведении сотрудника и почти никогда не
   // меняется — у уже существующего аккаунта прячем переключатель за
@@ -111,13 +113,20 @@ export function AccountModal({ account, onClose }: { account: Account | null; on
     // Авто по умолчанию имеет смысл только у водителя — при другой роли
     // всегда отправляем null, чтобы очистить поле, если, скажем,
     // бывшего водителя переводят в диспетчеры.
+    // null, не undefined: update-account теперь частично обновляет профиль
+    // (не трогает поле, которого нет в теле запроса — нужно самому
+    // сотруднику в мобильном "Мой профиль"), а JSON.stringify выбрасывает
+    // ключи со значением undefined. Раз это поле есть в форме — очищенное
+    // значение должно реально очищать поле в базе, а не оставлять старое.
     const profileFields = {
       name: name.trim(),
-      last_name: lastName.trim() || undefined,
-      phone: phone.trim() ? formatPhone(phone.trim()) : undefined,
+      last_name: lastName.trim() || null,
+      phone: phone.trim() ? formatPhone(phone.trim()) : null,
       birth_date: birthDate,
       hire_date: hireDate,
-      address: address.trim() || undefined,
+      address: address.trim() || null,
+      personal_vehicle_make: personalVehicleMake.trim() || null,
+      personal_vehicle_plate: personalVehiclePlate.trim() || null,
     };
     try {
       if (account) {
@@ -211,6 +220,21 @@ export function AccountModal({ account, onClose }: { account: Account | null; on
             minRows={1}
             value={address}
             onChange={(e) => setAddress(e.currentTarget.value)}
+          />
+        </SimpleGrid>
+        <Text size="xs" c="dimmed">
+          Личный транспорт (необязательно) — если сотрудник иногда добирается на нём до заказа.
+        </Text>
+        <SimpleGrid cols={2}>
+          <TextInput
+            label="Марка"
+            value={personalVehicleMake}
+            onChange={(e) => setPersonalVehicleMake(e.currentTarget.value)}
+          />
+          <TextInput
+            label="Гос номер"
+            value={personalVehiclePlate}
+            onChange={(e) => setPersonalVehiclePlate(e.currentTarget.value.toUpperCase())}
           />
         </SimpleGrid>
 
