@@ -1,9 +1,10 @@
 import type { OrderWithDetails } from '@/api/orders';
 import { DEFAULT_ORDER_COLOR, PAST_ORDER_COLOR } from '@/lib/labels';
 
-// Цвет заказа как в Bumpix: цвет его (первой) услуги; закончившийся заказ — серый.
+// Цвет заказа как в Bumpix: цвет его (первой) услуги; прошедший по времени
+// или уже отмеченный выполненным заказ — серый (цветное — только предстоящее).
 export function orderColor(order: OrderWithDetails, now: Date) {
-  if (new Date(order.scheduled_end) <= now) return PAST_ORDER_COLOR;
+  if (order.status === 'completed' || new Date(order.scheduled_end) <= now) return PAST_ORDER_COLOR;
   return order.order_services[0]?.services?.color ?? DEFAULT_ORDER_COLOR;
 }
 

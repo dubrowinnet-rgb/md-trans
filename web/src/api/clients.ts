@@ -136,6 +136,56 @@ export function useUpdateClient() {
   });
 }
 
+export interface ClientImportRow {
+  name: string;
+  phone?: string | null;
+  discount_percent?: number;
+  notes?: string | null;
+}
+
+// Импорт из CSV (components/clients/ClientImportModal.tsx): новые клиенты
+// вставляем одним запросом, уже существующих (найденных по телефону)
+// обновляем по одному — своего ограничения uq на phone в базе нет, так что
+// insert ... on conflict тут не сделать.
+export function useImportClients() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      toInsert,
+      toUpdate,
+    }: {
+      toInsert: ClientImportRow[];
+      toUpdate: (ClientImportRow & { id: string })[];
+    }) => {
+      if (toInsert.length > 0) {
+        const { error } = await supabase.from('clients').insert(
+          toInsert.map((c) => ({
+            name: c.name,
+            phone: c.phone ?? null,
+            discount_percent: c.discount_percent ?? 0,
+            notes: c.notes ?? null,
+          }))
+        );
+        if (error) throw error;
+      }
+      for (const u of toUpdate) {
+        const { error } = await supabase
+          .from('clients')
+          .update({
+            name: u.name,
+            ...(u.discount_percent !== undefined ? { discount_percent: u.discount_percent } : {}),
+            ...(u.notes !== undefined ? { notes: u.notes } : {}),
+          })
+          .eq('id', u.id);
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['clients'] });
+    },
+  });
+}
+
 // Удалить можно только клиента без заказов: в базе заказ ссылается на
 // клиента без каскада, и удалять историю заказов вместе с клиентом мы не
 // хотим.

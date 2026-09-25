@@ -222,6 +222,19 @@ export function OrderFormModal({
     if (!pickup.trim() || !dropoff.trim()) return setError('Заполните адреса загрузки и выгрузки.');
     if (!timeValid) return setError('Окончание должно быть позже начала.');
 
+    // Страховка диспетчера: не даём сохранить заказ с исполнителем,
+    // который на выбранное время недоступен (выходной или уже занят
+    // другим заказом) — такой выбор всё равно ничего не даст, человек не
+    // сможет выйти на этот заказ.
+    const crewIds = [...(driverId ? [driverId] : []), ...(needsLoaders ? loaderIds : [])];
+    const unavailable = crewIds
+      .map((id) => ({ person: employees.find((e) => e.id === id), ...availabilityOf(id) }))
+      .filter((x): x is { person: Employee; tier: Availability['tier']; suffix: string } => Boolean(x.person) && x.tier !== 'available');
+    if (unavailable.length > 0) {
+      const names = unavailable.map((x) => `${x.person.name}${x.suffix}`).join('; ');
+      return setError(`Не могу сохранить: ${names} — не смогут выйти на этот заказ. Уберите их из бригады или измените дату/время.`);
+    }
+
     const stops: OrderStopInput[] = [
       { type: 'pickup', address: pickup.trim(), order_index: 0, is_primary: true },
       { type: 'dropoff', address: dropoff.trim(), order_index: 1, is_primary: true },
@@ -435,15 +448,22 @@ export function OrderFormModal({
                 {sortByAvailability(drivers, availability).map((d) => {
                   const { tier, suffix } = availabilityOf(d.id);
                   const selected = driverId === d.id;
+                  // Недоступного на это время водителя нельзя назначить (но
+                  // уже назначенного — можно снять); на сохранении такой
+                  // выбор всё равно блокируется ещё раз, см. handleSubmit.
+                  const disabled = tier !== 'available' && !selected;
                   return (
                     <UnstyledButton
                       key={d.id}
-                      onClick={() => selectDriver(selected ? null : d.id)}
+                      disabled={disabled}
+                      onClick={() => !disabled && selectDriver(selected ? null : d.id)}
                       px={8}
                       py={4}
                       style={{
                         borderRadius: 6,
                         background: selected ? 'var(--mantine-color-violet-1)' : undefined,
+                        opacity: disabled ? 0.5 : 1,
+                        cursor: disabled ? 'not-allowed' : 'pointer',
                       }}
                     >
                       <Group gap={8} wrap="nowrap">
@@ -491,9 +511,10 @@ export function OrderFormModal({
                       <Checkbox
                         key={p.id}
                         checked={checked}
-                        // Грузчик не может быть на двух заказах одновременно —
-                        // это запрещает и база; выходной — только подсказка.
-                        disabled={busyIds.has(p.id) && !checked}
+                        // Недоступного (выходной или уже занят другим
+                        // заказом) нельзя назначить, но уже отмеченного —
+                        // можно снять; на сохранении проверяется ещё раз.
+                        disabled={tier !== 'available' && !checked}
                         onChange={() =>
                           setLoaderIds((prev) => (checked ? prev.filter((x) => x !== p.id) : [...prev, p.id]))
                         }

@@ -15,7 +15,7 @@ import {
   TextInput,
   UnstyledButton,
 } from '@mantine/core';
-import { IconChevronDown, IconChevronUp, IconDatabaseExport, IconSearch, IconUserPlus } from '@tabler/icons-react';
+import { IconChevronDown, IconChevronUp, IconDatabaseExport, IconSearch, IconUpload, IconUserPlus } from '@tabler/icons-react';
 import Link from 'next/link';
 import { useClientsWithStats, type ClientWithStats } from '@/api/clients';
 import { useSession } from '@/providers/SessionProvider';
@@ -23,6 +23,7 @@ import { canViewClientPhone, canViewClientStats, canViewOrderAmount } from '@/li
 import { dayjs, formatMoney } from '@/lib/dates';
 import { PageHeader } from '@/components/common/PageHeader';
 import { ClientFormModal } from '@/components/clients/ClientFormModal';
+import { ClientImportModal } from '@/components/clients/ClientImportModal';
 import { useOrderUI } from '@/components/orders/OrderUIProvider';
 
 type SortKey = 'name' | 'ordersCount' | 'revenue' | 'lastOrderAt' | 'created_at' | 'discount_percent';
@@ -45,6 +46,7 @@ export default function ClientsPage() {
   const [sort, setSort] = useState<{ key: SortKey; desc: boolean }>({ key: 'name', desc: false });
   const [page, setPage] = useState(1);
   const [creating, setCreating] = useState(false);
+  const [importing, setImporting] = useState(false);
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -88,6 +90,9 @@ export default function ClientsPage() {
       <PageHeader title="Клиенты" subtitle={query.data ? `В базе ${query.data.length} клиентов` : undefined}>
         <Button variant="default" component={Link} href="/export/" leftSection={<IconDatabaseExport size={16} />}>
           Выгрузить
+        </Button>
+        <Button variant="default" leftSection={<IconUpload size={16} />} onClick={() => setImporting(true)}>
+          Импорт из CSV
         </Button>
         <Button leftSection={<IconUserPlus size={16} />} onClick={() => setCreating(true)}>
           Новый клиент
@@ -193,6 +198,7 @@ export default function ClientsPage() {
       {creating && (
         <ClientFormModal client={null} onClose={() => setCreating(false)} onSaved={(c) => ui.openClient(c.id)} />
       )}
+      {importing && <ClientImportModal clients={query.data ?? []} onClose={() => setImporting(false)} />}
     </Box>
   );
 }

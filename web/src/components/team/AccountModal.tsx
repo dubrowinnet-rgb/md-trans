@@ -71,6 +71,11 @@ export function AccountModal({ account, onClose }: { account: Account | null; on
   const [hireDate, setHireDate] = useState<string | null>(account?.hire_date ?? null);
   const [address, setAddress] = useState(account?.address ?? '');
   const [role, setRole] = useState<AccountRole>(account?.role ?? 'dispatcher');
+  // Роль задаётся один раз при заведении сотрудника и почти никогда не
+  // меняется — у уже существующего аккаунта прячем переключатель за
+  // кнопку «Изменить», чтобы не занимал место и не провоцировал случайный
+  // клик. У нового аккаунта роль ещё не выбрана — показываем сразу.
+  const [roleEditing, setRoleEditing] = useState(!account);
   const [permissions, setPermissions] = useState<AccountPermissions>(
     account
       ? {
@@ -208,12 +213,21 @@ export function AccountModal({ account, onClose }: { account: Account | null; on
           <Text size="sm" fw={500} mb={4}>
             Роль
           </Text>
-          <SegmentedControl
-            fullWidth
-            value={role}
-            onChange={changeRole}
-            data={ROLES.map((r) => ({ value: r, label: ACCOUNT_ROLE_LABELS[r] }))}
-          />
+          {roleEditing ? (
+            <SegmentedControl
+              fullWidth
+              value={role}
+              onChange={changeRole}
+              data={ROLES.map((r) => ({ value: r, label: ACCOUNT_ROLE_LABELS[r] }))}
+            />
+          ) : (
+            <Group justify="space-between">
+              <Text size="sm">{ACCOUNT_ROLE_LABELS[role]}</Text>
+              <Button variant="subtle" size="xs" onClick={() => setRoleEditing(true)}>
+                Изменить
+              </Button>
+            </Group>
+          )}
         </div>
         {role === 'driver' && (
           <Select

@@ -136,6 +136,10 @@ export function WeekGrid({
           </Box>
           {days.map((day, dayIndex) => {
             const isToday = dayjs(day).isSame(now, 'day');
+            // Прошедшие дни и (для сегодня) время до текущего момента —
+            // темнее и чёрно-белые, чтобы взгляд сразу шёл на предстоящее;
+            // цветное на сетке — только то, что ещё будет.
+            const isPastDay = dayjs(day).isBefore(now, 'day');
             return (
               <Box
                 key={dayIndex}
@@ -143,7 +147,7 @@ export function WeekGrid({
                 style={{
                   position: 'relative',
                   borderLeft: '1px solid var(--mantine-color-gray-2)',
-                  backgroundColor: isToday ? 'rgba(124, 58, 237, 0.03)' : undefined,
+                  backgroundColor: isToday ? 'rgba(124, 58, 237, 0.03)' : isPastDay ? 'rgba(0, 0, 0, 0.05)' : undefined,
                   backgroundImage: `repeating-linear-gradient(to bottom, var(--mantine-color-gray-2) 0, var(--mantine-color-gray-2) 1px, transparent 1px, transparent ${HOUR_HEIGHT / 2}px)`,
                   cursor: canManage ? 'copy' : 'default',
                 }}
@@ -175,6 +179,20 @@ export function WeekGrid({
                   onDropOrder(drag.order, dayjs(day).startOf('day').add(minute, 'minute').toDate());
                 }}
               >
+                {isToday && (
+                  <Box
+                    style={{
+                      position: 'absolute',
+                      left: 0,
+                      right: 0,
+                      top: 0,
+                      height: minutesOf(now) * MIN_PX,
+                      background: 'rgba(0, 0, 0, 0.05)',
+                      pointerEvents: 'none',
+                      zIndex: 0,
+                    }}
+                  />
+                )}
                 {dropHint?.day === dayIndex && (
                   <Box
                     style={{
@@ -202,6 +220,7 @@ export function WeekGrid({
                   const height = Math.max((endMin - minutesOf(start)) * MIN_PX, 22);
                   const cancelled = order.status === 'cancelled';
                   const pickup = order.order_stops.find((s) => s.is_primary && s.type === 'pickup')?.address;
+                  const dropoff = order.order_stops.find((s) => s.is_primary && s.type === 'dropoff')?.address;
                   const service = order.order_services.map((s) => s.services?.name).filter(Boolean).join(', ');
                   const confirmed = confirmedLabel(order);
                   const crew = crewNames(order);
@@ -254,7 +273,12 @@ export function WeekGrid({
                         {cancelled ? ' · отменён' : ''}
                       </div>
                       {service && <div>{service}</div>}
-                      {pickup && <div style={{ opacity: 0.9 }}>{pickup}</div>}
+                      {(pickup || dropoff) && (
+                        <div style={{ opacity: 0.9 }}>
+                          {pickup ?? '—'} → {dropoff ?? '—'}
+                        </div>
+                      )}
+                      {order.cargo_description && <div style={{ opacity: 0.85 }}>📦 {order.cargo_description}</div>}
                       {crew && <div style={{ opacity: 0.9 }}>👤 {crew}</div>}
                       {order.vehicles && <div style={{ opacity: 0.9 }}>🚚 {order.vehicles.plate}</div>}
                     </Box>
