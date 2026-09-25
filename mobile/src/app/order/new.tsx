@@ -27,6 +27,7 @@ import { FormSection } from '../../components/form/FormSection';
 import { DismissKeyboardView } from '../../components/form/DismissKeyboardView';
 import { useSession } from '../../providers/SessionProvider';
 import { canManageOrders, canViewClientPhone, canViewOrderAmount } from '../../lib/permissions';
+import { formatPhone } from '../../lib/phone';
 import {
   evaluateAvailability,
   sortByAvailability,
@@ -314,7 +315,7 @@ export default function NewOrderScreen() {
                 description={
                   selectedClient.discount_percent
                     ? `Скидка ${selectedClient.discount_percent}%`
-                    : (canViewContacts ? selectedClient.phone : null) ?? undefined
+                    : (canViewContacts ? formatPhone(selectedClient.phone) || null : null) ?? undefined
                 }
                 right={() => <Button onPress={() => setSelectedClient(null)}>Изменить</Button>}
               />
@@ -335,7 +336,7 @@ export default function NewOrderScreen() {
                   description={
                     client.discount_percent
                       ? `Скидка ${client.discount_percent}%`
-                      : (canViewContacts ? client.phone : null) ?? undefined
+                      : (canViewContacts ? formatPhone(client.phone) || null : null) ?? undefined
                   }
                   left={(props) => <List.Icon {...props} icon="account-outline" />}
                   onPress={() => setSelectedClient(client)}

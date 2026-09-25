@@ -31,6 +31,16 @@ function loginToEmail(login: string) {
   return `${login.toLowerCase()}@mdtrans.internal`;
 }
 
+// Единый формат телефона (Максим, 2026-09-25): +7(ХХХ)ХХХ-ХХ-ХХ везде —
+// та же логика, что в mobile/src/lib/phone.ts и web/src/lib/phone.ts.
+function formatPhone(phone: string | null): string | null {
+  if (!phone) return null;
+  const digits = phone.replace(/\D/g, '');
+  const core = digits.length === 11 && (digits[0] === '7' || digits[0] === '8') ? digits.slice(1) : digits;
+  if (core.length !== 10) return phone;
+  return `+7(${core.slice(0, 3)})${core.slice(3, 6)}-${core.slice(6, 8)}-${core.slice(8, 10)}`;
+}
+
 function corsHeaders(origin: string | null) {
   return {
     'Access-Control-Allow-Origin': origin ?? '*',
@@ -129,7 +139,7 @@ Deno.serve(async (req) => {
     .update({
       name,
       last_name: has('last_name') ? (body.last_name ? String(body.last_name).trim() : null) : target.last_name,
-      phone: has('phone') ? (body.phone ? String(body.phone).trim() : null) : target.phone,
+      phone: has('phone') ? formatPhone(body.phone ? String(body.phone).trim() : null) : target.phone,
       login,
       birth_date: has('birth_date') ? (body.birth_date ? String(body.birth_date) : null) : target.birth_date,
       hire_date: has('hire_date') ? (body.hire_date ? String(body.hire_date) : null) : target.hire_date,
