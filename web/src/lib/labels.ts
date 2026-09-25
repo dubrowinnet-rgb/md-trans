@@ -1,4 +1,5 @@
 import type { AccountRole, AccountStatus, CrewStatus, OrderStatus } from '@/types/database';
+import type { TicketStatus } from '@/api/supportTickets';
 
 // Те же подписи и цвета, что в мобильном приложении (mobile/src/theme.ts).
 export const ORDER_STATUSES: OrderStatus[] = ['new', 'confirmed', 'in_progress', 'completed', 'cancelled'];
@@ -46,3 +47,15 @@ export const ACCOUNT_STATUS_COLORS: Record<AccountStatus, string> = {
 
 export const PAST_ORDER_COLOR = '#6B6B6B';
 export const DEFAULT_ORDER_COLOR = '#8E24AA';
+
+export const TICKET_STATUS_LABELS: Record<TicketStatus, string> = {
+  open: 'Открыто',
+  in_progress: 'В работе',
+  resolved: 'Решено',
+};
+
+export const TICKET_STATUS_COLORS: Record<TicketStatus, string> = {
+  open: 'red',
+  in_progress: 'yellow',
+  resolved: 'green',
+};

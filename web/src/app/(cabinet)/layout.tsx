@@ -3,11 +3,13 @@
 import { useEffect, type ReactNode } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { AppShell, Avatar, Button, Center, Group, Loader, NavLink, Stack, Text, Title } from '@mantine/core';
+import { AppShell, Avatar, Button, Center, Divider, Group, Loader, NavLink, Stack, Text, Title } from '@mantine/core';
 import {
+  IconBuildingStore,
   IconCalendarWeek,
   IconChartBar,
   IconDatabaseExport,
+  IconHeadset,
   IconListDetails,
   IconLogout,
   IconAddressBook,
@@ -17,6 +19,7 @@ import {
 } from '@tabler/icons-react';
 import { supabase } from '@/lib/supabase';
 import { isOfficeRole, useSession } from '@/providers/SessionProvider';
+import { isServiceOwner } from '@/lib/ownerAccess';
 import { ACCOUNT_ROLE_LABELS } from '@/lib/labels';
 import { OrderUIProvider } from '@/components/orders/OrderUIProvider';
 
@@ -29,6 +32,7 @@ const NAV = [
   { href: '/export/', label: 'Выгрузка', icon: IconDatabaseExport, adminOnly: false },
   { href: '/team/', label: 'Команда', icon: IconUsersGroup, adminOnly: true },
   { href: '/stats/', label: 'Статистика', icon: IconChartBar, adminOnly: true },
+  { href: '/support/', label: 'Техподдержка', icon: IconHeadset, adminOnly: true },
 ];
 
 // Общая рамка кабинета: меню слева, страница справа. Пускаем только
@@ -72,6 +76,7 @@ export default function CabinetLayout({ children }: { children: ReactNode }) {
   }
 
   const isAdmin = employee?.role === 'admin';
+  const isOwner = isServiceOwner(employee);
 
   return (
     <AppShell navbar={{ width: 220, breakpoint: 0 }} padding={0}>
@@ -94,6 +99,20 @@ export default function CabinetLayout({ children }: { children: ReactNode }) {
               style={{ borderRadius: 8 }}
             />
           ))}
+          {isOwner && (
+            <>
+              <Divider my="xs" label="Владелец сервиса" labelPosition="left" />
+              <NavLink
+                component={Link}
+                href="/owner/"
+                label="Кабинет владельца"
+                leftSection={<IconBuildingStore size={18} stroke={1.6} />}
+                active={pathname?.startsWith('/owner')}
+                variant="light"
+                style={{ borderRadius: 8 }}
+              />
+            </>
+          )}
         </AppShell.Section>
         <AppShell.Section>
           <Group
