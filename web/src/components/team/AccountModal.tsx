@@ -33,13 +33,7 @@ import {
   type AccountPermissions,
 } from '@/api/accounts';
 import { useVehicles } from '@/api/vehicles';
-import {
-  useEmployeePayEstimate,
-  useUpdateEmployeeRates,
-  type AccountWithRates,
-  type EmployeeRates,
-  type RateMode,
-} from '@/api/payroll';
+import { useEmployeePayEstimate, useUpdateEmployeeRates, type EmployeeRates, type RateMode } from '@/api/payroll';
 import { ACCOUNT_ROLE_LABELS } from '@/lib/labels';
 import type { AccountRole } from '@/types/database';
 
@@ -71,7 +65,6 @@ const PERMISSION_LABELS: { key: keyof AccountPermissions; label: string; hint: s
 // пароль — необязательные поля: пусто значит «не менять», см.
 // useUpdateAccountProfile).
 export function AccountModal({ account, onClose }: { account: Account | null; onClose: () => void }) {
-  const accountRates = account as AccountWithRates | null;
   const [name, setName] = useState(account?.name ?? '');
   const [lastName, setLastName] = useState(account?.last_name ?? '');
   const [phone, setPhone] = useState(account?.phone ?? '');
@@ -82,10 +75,10 @@ export function AccountModal({ account, onClose }: { account: Account | null; on
   const [address, setAddress] = useState(account?.address ?? '');
   const [personalVehicleMake, setPersonalVehicleMake] = useState(account?.personal_vehicle_make ?? '');
   const [personalVehiclePlate, setPersonalVehiclePlate] = useState(account?.personal_vehicle_plate ?? '');
-  const [rateMode, setRateMode] = useState<RateMode>(accountRates?.rate_mode ?? 'combined');
-  const [hourlyRate, setHourlyRate] = useState<number | string>(accountRates?.hourly_rate ?? '');
-  const [drivingHourlyRate, setDrivingHourlyRate] = useState<number | string>(accountRates?.driving_hourly_rate ?? '');
-  const [loadingHourlyRate, setLoadingHourlyRate] = useState<number | string>(accountRates?.loading_hourly_rate ?? '');
+  const [rateMode, setRateMode] = useState<RateMode>(account?.rate_mode ?? 'combined');
+  const [hourlyRate, setHourlyRate] = useState<number | string>(account?.hourly_rate ?? '');
+  const [drivingHourlyRate, setDrivingHourlyRate] = useState<number | string>(account?.driving_hourly_rate ?? '');
+  const [loadingHourlyRate, setLoadingHourlyRate] = useState<number | string>(account?.loading_hourly_rate ?? '');
   const [role, setRole] = useState<AccountRole>(account?.role ?? 'dispatcher');
   // Роль задаётся один раз при заведении сотрудника и почти никогда не
   // меняется — у уже существующего аккаунта прячем переключатель за
@@ -115,10 +108,10 @@ export function AccountModal({ account, onClose }: { account: Account | null; on
   // посчитано). Виден только у уже существующего сотрудника: у нового
   // ставки ещё нечем считать, часов пока нет.
   const savedRates: EmployeeRates = {
-    rate_mode: accountRates?.rate_mode ?? 'combined',
-    hourly_rate: accountRates?.hourly_rate ?? null,
-    driving_hourly_rate: accountRates?.driving_hourly_rate ?? null,
-    loading_hourly_rate: accountRates?.loading_hourly_rate ?? null,
+    rate_mode: account?.rate_mode ?? 'combined',
+    hourly_rate: account?.hourly_rate ?? null,
+    driving_hourly_rate: account?.driving_hourly_rate ?? null,
+    loading_hourly_rate: account?.loading_hourly_rate ?? null,
   };
   const periodStart = dayjs().startOf('month').format('YYYY-MM-DD');
   const periodEnd = dayjs().startOf('month').add(1, 'month').format('YYYY-MM-DD');
@@ -167,17 +160,9 @@ export function AccountModal({ account, onClose }: { account: Account | null; on
       personal_vehicle_make: personalVehicleMake.trim() || null,
       personal_vehicle_plate: personalVehiclePlate.trim() || null,
     };
-    // Ставки — отдельный, изолированный запрос (см. useUpdateEmployeeRates):
-    // пока не пришла миграция с колонками ставок, его неудача не должна
-    // ронять сохранение роли/прав/машины той же кнопкой.
+    // Ставки — отдельный запрос (см. useUpdateEmployeeRates), той же кнопкой.
     const saveRates = async (id: string) => {
-      const result = await updateEmployeeRates.mutateAsync({ id, rates });
-      if (result.missingSchema) {
-        notifications.show({
-          message: 'Остальное сохранено. Ставки пока нельзя сохранить — ждём миграцию от мобильного треда',
-          color: 'yellow',
-        });
-      }
+      await updateEmployeeRates.mutateAsync({ id, rates });
     };
     try {
       if (account) {
@@ -191,9 +176,7 @@ export function AccountModal({ account, onClose }: { account: Account | null; on
         // Помимо самих водителей/грузчиков, шлём и когда у аккаунта раньше
         // уже была сохранена ставка — иначе при смене роли в диспетчеры
         // старая ставка так и останется висеть в базе.
-        const hadRates = Boolean(
-          accountRates?.hourly_rate || accountRates?.driving_hourly_rate || accountRates?.loading_hourly_rate
-        );
+        const hadRates = Boolean(account?.hourly_rate || account?.driving_hourly_rate || account?.loading_hourly_rate);
         if (isCrew || hadRates) await saveRates(account.id);
       } else {
         const created = await createAccount.mutateAsync({
@@ -358,7 +341,7 @@ export function AccountModal({ account, onClose }: { account: Account | null; on
             ) : (
               <NumberInput label="За час, ₽" min={0} value={hourlyRate} onChange={setHourlyRate} maw={220} />
             )}
-            {account && !payEstimate.data?.missingSchema && (
+            {account && (
               <Text size="xs" c="dimmed">
                 За {dayjs().format('MMMM')}: {payEstimate.isLoading ? '…' : `${payEstimate.data?.estimate.hours ?? 0} ч × ставка ≈ ${payEstimate.data?.estimate.pay ?? 0} ₽`}
               </Text>

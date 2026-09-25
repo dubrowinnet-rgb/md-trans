@@ -2,29 +2,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import type { AccountStatus, Database } from '@/types/database';
 
-// companies приземлилась миграцией 0013 (мобильный тред) — типизированный
-// клиент теперь можно использовать напрямую, как для любой другой таблицы.
-// isMissingTableError остаётся экспортированной: её всё ещё использует
-// api/driverReports.ts для ЕЩЁ не приземлившейся схемы (см. память
-// payroll-and-driver-reports-feature) — тот же приём, другая таблица.
-export function isMissingTableError(err: unknown): boolean {
-  if (!err || typeof err !== 'object') return false;
-  const code = 'code' in err ? String((err as { code?: unknown }).code) : '';
-  const message =
-    'message' in err && typeof (err as { message?: unknown }).message === 'string'
-      ? (err as { message: string }).message
-      : '';
-  // PGRST200 — отдельный код: его отдаёт запрос со встроенной связью
-  // (напр. `select=*,companies(name)`), когда искомой таблицы ещё нет —
-  // PostgREST в этом случае жалуется на отсутствие связи, а не таблицы.
-  return (
-    code === '42P01' ||
-    code === 'PGRST205' ||
-    code === 'PGRST200' ||
-    /does not exist|Could not find the table|Could not find a relationship/i.test(message)
-  );
-}
-
 // Компания = «подключённый администратор» (клиент сервиса) в терминах
 // Максима — тенант, у которого свои сотрудники/клиенты/заказы. Статус
 // подписки — та же форма, что и AccountStatus, которым уже пользуется

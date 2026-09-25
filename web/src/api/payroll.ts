@@ -1,14 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
-import type { Account } from './accounts';
+import type { RateMode } from '@/types/database';
 
-// Ставки за час — предложенная схема (память payroll-and-driver-reports-feature),
-// миграция мобильного треда ещё не пришла. Как companies/support_tickets —
-// нетипизированный клиент, пока полей нет в types/database.ts.
-const db = supabase as unknown as SupabaseClient;
-
-export type RateMode = 'combined' | 'split';
+export type { RateMode };
 
 export interface EmployeeRates {
   hourly_rate: number | null;
@@ -16,10 +10,6 @@ export interface EmployeeRates {
   loading_hourly_rate: number | null;
   rate_mode: RateMode;
 }
-
-// account, пришедший через select('*'), реально содержит эти поля, как
-// только миграция применена — просто types/database.ts про них не знает.
-export type AccountWithRates = Account & Partial<EmployeeRates>;
 
 interface PayPeriodRow {
   order_id: string;
@@ -48,20 +38,15 @@ export function useEmployeePayEstimate(employeeId: string | undefined, rates: Em
   return useQuery({
     queryKey: ['payroll-estimate', employeeId, periodStart, periodEnd],
     enabled: Boolean(employeeId),
-    queryFn: async (): Promise<{ estimate: EmployeePayEstimate; missingSchema: boolean }> => {
-      const { data, error } = await db
+    queryFn: async (): Promise<{ estimate: EmployeePayEstimate }> => {
+      const { data, error } = await supabase
         .from('order_crew')
         .select('order_id, employee_id, role, orders!inner(scheduled_start, scheduled_end, status)')
         .eq('employee_id', employeeId as string)
         .eq('orders.status', 'completed')
         .gte('orders.scheduled_start', periodStart)
         .lt('orders.scheduled_start', periodEnd);
-      if (error) {
-        if (/does not exist|Could not find/i.test(error.message)) {
-          return { estimate: { hours: 0, pay: 0 }, missingSchema: true };
-        }
-        throw error;
-      }
+      if (error) throw error;
       const rows = (data as unknown as (PayPeriodRow & { orders: { scheduled_start: string; scheduled_end: string } })[]) ?? [];
       const orderRoles = new Map<string, { durationHours: number; roles: Set<'driver' | 'loader'> }>();
       for (const row of rows) {
@@ -86,28 +71,21 @@ export function useEmployeePayEstimate(employeeId: string | undefined, rates: Em
           : (roles.has('driver') ? rates.driving_hourly_rate : rates.loading_hourly_rate) ?? 0;
         pay += durationHours * rate;
       }
-      return { estimate: { hours: Math.round(hours * 100) / 100, pay: Math.round(pay) }, missingSchema: false };
+      return { estimate: { hours: Math.round(hours * 100) / 100, pay: Math.round(pay) } };
     },
   });
 }
 
-// Намеренно ОТДЕЛЬНАЯ мутация от useUpdateAccount (api/accounts.ts) — пока
-// не пришла миграция с колонками ставок, ошибка «column does not exist»
-// не должна ломать сохранение роли/прав/машины, идущее той же кнопкой
-// «Сохранить». Вызывающая сторона (AccountModal) ловит missingSchema и
-// показывает мягкое уведомление, не роняя всё сохранение.
+// Намеренно ОТДЕЛЬНАЯ мутация от useUpdateAccount (api/accounts.ts) — тот
+// же клик «Сохранить» шлёт профиль/роль/права одним запросом и ставки
+// другим, чтобы это разделение UI (см. AccountModal) не завязывалось на
+// внутренний состав полей useUpdateAccount.
 export function useUpdateEmployeeRates() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, rates }: { id: string; rates: EmployeeRates }): Promise<{ missingSchema: boolean }> => {
-      const { error } = await db.from('employees').update(rates).eq('id', id);
-      if (error) {
-        if (/does not exist|Could not find/i.test(error.message)) {
-          return { missingSchema: true };
-        }
-        throw error;
-      }
-      return { missingSchema: false };
+    mutationFn: async ({ id, rates }: { id: string; rates: EmployeeRates }) => {
+      const { error } = await supabase.from('employees').update(rates).eq('id', id);
+      if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['accounts'] });

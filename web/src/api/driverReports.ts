@@ -1,16 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
-import { isMissingTableError } from './companies';
+import type { DriverReportStatus, FuelPaymentMethod } from '@/types/database';
 
-// driver_reports/driver_report_orders/driver_report_expenses ещё не в
-// types/database.ts — предложенная схема, миграция мобильного треда ещё не
-// пришла (память payroll-and-driver-reports-feature). Тот же нетипизированный
-// клиент и isMissingTableError, что и в api/companies.ts.
-const db = supabase as unknown as SupabaseClient;
-
-export type DriverReportStatus = 'draft' | 'submitted' | 'confirmed';
-export type FuelPaymentMethod = 'cash' | 'cashless';
+export type { DriverReportStatus, FuelPaymentMethod };
 
 interface DriverReportOrderRow {
   id: string;
@@ -77,15 +69,12 @@ function withTotals(row: DriverReportRow): DriverReport {
 export function useDriverReports(period: { from: string; to: string } | null) {
   return useQuery({
     queryKey: ['driver-reports', period?.from, period?.to],
-    queryFn: async (): Promise<{ reports: DriverReport[]; missingTable: boolean }> => {
-      let query = db.from('driver_reports').select(REPORT_SELECT).order('report_date', { ascending: false });
+    queryFn: async (): Promise<{ reports: DriverReport[] }> => {
+      let query = supabase.from('driver_reports').select(REPORT_SELECT).order('report_date', { ascending: false });
       if (period) query = query.gte('report_date', period.from).lt('report_date', period.to);
       const { data, error } = await query;
-      if (error) {
-        if (isMissingTableError(error)) return { reports: [], missingTable: true };
-        throw error;
-      }
-      return { reports: (data as unknown as DriverReportRow[]).map(withTotals), missingTable: false };
+      if (error) throw error;
+      return { reports: (data as unknown as DriverReportRow[]).map(withTotals) };
     },
   });
 }
@@ -97,7 +86,7 @@ export function useConfirmDriverReport() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, confirmedBy }: { id: string; confirmedBy: string }) => {
-      const { error } = await db
+      const { error } = await supabase
         .from('driver_reports')
         .update({ status: 'confirmed', confirmed_by: confirmedBy, confirmed_at: new Date().toISOString() })
         .eq('id', id);

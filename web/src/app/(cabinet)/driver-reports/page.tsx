@@ -9,7 +9,6 @@ import { useSession } from '@/providers/SessionProvider';
 import { DRIVER_REPORT_STATUS_COLORS, DRIVER_REPORT_STATUS_LABELS } from '@/lib/labels';
 import { dayjs, formatDate, formatMoney } from '@/lib/dates';
 import { PageHeader } from '@/components/common/PageHeader';
-import { ComingSoon } from '@/components/common/ComingSoon';
 import { DriverReportDetailModal } from '@/components/driverReports/DriverReportDetailModal';
 
 type Period = 'week' | 'month' | 'year' | 'all' | 'custom';
@@ -60,8 +59,6 @@ function buildMonthlyRollup(reports: DriverReport[], namesById: Map<string, stri
 // Отчёты водителей (касса, расходы, топливо, подтверждение) — админская
 // сторона запроса Максима от 2026-09-25. Мобильный тред владеет схемой,
 // фото одометра и напоминанием 21:00; здесь только чтение/подтверждение.
-// Схема (driver_reports и связанные) ещё не пришла — до тех пор страница
-// показывает ComingSoon, см. api/driverReports.ts.
 export default function DriverReportsPage() {
   const { employee } = useSession();
   const [period, setPeriod] = useState<Period>('month');
@@ -98,7 +95,6 @@ export default function DriverReportsPage() {
   }
 
   const reports = reportsQuery.data?.reports ?? [];
-  const missing = reportsQuery.data?.missingTable ?? false;
   const namesById = new Map((accountsQuery.data ?? []).map((a) => [a.id, a.name]));
   const openReport = reports.find((r) => r.id === openReportId) ?? null;
   const monthlyRows = buildMonthlyRollup(reports, namesById);
@@ -129,120 +125,114 @@ export default function DriverReportsPage() {
         )}
       </PageHeader>
 
-      {missing ? (
-        <ComingSoon text="Отчёты появятся здесь, как только водители начнут их заполнять в мобильном приложении." />
-      ) : (
-        <>
-          {reportsQuery.isError && <Alert color="red">Не удалось загрузить отчёты</Alert>}
-          {reportsQuery.isLoading && <Loader />}
-          <Tabs defaultValue="reports">
-            <Tabs.List mb="md">
-              <Tabs.Tab value="reports">
-                Отчёты
-                {reports.some((r) => r.status === 'submitted') && (
-                  <Badge ml={6} size="xs" color="yellow" circle>
-                    {reports.filter((r) => r.status === 'submitted').length}
-                  </Badge>
+      {reportsQuery.isError && <Alert color="red">Не удалось загрузить отчёты</Alert>}
+      {reportsQuery.isLoading && <Loader />}
+      <Tabs defaultValue="reports">
+        <Tabs.List mb="md">
+          <Tabs.Tab value="reports">
+            Отчёты
+            {reports.some((r) => r.status === 'submitted') && (
+              <Badge ml={6} size="xs" color="yellow" circle>
+                {reports.filter((r) => r.status === 'submitted').length}
+              </Badge>
+            )}
+          </Tabs.Tab>
+          <Tabs.Tab value="monthly">Помесячно</Tabs.Tab>
+        </Tabs.List>
+
+        <Tabs.Panel value="reports">
+          <Paper withBorder>
+            <Table highlightOnHover striped>
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>Дата</Table.Th>
+                  <Table.Th>Сотрудник</Table.Th>
+                  <Table.Th>Статус</Table.Th>
+                  <Table.Th ta="right">Должен сдать</Table.Th>
+                  <Table.Th ta="right">Сдал</Table.Th>
+                  <Table.Th ta="right">Расхождение</Table.Th>
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {reports.map((r) => (
+                  <Table.Tr key={r.id} style={{ cursor: 'pointer' }} onClick={() => setOpenReportId(r.id)}>
+                    <Table.Td>{formatDate(r.report_date)}</Table.Td>
+                    <Table.Td>{namesById.get(r.employee_id) ?? '—'}</Table.Td>
+                    <Table.Td>
+                      <Badge color={DRIVER_REPORT_STATUS_COLORS[r.status]}>{DRIVER_REPORT_STATUS_LABELS[r.status]}</Badge>
+                    </Table.Td>
+                    <Table.Td ta="right">{formatMoney(r.expectedHandIn)}</Table.Td>
+                    <Table.Td ta="right">{formatMoney(r.cash_handed_in)}</Table.Td>
+                    <Table.Td ta="right" c={r.discrepancy === 0 ? undefined : 'red'}>
+                      {r.discrepancy > 0 ? '+' : ''}
+                      {formatMoney(r.discrepancy)}
+                    </Table.Td>
+                  </Table.Tr>
+                ))}
+                {reports.length === 0 && !reportsQuery.isLoading && (
+                  <Table.Tr>
+                    <Table.Td colSpan={6}>
+                      <Text c="dimmed" ta="center" py="lg">
+                        За этот период отчётов нет
+                      </Text>
+                    </Table.Td>
+                  </Table.Tr>
                 )}
-              </Tabs.Tab>
-              <Tabs.Tab value="monthly">Помесячно</Tabs.Tab>
-            </Tabs.List>
+              </Table.Tbody>
+            </Table>
+          </Paper>
+        </Tabs.Panel>
 
-            <Tabs.Panel value="reports">
-              <Paper withBorder>
-                <Table highlightOnHover striped>
-                  <Table.Thead>
-                    <Table.Tr>
-                      <Table.Th>Дата</Table.Th>
-                      <Table.Th>Сотрудник</Table.Th>
-                      <Table.Th>Статус</Table.Th>
-                      <Table.Th ta="right">Должен сдать</Table.Th>
-                      <Table.Th ta="right">Сдал</Table.Th>
-                      <Table.Th ta="right">Расхождение</Table.Th>
-                    </Table.Tr>
-                  </Table.Thead>
-                  <Table.Tbody>
-                    {reports.map((r) => (
-                      <Table.Tr key={r.id} style={{ cursor: 'pointer' }} onClick={() => setOpenReportId(r.id)}>
-                        <Table.Td>{formatDate(r.report_date)}</Table.Td>
-                        <Table.Td>{namesById.get(r.employee_id) ?? '—'}</Table.Td>
-                        <Table.Td>
-                          <Badge color={DRIVER_REPORT_STATUS_COLORS[r.status]}>{DRIVER_REPORT_STATUS_LABELS[r.status]}</Badge>
-                        </Table.Td>
-                        <Table.Td ta="right">{formatMoney(r.expectedHandIn)}</Table.Td>
-                        <Table.Td ta="right">{formatMoney(r.cash_handed_in)}</Table.Td>
-                        <Table.Td ta="right" c={r.discrepancy === 0 ? undefined : 'red'}>
-                          {r.discrepancy > 0 ? '+' : ''}
-                          {formatMoney(r.discrepancy)}
-                        </Table.Td>
-                      </Table.Tr>
-                    ))}
-                    {reports.length === 0 && !reportsQuery.isLoading && (
-                      <Table.Tr>
-                        <Table.Td colSpan={6}>
-                          <Text c="dimmed" ta="center" py="lg">
-                            За этот период отчётов нет
-                          </Text>
-                        </Table.Td>
-                      </Table.Tr>
-                    )}
-                  </Table.Tbody>
-                </Table>
-              </Paper>
-            </Tabs.Panel>
-
-            <Tabs.Panel value="monthly">
-              <Paper withBorder>
-                <Table highlightOnHover striped>
-                  <Table.Thead>
-                    <Table.Tr>
-                      <Table.Th>Месяц</Table.Th>
-                      <Table.Th>Сотрудник</Table.Th>
-                      <Table.Th ta="right">Отчётов</Table.Th>
-                      <Table.Th ta="right">Собрано нал.</Table.Th>
-                      <Table.Th ta="right">Должен сдать</Table.Th>
-                      <Table.Th ta="right">Сдал</Table.Th>
-                      <Table.Th ta="right">Расхождение</Table.Th>
-                    </Table.Tr>
-                  </Table.Thead>
-                  <Table.Tbody>
-                    {monthlyRows.map((row) => (
-                      <Table.Tr key={row.key}>
-                        <Table.Td style={{ textTransform: 'capitalize' }}>{row.month}</Table.Td>
-                        <Table.Td>{row.employeeName}</Table.Td>
-                        <Table.Td ta="right">
-                          {row.reportsCount}
-                          {row.unconfirmedCount > 0 && (
-                            <Text span size="xs" c="yellow.8" ml={4}>
-                              ({row.unconfirmedCount} не подтв.)
-                            </Text>
-                          )}
-                        </Table.Td>
-                        <Table.Td ta="right">{formatMoney(row.cashCollected)}</Table.Td>
-                        <Table.Td ta="right">{formatMoney(row.expectedHandIn)}</Table.Td>
-                        <Table.Td ta="right">{formatMoney(row.handedIn)}</Table.Td>
-                        <Table.Td ta="right" c={row.discrepancy === 0 ? undefined : 'red'}>
-                          {row.discrepancy > 0 ? '+' : ''}
-                          {formatMoney(row.discrepancy)}
-                        </Table.Td>
-                      </Table.Tr>
-                    ))}
-                    {monthlyRows.length === 0 && !reportsQuery.isLoading && (
-                      <Table.Tr>
-                        <Table.Td colSpan={7}>
-                          <Text c="dimmed" ta="center" py="lg">
-                            За этот период данных нет
-                          </Text>
-                        </Table.Td>
-                      </Table.Tr>
-                    )}
-                  </Table.Tbody>
-                </Table>
-              </Paper>
-            </Tabs.Panel>
-          </Tabs>
-        </>
-      )}
+        <Tabs.Panel value="monthly">
+          <Paper withBorder>
+            <Table highlightOnHover striped>
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>Месяц</Table.Th>
+                  <Table.Th>Сотрудник</Table.Th>
+                  <Table.Th ta="right">Отчётов</Table.Th>
+                  <Table.Th ta="right">Собрано нал.</Table.Th>
+                  <Table.Th ta="right">Должен сдать</Table.Th>
+                  <Table.Th ta="right">Сдал</Table.Th>
+                  <Table.Th ta="right">Расхождение</Table.Th>
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {monthlyRows.map((row) => (
+                  <Table.Tr key={row.key}>
+                    <Table.Td style={{ textTransform: 'capitalize' }}>{row.month}</Table.Td>
+                    <Table.Td>{row.employeeName}</Table.Td>
+                    <Table.Td ta="right">
+                      {row.reportsCount}
+                      {row.unconfirmedCount > 0 && (
+                        <Text span size="xs" c="yellow.8" ml={4}>
+                          ({row.unconfirmedCount} не подтв.)
+                        </Text>
+                      )}
+                    </Table.Td>
+                    <Table.Td ta="right">{formatMoney(row.cashCollected)}</Table.Td>
+                    <Table.Td ta="right">{formatMoney(row.expectedHandIn)}</Table.Td>
+                    <Table.Td ta="right">{formatMoney(row.handedIn)}</Table.Td>
+                    <Table.Td ta="right" c={row.discrepancy === 0 ? undefined : 'red'}>
+                      {row.discrepancy > 0 ? '+' : ''}
+                      {formatMoney(row.discrepancy)}
+                    </Table.Td>
+                  </Table.Tr>
+                ))}
+                {monthlyRows.length === 0 && !reportsQuery.isLoading && (
+                  <Table.Tr>
+                    <Table.Td colSpan={7}>
+                      <Text c="dimmed" ta="center" py="lg">
+                        За этот период данных нет
+                      </Text>
+                    </Table.Td>
+                  </Table.Tr>
+                )}
+              </Table.Tbody>
+            </Table>
+          </Paper>
+        </Tabs.Panel>
+      </Tabs>
 
       {openReport && employee && (
         <DriverReportDetailModal
