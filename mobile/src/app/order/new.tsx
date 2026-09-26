@@ -14,6 +14,7 @@ import {
   TextInput,
 } from 'react-native-paper';
 import { useEmployees } from '../../api/employees';
+import { useRecentAddresses } from '../../api/addresses';
 import { useClients, type Client } from '../../api/clients';
 import { ClientDialog } from '../../components/clients/ClientDialog';
 import { useNewClientFromContacts } from '../../hooks/useNewClientFromContacts';
@@ -24,9 +25,10 @@ import { toDateKey, useScheduleDaysOn, type ScheduleDay } from '../../api/schedu
 import { ServicePicker, formatServiceMeta } from '../../components/form/ServicePicker';
 import { DateTimeField } from '../../components/form/DateTimeField';
 import { FormSection } from '../../components/form/FormSection';
+import { AddressField } from '../../components/form/AddressField';
 import { DismissKeyboardView } from '../../components/form/DismissKeyboardView';
 import { useSession } from '../../providers/SessionProvider';
-import { canManageOrders, canViewClientPhone, canViewOrderAmount } from '../../lib/permissions';
+import { canCreateOrders, canViewClientPhone, canViewOrderAmount } from '../../lib/permissions';
 import { formatPhone } from '../../lib/phone';
 import {
   evaluateAvailability,
@@ -35,6 +37,8 @@ import {
   type AvailabilityTier,
 } from '../../lib/crewAvailability';
 import { serviceNeedsLoaders } from '../../lib/services';
+import { buildNewOrderSmsText, openSmsComposer } from '../../lib/smsCompose';
+import { useSmsTemplates } from '../../api/smsTemplates';
 
 interface ExtraStop {
   key: string;
@@ -195,7 +199,7 @@ export default function NewOrderScreen() {
   }, [duplicateFrom, sourceOrderQuery.data]);
 
   const { employee } = useSession();
-  const canManage = canManageOrders(employee);
+  const canManage = canCreateOrders(employee);
   const canViewContacts = canViewClientPhone(employee);
   const showAmount = canViewOrderAmount(employee);
 
@@ -208,6 +212,9 @@ export default function NewOrderScreen() {
     employees.map((e) => [e.id, evaluateAvailability(e, busyIds, scheduleOn, scheduledStart, scheduledEnd)])
   );
   const createOrder = useCreateOrder();
+  const recentAddressesQuery = useRecentAddresses();
+  const recentAddresses = recentAddressesQuery.data ?? [];
+  const smsTemplatesQuery = useSmsTemplates();
 
   // Как в Bumpix: выбранные услуги задают длительность и подставляют сумму.
   const applyServices = (ids: string[]) => {
@@ -262,19 +269,36 @@ export default function NewOrderScreen() {
       ...(needsLoaders ? loaderIds.map((id) => ({ employee_id: id, role: 'loader' as const })) : []),
     ];
 
+    const actualPrice = priceText.trim() ? Number(priceText.trim().replace(',', '.')) : null;
+
     try {
       await createOrder.mutateAsync({
         client_id: selectedClient.id,
         cargo_description: cargoDescription,
         scheduled_start: scheduledStart,
         scheduled_end: scheduledEnd,
-        actual_price: priceText.trim() ? Number(priceText.trim().replace(',', '.')) : null,
+        actual_price: actualPrice,
         comment,
         stops,
         crew,
         services: serviceIds.map((id) => ({ service_id: id, qty: 1 })),
         vehicle_id: vehicleId,
       });
+
+      // Смс клиенту — открываем системный экран отправки, диспетчер сам
+      // жмёт «Отправить» в своём же смс-приложении (доработка 2026-09-26,
+      // взамен автоматической отправки через sms.ru).
+      const template = smsTemplatesQuery.data?.find((t) => t.key === 'new_order');
+      if (selectedClient.phone && template) {
+        const text = buildNewOrderSmsText(template.body, {
+          clientName: selectedClient.name,
+          scheduledStart,
+          price: actualPrice,
+          pickupAddress: pickupAddress.trim(),
+        });
+        await openSmsComposer(selectedClient.phone, text);
+      }
+
       router.back();
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Не удалось создать заказ');
@@ -383,21 +407,19 @@ export default function NewOrderScreen() {
         </FormSection>
 
         <FormSection title="Точки маршрута">
-          <TextInput
-            mode="outlined"
+          <AddressField
             label="Адрес загрузки"
-            accessibilityLabel="Адрес загрузки"
-            left={<TextInput.Icon icon="package-up" />}
+            icon="package-up"
             value={pickupAddress}
             onChangeText={setPickupAddress}
+            recentAddresses={recentAddresses}
           />
-          <TextInput
-            mode="outlined"
+          <AddressField
             label="Адрес выгрузки"
-            accessibilityLabel="Адрес выгрузки"
-            left={<TextInput.Icon icon="package-down" />}
+            icon="package-down"
             value={dropoffAddress}
             onChangeText={setDropoffAddress}
+            recentAddresses={recentAddresses}
           />
           {extraStops.map((stop) => (
             <View key={stop.key} style={styles.row}>

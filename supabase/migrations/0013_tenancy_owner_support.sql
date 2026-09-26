@@ -52,7 +52,7 @@ alter table employees add constraint employees_role_check
   check (role in ('owner', 'admin', 'dispatcher', 'driver', 'loader'));
 
 alter table employees add column if not exists company_id uuid references companies (id);
-update employees set company_id = '00000000-0000-0000-0000-000000000001' where company_id is null;
+update employees set company_id = '00000000-0000-0000-0000-000000000001' where company_id is null and role <> 'owner';
 alter table employees drop constraint if exists employees_company_id_by_role;
 alter table employees add constraint employees_company_id_by_role check (
   (role = 'owner' and company_id is null) or (role <> 'owner' and company_id is not null)

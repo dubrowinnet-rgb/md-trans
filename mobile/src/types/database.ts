@@ -48,6 +48,7 @@ export interface Database {
           can_view_client_stats: boolean;
           can_view_contacts_and_amounts: boolean;
           can_manage_own_schedule: boolean;
+          can_edit_order_schedule_and_price: boolean;
           default_vehicle_id: string | null;
           schedule_mode: ScheduleMode;
           birth_date: string | null;
@@ -80,6 +81,7 @@ export interface Database {
           can_view_client_stats?: boolean;
           can_view_contacts_and_amounts?: boolean;
           can_manage_own_schedule?: boolean;
+          can_edit_order_schedule_and_price?: boolean;
           default_vehicle_id?: string | null;
           schedule_mode?: ScheduleMode;
           birth_date?: string | null;
@@ -452,6 +454,10 @@ export interface Database {
       delete_order: {
         Args: { p_order_id: string };
         Returns: undefined;
+      };
+      recent_addresses: {
+        Args: { p_limit?: number };
+        Returns: { address: string; uses: number }[];
       };
     };
     Enums: Record<string, never>;

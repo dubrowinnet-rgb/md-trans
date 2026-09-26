@@ -10,6 +10,7 @@ export interface AccountPermissions {
   can_view_client_stats: boolean;
   can_view_contacts_and_amounts: boolean;
   can_manage_own_schedule: boolean;
+  can_edit_order_schedule_and_price: boolean;
 }
 
 // Все аккаунты (админы, диспетчеры, водители, грузчики) — для экрана
@@ -30,7 +31,6 @@ export function useAllAccounts() {
 }
 
 export interface CreateAccountInput {
-  login: string;
   password: string;
   name: string;
   last_name?: string;
@@ -108,7 +108,6 @@ export function useUpdateAccount() {
 
 export interface UpdateAccountProfileInput {
   id: string;
-  login: string;
   password?: string;
   name: string;
   last_name?: string;
@@ -151,13 +150,12 @@ export function useUpdateAccountProfile() {
 
 export interface UpdateOwnProfileInput {
   id: string;
-  login?: string;
   phone?: string;
   password?: string;
 }
 
 // «Мой профиль» в Настройках (доработки 1, п.2) — сотрудник правит СВОЙ
-// логин/телефон/пароль через ту же Edge Function, что и админ (теперь
+// телефон/пароль через ту же Edge Function, что и админ (теперь
 // она разрешает id === себя, см. update-account/index.ts). Поля, которых
 // нет в input, функция не тронет — имя/фамилию/адрес и т.д. можно не
 // передавать.

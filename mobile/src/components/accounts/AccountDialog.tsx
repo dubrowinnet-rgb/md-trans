@@ -38,9 +38,12 @@ const ROLE_OPTIONS: { value: AccountRole; label: string }[] = [
 // Права по умолчанию при создании нового аккаунта — по роли (раздел
 // «права и доступы»): администратору и диспетчеру полный доступ,
 // водителю — видимость контактов и сумм, но без полного управления
-// заказами (у него своё, более узкое право — редактировать время и
-// сумму, оно не выключается галочкой, см. lib/permissions.ts), грузчику —
-// только просмотр. Админ может донастроить это на конкретном аккаунте.
+// заказами (у него есть более узкое право — редактировать время и сумму
+// СВОЕГО заказа, отдельная галочка can_edit_order_schedule_and_price,
+// выключена по умолчанию, см. lib/permissions.ts), грузчику — только
+// просмотр. Создать новый заказ может только админ/диспетчер — это не
+// галочка, а фиксированное правило (доработки 3, п.5). Админ может
+// донастроить остальное на конкретном аккаунте.
 // 'owner' в ROLE_OPTIONS нет и через эту карточку не заводится (см.
 // supabase/functions/create-account, «Стать владельцем сервиса» в
 // supabase/README.md) — запись ниже нужна только для полноты Record'а по
@@ -52,30 +55,35 @@ const ROLE_DEFAULT_PERMISSIONS: Record<AccountRole, AccountPermissions> = {
     can_view_client_stats: false,
     can_view_contacts_and_amounts: false,
     can_manage_own_schedule: false,
+    can_edit_order_schedule_and_price: false,
   },
   admin: {
     can_manage_orders: true,
     can_view_client_stats: true,
     can_view_contacts_and_amounts: true,
     can_manage_own_schedule: true,
+    can_edit_order_schedule_and_price: false,
   },
   dispatcher: {
     can_manage_orders: true,
     can_view_client_stats: true,
     can_view_contacts_and_amounts: true,
     can_manage_own_schedule: false,
+    can_edit_order_schedule_and_price: false,
   },
   driver: {
     can_manage_orders: false,
     can_view_client_stats: false,
     can_view_contacts_and_amounts: true,
     can_manage_own_schedule: false,
+    can_edit_order_schedule_and_price: false,
   },
   loader: {
     can_manage_orders: false,
     can_view_client_stats: false,
     can_view_contacts_and_amounts: false,
     can_manage_own_schedule: false,
+    can_edit_order_schedule_and_price: false,
   },
 };
 
@@ -135,7 +143,6 @@ export function AccountDialog({ account, onClose }: { account: Account | null; o
 
   const [name, setName] = useState(account?.name ?? '');
   const [lastName, setLastName] = useState(account?.last_name ?? '');
-  const [login, setLogin] = useState(account?.login ?? '');
   const [phone, setPhone] = useState(account?.phone ?? '');
   const [password, setPassword] = useState('');
   const [birthDate, setBirthDate] = useState<Date | null>(parseDate(account?.birth_date ?? null));
@@ -156,6 +163,7 @@ export function AccountDialog({ account, onClose }: { account: Account | null; o
           can_view_client_stats: account.can_view_client_stats,
           can_view_contacts_and_amounts: account.can_view_contacts_and_amounts,
           can_manage_own_schedule: account.can_manage_own_schedule,
+          can_edit_order_schedule_and_price: account.can_edit_order_schedule_and_price,
         }
       : ROLE_DEFAULT_PERMISSIONS[role]
   );
@@ -192,6 +200,10 @@ export function AccountDialog({ account, onClose }: { account: Account | null; o
       setError('Укажите имя');
       return;
     }
+    if (!account && !phone.trim()) {
+      setError('Укажите телефон — по нему сотрудник будет входить');
+      return;
+    }
     try {
       // Авто по умолчанию имеет смысл только у водителя — при другой роли
       // всегда отправляем null, чтобы очистить поле, если админ, скажем,
@@ -210,7 +222,6 @@ export function AccountDialog({ account, onClose }: { account: Account | null; o
       if (account) {
         await updateProfile.mutateAsync({
           id: account.id,
-          login: login.trim(),
           password: password || undefined,
           ...profileFields,
         });
@@ -226,7 +237,6 @@ export function AccountDialog({ account, onClose }: { account: Account | null; o
         }
       } else {
         await createAccount.mutateAsync({
-          login: login.trim(),
           password,
           role,
           permissions,
@@ -258,24 +268,12 @@ export function AccountDialog({ account, onClose }: { account: Account | null; o
                 />
                 <TextInput
                   mode="outlined"
-                  label="Телефон (необязательно)"
+                  label={account ? 'Телефон' : 'Телефон — по нему сотрудник входит'}
+                  accessibilityLabel="Телефон"
                   value={phone}
                   onChangeText={setPhone}
                   keyboardType="phone-pad"
                 />
-                <TextInput
-                  mode="outlined"
-                  label="Логин"
-                  accessibilityLabel="Логин"
-                  value={login}
-                  onChangeText={setLogin}
-                  autoCapitalize="none"
-                />
-                <HelperText type="info">
-                  {account
-                    ? 'Латиница, цифры, точка, дефис или подчёркивание, 3–32 символа. Пусто — логин не меняется.'
-                    : 'Латиница, цифры, точка, дефис или подчёркивание, 3–32 символа'}
-                </HelperText>
                 <TextInput
                   mode="outlined"
                   label={account ? 'Новый пароль' : 'Пароль'}
@@ -428,12 +426,10 @@ export function AccountDialog({ account, onClose }: { account: Account | null; o
                   <>
                     <Divider style={styles.divider} />
                     <Text variant="labelLarge">Права доступа</Text>
-                    {role === 'driver' && (
-                      <Text variant="bodySmall" style={styles.muted}>
-                        Без «Создавать, редактировать и удалять заказы» водитель всё равно может
-                        поменять время и сумму своего заказа — остальное только смотрит.
-                      </Text>
-                    )}
+                    <Text variant="bodySmall" style={styles.muted}>
+                      Создать новый заказ может только администратор или диспетчер — этим ниже не
+                      выдаётся никому.
+                    </Text>
                     {role === 'loader' && (
                       <Text variant="bodySmall" style={styles.muted}>
                         Грузчик всегда только смотрит заказ и не видит сумму. Телефон клиента видит,
@@ -441,10 +437,17 @@ export function AccountDialog({ account, onClose }: { account: Account | null; o
                       </Text>
                     )}
                     <PermissionRow
-                      label="Создавать, редактировать и удалять заказы"
+                      label="Редактировать и удалять любой заказ (как диспетчер)"
                       value={permissions.can_manage_orders}
                       onChange={() => togglePermission('can_manage_orders')}
                     />
+                    {role === 'driver' && (
+                      <PermissionRow
+                        label="Менять время и сумму своего заказа"
+                        value={permissions.can_edit_order_schedule_and_price}
+                        onChange={() => togglePermission('can_edit_order_schedule_and_price')}
+                      />
+                    )}
                     <PermissionRow
                       label="Смотреть историю и статистику по клиентам"
                       value={permissions.can_view_client_stats}

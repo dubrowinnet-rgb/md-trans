@@ -177,7 +177,13 @@ function PagedCalendarInner({
           ))}
         </ScrollView>
       </View>
-      <ScrollView ref={verticalRef} style={styles.container}>
+      <ScrollView
+        ref={verticalRef}
+        style={styles.container}
+        bounces
+        alwaysBounceVertical
+        overScrollMode="always"
+      >
         <View style={styles.bodyRow}>
           <HourAxis now={now} />
           <ScrollView

@@ -27,6 +27,7 @@ import {
 } from '../../api/orders';
 import { useSession } from '../../providers/SessionProvider';
 import {
+  canCreateOrders,
   canEditOrderScheduleAndPrice,
   canManageOrders,
   canViewClientPhone,
@@ -64,6 +65,7 @@ export default function OrderScreen() {
   const canManage = canManageOrders(employee);
   const showFullStatusUI = !isCrew || canManage;
   const canEditSchedulePrice = canEditOrderScheduleAndPrice(employee);
+  const canDuplicate = canCreateOrders(employee);
 
   const orderQuery = useOrder(id);
   const order = orderQuery.data;
@@ -120,18 +122,28 @@ export default function OrderScreen() {
     }
   };
 
-  const handleSaveSchedulePrice = async () => {
-    if (!order || !editDate || !editStart || !editEnd) return;
-    try {
-      await updateSchedulePrice.mutateAsync({
-        orderId: order.id,
-        scheduledStart: combine(editDate, editStart),
-        scheduledEnd: combine(editDate, editEnd),
-        actualPrice: editPriceText.trim() ? Number(editPriceText.trim().replace(',', '.')) : null,
-      });
-    } catch {
-      // ошибка уже показана через updateSchedulePrice.error
+  const canEditSchedulePriceNow = canManage || (canEditSchedulePrice && Boolean(myCrew));
+
+  // Раньше время/сумму сохраняла отдельная кнопка в блоке редактирования, а
+  // «Готово» просто закрывало карточку без сохранения — можно было
+  // случайно потерять правки. Теперь один и тот же чек-марк снизу справа и
+  // сохраняет (если есть что сохранять), и закрывает карточку (доработки 3,
+  // п.9). Если сохранить не получилось, карточка не закрывается — ошибка
+  // уже показана через updateSchedulePrice.error.
+  const handleDone = async () => {
+    if (order && canEditSchedulePriceNow && editDate && editStart && editEnd) {
+      try {
+        await updateSchedulePrice.mutateAsync({
+          orderId: order.id,
+          scheduledStart: combine(editDate, editStart),
+          scheduledEnd: combine(editDate, editEnd),
+          actualPrice: editPriceText.trim() ? Number(editPriceText.trim().replace(',', '.')) : null,
+        });
+      } catch {
+        return;
+      }
     }
+    router.back();
   };
 
   if (orderQuery.isLoading) return <ActivityIndicator style={styles.loader} />;
@@ -281,14 +293,6 @@ export default function OrderScreen() {
           {updateSchedulePrice.error && (
             <HelperText type="error">{updateSchedulePrice.error.message}</HelperText>
           )}
-          <Button
-            mode="contained"
-            onPress={handleSaveSchedulePrice}
-            loading={updateSchedulePrice.isPending}
-            disabled={updateSchedulePrice.isPending}
-          >
-            Сохранить время и сумму
-          </Button>
         </View>
       )}
 
@@ -389,7 +393,7 @@ export default function OrderScreen() {
         ) : null}
       </List.Section>
 
-      {canManage && (
+      {canDuplicate && (
         <Button
           mode="outlined"
           icon="content-copy"
@@ -433,7 +437,14 @@ export default function OrderScreen() {
       {crewDialogOpen && <CrewDialog order={order} onClose={() => setCrewDialogOpen(false)} />}
     </ScrollView>
     </DismissKeyboardView>
-    <FAB icon="check" style={styles.doneFab} accessibilityLabel="Готово, назад к заказам" onPress={() => router.back()} />
+    <FAB
+      icon="check"
+      style={styles.doneFab}
+      accessibilityLabel="Сохранить и закрыть заказ"
+      onPress={handleDone}
+      loading={updateSchedulePrice.isPending}
+      disabled={updateSchedulePrice.isPending}
+    />
     </View>
   );
 }
@@ -459,7 +470,7 @@ const styles = StyleSheet.create({
   },
   doneFab: {
     position: 'absolute',
-    alignSelf: 'center',
+    right: 16,
     bottom: 16,
   },
   when: {

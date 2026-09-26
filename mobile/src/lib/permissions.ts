@@ -13,9 +13,22 @@ export function canManageOrders(employee: Employee | null) {
 
 // Узкое право водителя: своё время начала/окончания и сумма заказа.
 // Действует, только если водителю не выдано полное управление (иначе он
-// и так может всё, как диспетчер).
+// и так может всё, как диспетчер), и только если админ включил отдельную
+// галочку can_edit_order_schedule_and_price (доработки 3, п.5 — раньше
+// это разрешалось любому водителю автоматически, без галочки).
 export function canEditOrderScheduleAndPrice(employee: Employee | null) {
-  return employee?.role === 'driver' && !canManageOrders(employee);
+  return (
+    employee?.role === 'driver' &&
+    !canManageOrders(employee) &&
+    Boolean(employee?.can_edit_order_schedule_and_price)
+  );
+}
+
+// Кто может СОЗДАТЬ новый заказ: только админ/диспетчер (доработки 3, п.5) —
+// раньше can_manage_orders у водителя/грузчика заодно разрешал и создание,
+// теперь это отдельное, не выдаваемое им право.
+export function canCreateOrders(employee: Employee | null) {
+  return employee?.role === 'admin' || employee?.role === 'dispatcher';
 }
 
 // Сумма заказа: как и раньше, отдельная от can_manage_orders галочка
