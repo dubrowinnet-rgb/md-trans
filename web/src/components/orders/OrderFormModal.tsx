@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActionIcon,
   Alert,
+  Autocomplete,
   Box,
   Button,
   Checkbox,
@@ -40,6 +41,7 @@ import { useClient, useClientSearch, type Client } from '@/api/clients';
 import { useServices } from '@/api/services';
 import { useVehicles } from '@/api/vehicles';
 import { useScheduleDaysOn, type ScheduleDay } from '@/api/schedule';
+import { useFrequentAddresses } from '@/api/addresses';
 import { combineDateTime, dayjs, toDateKey } from '@/lib/dates';
 import { formatPhone } from '@/lib/phone';
 import { useSession } from '@/providers/SessionProvider';
@@ -126,6 +128,7 @@ export function OrderFormModal({
   const drivers = employees.filter((e) => e.role === 'driver');
   const loaders = employees.filter((e) => e.role === 'loader');
   const services = useServices().data ?? [];
+  const frequentAddresses = useFrequentAddresses().data;
   const vehicles = useVehicles().data ?? [];
   const clientsQuery = useClientSearch(clientSearch);
   const selectedClientQuery = useClient(clientId);
@@ -355,26 +358,31 @@ export function OrderFormModal({
               }}
             />
 
-            <TextInput
+            <Autocomplete
               label="Адрес загрузки *"
+              data={frequentAddresses?.pickup ?? []}
               value={pickup}
-              onChange={(e) => setPickup(e.currentTarget.value)}
+              onChange={setPickup}
+              comboboxProps={{ zIndex: 500 }}
             />
-            <TextInput
+            <Autocomplete
               label="Адрес выгрузки *"
+              data={frequentAddresses?.dropoff ?? []}
               value={dropoff}
-              onChange={(e) => setDropoff(e.currentTarget.value)}
+              onChange={setDropoff}
+              comboboxProps={{ zIndex: 500 }}
             />
             {extraStops.map((stop) => (
               <Group key={stop.key} gap="xs" wrap="nowrap" align="flex-end">
-                <TextInput
+                <Autocomplete
                   style={{ flex: 1 }}
                   label={stop.type === 'pickup' ? 'Доп. точка загрузки' : 'Доп. точка выгрузки'}
+                  data={frequentAddresses?.[stop.type] ?? []}
                   value={stop.address}
-                  onChange={(e) => {
-                    const value = e.currentTarget.value;
+                  onChange={(value) => {
                     setExtraStops((prev) => prev.map((s) => (s.key === stop.key ? { ...s, address: value } : s)));
                   }}
+                  comboboxProps={{ zIndex: 500 }}
                 />
                 <ActionIcon
                   variant="subtle"
