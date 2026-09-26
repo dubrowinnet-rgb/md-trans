@@ -360,14 +360,14 @@ export function OrderFormModal({
 
             <Autocomplete
               label="Адрес загрузки *"
-              data={frequentAddresses?.pickup ?? []}
+              data={frequentAddresses ?? []}
               value={pickup}
               onChange={setPickup}
               comboboxProps={{ zIndex: 500 }}
             />
             <Autocomplete
               label="Адрес выгрузки *"
-              data={frequentAddresses?.dropoff ?? []}
+              data={frequentAddresses ?? []}
               value={dropoff}
               onChange={setDropoff}
               comboboxProps={{ zIndex: 500 }}
@@ -377,7 +377,7 @@ export function OrderFormModal({
                 <Autocomplete
                   style={{ flex: 1 }}
                   label={stop.type === 'pickup' ? 'Доп. точка загрузки' : 'Доп. точка выгрузки'}
-                  data={frequentAddresses?.[stop.type] ?? []}
+                  data={frequentAddresses ?? []}
                   value={stop.address}
                   onChange={(value) => {
                     setExtraStops((prev) => prev.map((s) => (s.key === stop.key ? { ...s, address: value } : s)));

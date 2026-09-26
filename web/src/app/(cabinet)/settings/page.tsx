@@ -195,11 +195,11 @@ export default function SettingsPage() {
               {employee.name}
             </Text>
             <Text size="sm" c="dimmed" mb="md">
-              Логин {employee.login ?? '—'} · {employee.phone ? formatPhone(employee.phone) : 'телефон не указан'}
+              {employee.phone ? formatPhone(employee.phone) : 'телефон не указан'}
             </Text>
             <Text size="xs" c="dimmed" mb="md">
-              «Логин» — это то, чем вы входите в кабинет и приложение (настоящей почты и SMTP в системе нет). Здесь
-              же можно сменить пароль.
+              Телефон — это то, чем вы входите в кабинет и приложение (настоящей почты и SMS-провайдера в системе
+              нет). Здесь же можно сменить пароль.
             </Text>
             <Button onClick={() => setEditingProfile(true)}>Изменить мои данные</Button>
           </Paper>

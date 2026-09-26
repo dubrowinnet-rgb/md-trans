@@ -39,11 +39,23 @@ import type { AccountRole } from '@/types/database';
 
 const ROLES: AccountRole[] = ['admin', 'dispatcher', 'driver', 'loader'];
 
-const PERMISSION_LABELS: { key: keyof AccountPermissions; label: string; hint: string; crewOnly?: boolean }[] = [
+const PERMISSION_LABELS: {
+  key: keyof AccountPermissions;
+  label: string;
+  hint: string;
+  crewOnly?: boolean;
+  driverOnly?: boolean;
+}[] = [
   {
     key: 'can_manage_orders',
     label: 'Может создавать и менять заказы',
     hint: 'Водителю или грузчику с этой галочкой доступно всё, что диспетчеру',
+  },
+  {
+    key: 'can_edit_order_schedule_and_price',
+    label: 'Менять время и сумму своего заказа',
+    hint: 'Только для заказов, куда он назначен — не нужно, если выше уже включено полное управление',
+    driverOnly: true,
   },
   { key: 'can_view_client_stats', label: 'Видит историю и статистику клиентов', hint: '' },
   {
@@ -68,7 +80,6 @@ export function AccountModal({ account, onClose }: { account: Account | null; on
   const [name, setName] = useState(account?.name ?? '');
   const [lastName, setLastName] = useState(account?.last_name ?? '');
   const [phone, setPhone] = useState(account?.phone ?? '');
-  const [login, setLogin] = useState(account?.login ?? '');
   const [password, setPassword] = useState('');
   const [birthDate, setBirthDate] = useState<string | null>(account?.birth_date ?? null);
   const [hireDate, setHireDate] = useState<string | null>(account?.hire_date ?? null);
@@ -92,6 +103,7 @@ export function AccountModal({ account, onClose }: { account: Account | null; on
           can_view_client_stats: account.can_view_client_stats,
           can_view_contacts_and_amounts: account.can_view_contacts_and_amounts,
           can_manage_own_schedule: account.can_manage_own_schedule,
+          can_edit_order_schedule_and_price: account.can_edit_order_schedule_and_price,
         }
       : ROLE_DEFAULT_PERMISSIONS.dispatcher
   );
@@ -132,6 +144,7 @@ export function AccountModal({ account, onClose }: { account: Account | null; on
   const save = async () => {
     setError(null);
     if (!name.trim()) return setError('Укажите имя');
+    if (!phone.trim()) return setError('Укажите номер телефона — по нему сотрудник будет входить');
     const vehicleForRole = role === 'driver' ? vehicleId : null;
     // Ставки применимы только водителю/грузчику — при другой роли шлём
     // null-ы, чтобы не оставлять висящую ставку у диспетчера/админа,
@@ -153,7 +166,7 @@ export function AccountModal({ account, onClose }: { account: Account | null; on
     const profileFields = {
       name: name.trim(),
       last_name: lastName.trim() || null,
-      phone: phone.trim() ? formatPhone(phone.trim()) : null,
+      phone: formatPhone(phone.trim()),
       birth_date: birthDate,
       hire_date: hireDate,
       address: address.trim() || null,
@@ -168,7 +181,6 @@ export function AccountModal({ account, onClose }: { account: Account | null; on
       if (account) {
         await updateProfile.mutateAsync({
           id: account.id,
-          login: login.trim(),
           password: password || undefined,
           ...profileFields,
         });
@@ -180,7 +192,6 @@ export function AccountModal({ account, onClose }: { account: Account | null; on
         if (isCrew || hadRates) await saveRates(account.id);
       } else {
         const created = await createAccount.mutateAsync({
-          login: login.trim(),
           password,
           role,
           permissions,
@@ -203,20 +214,11 @@ export function AccountModal({ account, onClose }: { account: Account | null; on
           <TextInput label="Имя *" value={name} onChange={(e) => setName(e.currentTarget.value)} />
           <TextInput label="Фамилия" value={lastName} onChange={(e) => setLastName(e.currentTarget.value)} />
           <TextInput
-            label="Телефон"
+            label="Телефон *"
+            description="Сотрудник входит по нему — как логин"
             value={phone}
             onChange={(e) => setPhone(e.currentTarget.value)}
             onBlur={() => phone.trim() && setPhone(formatPhone(phone.trim()))}
-          />
-          <TextInput
-            label={account ? 'Логин' : 'Логин *'}
-            description={
-              account
-                ? 'Латиница, цифры, точка, дефис, 3–32 символа. Пусто — логин не меняется'
-                : 'Латиница, цифры, точка, дефис, 3–32 символа'
-            }
-            value={login}
-            onChange={(e) => setLogin(e.currentTarget.value)}
           />
           <PasswordInput
             label={account ? 'Новый пароль' : 'Пароль *'}
@@ -357,7 +359,7 @@ export function AccountModal({ account, onClose }: { account: Account | null; on
             <Text size="sm" fw={500}>
               Права поверх роли
             </Text>
-            {PERMISSION_LABELS.filter((p) => !p.crewOnly || isCrew).map((p) => (
+            {PERMISSION_LABELS.filter((p) => (!p.crewOnly || isCrew) && (!p.driverOnly || role === 'driver')).map((p) => (
               <Switch
                 key={p.key}
                 label={p.label}

@@ -10,43 +10,51 @@ export interface AccountPermissions {
   can_view_client_stats: boolean;
   can_view_contacts_and_amounts: boolean;
   can_manage_own_schedule: boolean;
+  can_edit_order_schedule_and_price: boolean;
 }
 
 // Права по умолчанию при создании аккаунта — те же, что в мобильном
 // приложении (mobile/src/components/accounts/AccountDialog.tsx). У
 // 'owner' в экране «Команда» этой записи не видно (заводится не отсюда —
 // см. lib/ownerAccess.ts), запись нужна только чтобы Record<AccountRole,...>
-// был исчерпывающим, как и в мобильной копии этого файла.
+// был исчерпывающим, как и в мобильной копии этого файла. Создать новый
+// заказ может только админ/диспетчер — это не галочка, а фиксированное
+// правило (доработки 3, п.5, can_create_orders() в БД).
 export const ROLE_DEFAULT_PERMISSIONS: Record<AccountRole, AccountPermissions> = {
   owner: {
     can_manage_orders: false,
     can_view_client_stats: false,
     can_view_contacts_and_amounts: false,
     can_manage_own_schedule: false,
+    can_edit_order_schedule_and_price: false,
   },
   admin: {
     can_manage_orders: true,
     can_view_client_stats: true,
     can_view_contacts_and_amounts: true,
     can_manage_own_schedule: true,
+    can_edit_order_schedule_and_price: false,
   },
   dispatcher: {
     can_manage_orders: true,
     can_view_client_stats: true,
     can_view_contacts_and_amounts: true,
     can_manage_own_schedule: false,
+    can_edit_order_schedule_and_price: false,
   },
   driver: {
     can_manage_orders: false,
     can_view_client_stats: false,
     can_view_contacts_and_amounts: true,
     can_manage_own_schedule: false,
+    can_edit_order_schedule_and_price: false,
   },
   loader: {
     can_manage_orders: false,
     can_view_client_stats: false,
     can_view_contacts_and_amounts: false,
     can_manage_own_schedule: false,
+    can_edit_order_schedule_and_price: false,
   },
 };
 
@@ -68,11 +76,10 @@ export function useAllAccounts() {
 }
 
 export interface CreateAccountInput {
-  login: string;
   password: string;
   name: string;
   last_name?: string | null;
-  phone?: string | null;
+  phone: string;
   birth_date?: string | null;
   hire_date?: string | null;
   address?: string | null;
@@ -150,11 +157,10 @@ export function useUpdateAccount() {
 
 export interface UpdateAccountProfileInput {
   id: string;
-  login: string;
   password?: string;
   name: string;
   last_name?: string | null;
-  phone?: string | null;
+  phone: string;
   birth_date?: string | null;
   hire_date?: string | null;
   address?: string | null;

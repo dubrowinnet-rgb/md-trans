@@ -2,17 +2,23 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Alert, Button, Center, Paper, PasswordInput, Stack, Text, TextInput, Title } from '@mantine/core';
+import { Alert, Anchor, Button, Center, Paper, PasswordInput, Stack, Text, TextInput, Title } from '@mantine/core';
 import { supabase, supabaseConfigured } from '@/lib/supabase';
-import { loginInputToEmail } from '@/lib/accountLogin';
+import { loginInputToE164, loginInputToEmail } from '@/lib/accountLogin';
 import { useSession } from '@/providers/SessionProvider';
 
-// Вход тем же логином и паролем, что и в мобильном приложении.
+// Вход по телефону и паролю (доработки 3, п.4 — логин сотрудникам больше не
+// нужен), те же учётные данные, что и в мобильном приложении. «Войти по
+// логину или email» ниже — свёрнутый запасной вариант: нужен только
+// аккаунту, которому ещё ни разу не синхронизировали телефон на auth.users
+// (см. providers/SessionProvider.tsx), обычно только самые старые учётки.
 export default function LoginPage() {
   const router = useRouter();
   const { session } = useSession();
+  const [phone, setPhone] = useState('');
   const [login, setLogin] = useState('');
   const [password, setPassword] = useState('');
+  const [useLoginFallback, setUseLoginFallback] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -24,18 +30,26 @@ export default function LoginPage() {
     e.preventDefault();
     setError(null);
     setLoading(true);
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email: loginInputToEmail(login),
-      password,
-    });
-    setLoading(false);
-    if (signInError) {
-      setError(
-        signInError.message === 'Invalid login credentials'
-          ? 'Неверный логин или пароль'
-          : `Не удалось войти: ${signInError.message}`
-      );
+
+    if (useLoginFallback) {
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: loginInputToEmail(login),
+        password,
+      });
+      setLoading(false);
+      if (signInError) setError(friendlyError(signInError.message));
+      return;
     }
+
+    const e164 = loginInputToE164(phone);
+    if (!e164) {
+      setError('Проверьте номер телефона');
+      setLoading(false);
+      return;
+    }
+    const { error: signInError } = await supabase.auth.signInWithPassword({ phone: e164, password });
+    setLoading(false);
+    if (signInError) setError(friendlyError(signInError.message));
   };
 
   return (
@@ -46,7 +60,7 @@ export default function LoginPage() {
             <div>
               <Title order={3}>Кабинет диспетчера</Title>
               <Text c="dimmed" size="sm">
-                Логин и пароль — те же, что в мобильном приложении
+                Телефон и пароль — те же, что в мобильном приложении
               </Text>
             </div>
             {!supabaseConfigured && (
@@ -55,13 +69,23 @@ export default function LoginPage() {
                 web/README.md).
               </Alert>
             )}
-            <TextInput
-              label="Логин"
-              value={login}
-              onChange={(e) => setLogin(e.currentTarget.value)}
-              autoComplete="username"
-              required
-            />
+            {useLoginFallback ? (
+              <TextInput
+                label="Логин или email"
+                value={login}
+                onChange={(e) => setLogin(e.currentTarget.value)}
+                autoComplete="username"
+                required
+              />
+            ) : (
+              <TextInput
+                label="Телефон"
+                value={phone}
+                onChange={(e) => setPhone(e.currentTarget.value)}
+                autoComplete="tel"
+                required
+              />
+            )}
             <PasswordInput
               label="Пароль"
               value={password}
@@ -73,9 +97,16 @@ export default function LoginPage() {
             <Button type="submit" loading={loading}>
               Войти
             </Button>
+            <Anchor size="sm" ta="center" onClick={() => setUseLoginFallback((v) => !v)}>
+              {useLoginFallback ? 'Войти по телефону' : 'Войти по логину или email'}
+            </Anchor>
           </Stack>
         </form>
       </Paper>
     </Center>
   );
+}
+
+function friendlyError(message: string) {
+  return message === 'Invalid login credentials' ? 'Неверные данные для входа' : `Не удалось войти: ${message}`;
 }

@@ -37,7 +37,7 @@ export default function TeamPage() {
 
   return (
     <Box p="lg">
-      <PageHeader title="Команда" subtitle="Логины, роли и права сотрудников">
+      <PageHeader title="Команда" subtitle="Телефоны, роли и права сотрудников">
         <Button leftSection={<IconPlus size={16} />} onClick={() => setEditing('new')}>
           Добавить аккаунт
         </Button>
@@ -50,9 +50,9 @@ export default function TeamPage() {
             <Table.Tr>
               <Table.Th>Имя</Table.Th>
               <Table.Th>Роль</Table.Th>
-              <Table.Th>Логин</Table.Th>
               <Table.Th>Телефон</Table.Th>
               <Table.Th ta="center">Заказы</Table.Th>
+              <Table.Th ta="center">Время/сумма своего заказа</Table.Th>
               <Table.Th ta="center">Статистика клиентов</Table.Th>
               <Table.Th ta="center">Телефоны и суммы</Table.Th>
               <Table.Th ta="center">Свой график</Table.Th>
@@ -71,11 +71,15 @@ export default function TeamPage() {
                       {ACCOUNT_ROLE_LABELS[a.role]}
                     </Badge>
                   </Table.Td>
-                  <Table.Td>{a.login ?? '—'}</Table.Td>
                   <Table.Td>{a.phone ? formatPhone(a.phone) : '—'}</Table.Td>
                   <Table.Td ta="center">
                     <Group justify="center">
                       <Tick on={admin || a.can_manage_orders} />
+                    </Group>
+                  </Table.Td>
+                  <Table.Td ta="center">
+                    <Group justify="center">
+                      <Tick on={a.can_edit_order_schedule_and_price} />
                     </Group>
                   </Table.Td>
                   <Table.Td ta="center">
