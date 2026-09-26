@@ -37,6 +37,8 @@ import {
   type AvailabilityTier,
 } from '../../lib/crewAvailability';
 import { serviceNeedsLoaders } from '../../lib/services';
+import { buildNewOrderSmsText, openSmsComposer } from '../../lib/smsCompose';
+import { useSmsTemplates } from '../../api/smsTemplates';
 
 interface ExtraStop {
   key: string;
@@ -212,6 +214,7 @@ export default function NewOrderScreen() {
   const createOrder = useCreateOrder();
   const recentAddressesQuery = useRecentAddresses();
   const recentAddresses = recentAddressesQuery.data ?? [];
+  const smsTemplatesQuery = useSmsTemplates();
 
   // Как в Bumpix: выбранные услуги задают длительность и подставляют сумму.
   const applyServices = (ids: string[]) => {
@@ -266,19 +269,36 @@ export default function NewOrderScreen() {
       ...(needsLoaders ? loaderIds.map((id) => ({ employee_id: id, role: 'loader' as const })) : []),
     ];
 
+    const actualPrice = priceText.trim() ? Number(priceText.trim().replace(',', '.')) : null;
+
     try {
       await createOrder.mutateAsync({
         client_id: selectedClient.id,
         cargo_description: cargoDescription,
         scheduled_start: scheduledStart,
         scheduled_end: scheduledEnd,
-        actual_price: priceText.trim() ? Number(priceText.trim().replace(',', '.')) : null,
+        actual_price: actualPrice,
         comment,
         stops,
         crew,
         services: serviceIds.map((id) => ({ service_id: id, qty: 1 })),
         vehicle_id: vehicleId,
       });
+
+      // Смс клиенту — открываем системный экран отправки, диспетчер сам
+      // жмёт «Отправить» в своём же смс-приложении (доработка 2026-09-26,
+      // взамен автоматической отправки через sms.ru).
+      const template = smsTemplatesQuery.data?.find((t) => t.key === 'new_order');
+      if (selectedClient.phone && template) {
+        const text = buildNewOrderSmsText(template.body, {
+          clientName: selectedClient.name,
+          scheduledStart,
+          price: actualPrice,
+          pickupAddress: pickupAddress.trim(),
+        });
+        await openSmsComposer(selectedClient.phone, text);
+      }
+
       router.back();
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Не удалось создать заказ');
