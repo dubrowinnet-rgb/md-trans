@@ -17,10 +17,6 @@ import { SmsTemplateModal } from '@/components/settings/SmsTemplateModal';
 import { ReminderRuleModal } from '@/components/settings/ReminderRuleModal';
 import { AccountModal } from '@/components/team/AccountModal';
 
-// SMS клиенту сейчас отправляется автоматически только для new_order —
-// см. комментарий в migrations/0011 и mobile/src/app/settings/sms-templates.tsx.
-const AUTO_SENT_KEYS = new Set(['new_order']);
-
 // Настройки (открывается кликом по имени/роли в сайдбаре) — только для
 // администратора.
 export default function SettingsPage() {
@@ -148,7 +144,6 @@ export default function SettingsPage() {
               <Table.Thead>
                 <Table.Tr>
                   <Table.Th>Шаблон</Table.Th>
-                  <Table.Th>Статус</Table.Th>
                 </Table.Tr>
               </Table.Thead>
               <Table.Tbody>
@@ -156,13 +151,6 @@ export default function SettingsPage() {
                   <Table.Tr key={t.key} style={{ cursor: 'pointer' }} onClick={() => setEditingTemplate(t)}>
                     <Table.Td>
                       <Text fw={500}>{t.label}</Text>
-                    </Table.Td>
-                    <Table.Td>
-                      {AUTO_SENT_KEYS.has(t.key) ? (
-                        <Badge color="green">Отправляется автоматически</Badge>
-                      ) : (
-                        <Badge color="gray">Пока не подключено</Badge>
-                      )}
                     </Table.Td>
                   </Table.Tr>
                 ))}
