@@ -14,6 +14,7 @@ import {
   TextInput,
 } from 'react-native-paper';
 import { useEmployees } from '../../api/employees';
+import { useRecentAddresses } from '../../api/addresses';
 import { useClients, type Client } from '../../api/clients';
 import { ClientDialog } from '../../components/clients/ClientDialog';
 import { useNewClientFromContacts } from '../../hooks/useNewClientFromContacts';
@@ -24,9 +25,10 @@ import { toDateKey, useScheduleDaysOn, type ScheduleDay } from '../../api/schedu
 import { ServicePicker, formatServiceMeta } from '../../components/form/ServicePicker';
 import { DateTimeField } from '../../components/form/DateTimeField';
 import { FormSection } from '../../components/form/FormSection';
+import { AddressField } from '../../components/form/AddressField';
 import { DismissKeyboardView } from '../../components/form/DismissKeyboardView';
 import { useSession } from '../../providers/SessionProvider';
-import { canManageOrders, canViewClientPhone, canViewOrderAmount } from '../../lib/permissions';
+import { canCreateOrders, canViewClientPhone, canViewOrderAmount } from '../../lib/permissions';
 import { formatPhone } from '../../lib/phone';
 import {
   evaluateAvailability,
@@ -195,7 +197,7 @@ export default function NewOrderScreen() {
   }, [duplicateFrom, sourceOrderQuery.data]);
 
   const { employee } = useSession();
-  const canManage = canManageOrders(employee);
+  const canManage = canCreateOrders(employee);
   const canViewContacts = canViewClientPhone(employee);
   const showAmount = canViewOrderAmount(employee);
 
@@ -208,6 +210,8 @@ export default function NewOrderScreen() {
     employees.map((e) => [e.id, evaluateAvailability(e, busyIds, scheduleOn, scheduledStart, scheduledEnd)])
   );
   const createOrder = useCreateOrder();
+  const recentAddressesQuery = useRecentAddresses();
+  const recentAddresses = recentAddressesQuery.data ?? [];
 
   // Как в Bumpix: выбранные услуги задают длительность и подставляют сумму.
   const applyServices = (ids: string[]) => {
@@ -383,21 +387,19 @@ export default function NewOrderScreen() {
         </FormSection>
 
         <FormSection title="Точки маршрута">
-          <TextInput
-            mode="outlined"
+          <AddressField
             label="Адрес загрузки"
-            accessibilityLabel="Адрес загрузки"
-            left={<TextInput.Icon icon="package-up" />}
+            icon="package-up"
             value={pickupAddress}
             onChangeText={setPickupAddress}
+            recentAddresses={recentAddresses}
           />
-          <TextInput
-            mode="outlined"
+          <AddressField
             label="Адрес выгрузки"
-            accessibilityLabel="Адрес выгрузки"
-            left={<TextInput.Icon icon="package-down" />}
+            icon="package-down"
             value={dropoffAddress}
             onChangeText={setDropoffAddress}
+            recentAddresses={recentAddresses}
           />
           {extraStops.map((stop) => (
             <View key={stop.key} style={styles.row}>

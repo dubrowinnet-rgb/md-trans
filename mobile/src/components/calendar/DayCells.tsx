@@ -23,6 +23,10 @@ const HOURS = Array.from({ length: 24 }, (_, i) => i);
 // Цвета сетки и шапки дней из референса (Bumpix).
 export const GRID_COLORS = {
   line: '#DDDDDD',
+  // Часовые линии в теле дня чуть темнее и не hairline — на реальном
+  // iPhone бледный hairlineWidth почти не виден, сетка выглядела как
+  // пустые белые полосы без часов (доработки 3, п.7).
+  hourLine: '#C7C7C7',
   past: '#E6E6E6',
   nowLine: '#E53935',
   todayHeader: '#3F9A1C',
@@ -132,8 +136,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
   },
   hourRow: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: GRID_COLORS.line,
+    borderTopWidth: 1,
+    borderTopColor: GRID_COLORS.hourLine,
   },
   hourLabel: {
     fontSize: 11,
@@ -191,8 +195,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: GRID_COLORS.line,
+    borderTopWidth: 1,
+    borderTopColor: GRID_COLORS.hourLine,
   },
   nowLine: {
     position: 'absolute',

@@ -7,7 +7,7 @@ import { useOrdersForRange, type OrderWithDetails } from '../../api/orders';
 import { AccountMenu } from '../../components/layout/AccountMenu';
 import { NotificationBell } from '../../components/layout/NotificationBell';
 import { useSession } from '../../providers/SessionProvider';
-import { canManageOrders } from '../../lib/permissions';
+import { canCreateOrders } from '../../lib/permissions';
 import { useCalendarNav } from '../../hooks/useCalendarNav';
 import { PagedCalendar } from '../../components/calendar/PagedCalendar';
 import { CalendarToolbar } from '../../components/calendar/CalendarToolbar';
@@ -17,7 +17,7 @@ import { formatHeaderDate } from '../../utils/date';
 export default function DispatcherCalendarScreen() {
   const nav = useCalendarNav();
   const { employee } = useSession();
-  const canManage = canManageOrders(employee);
+  const canManage = canCreateOrders(employee);
   const [activeEmployeeId, setActiveEmployeeId] = useState<string>(ALL_EMPLOYEES);
 
   const employeesQuery = useEmployees();

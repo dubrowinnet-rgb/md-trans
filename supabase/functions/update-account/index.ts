@@ -1,12 +1,12 @@
-// Правка уже существующего аккаунта сотрудника: логин, пароль и профиль
-// (раздел «Команда» — админ должен видеть и менять логин/пароль и всю
+// Правка уже существующего аккаунта сотрудника: телефон, пароль и профиль
+// (раздел «Команда» — админ должен видеть и менять телефон/пароль и всю
 // информацию о сотруднике). С доработки «Настройки» этой же функцией
-// пользуется и сам сотрудник — правит СВОЙ логин/телефон/пароль (раздел
+// пользуется и сам сотрудник — правит СВОЙ телефон/пароль (раздел
 // «Мой профиль»): вызывающий либо администратор СВОЕЙ ЖЕ компании, либо
 // владелец сервиса (любой компании — для поддержки), либо id === он сам.
 //
-// Отдельная функция, а не часть create-account: смена логина меняет email
-// в auth.users, а смена пароля — это auth.admin.updateUserById, и то, и
+// Отдельная функция, а не часть create-account: смена телефона меняет
+// auth.users.phone, а смена пароля — это auth.admin.updateUserById, и то, и
 // другое требует service role key по той же причине, что и создание
 // аккаунта (см. create-account/index.ts) — с телефона напрямую это
 // сделать нельзя.
@@ -14,8 +14,10 @@
 // Тело запроса — частичное обновление: поле, которого нет в body,
 // остаётся как было (берётся из текущей строки), а не затирается пустым.
 // Это важно для самообслуживания — экран «Мой профиль» отправляет только
-// login/phone/password, и не должен случайно стереть фамилию/адрес/etc,
-// которые заполнял администратор.
+// phone/password, и не должен случайно стереть фамилию/адрес/etc, которые
+// заполнял администратор. Также этим же частичным обновлением (только
+// id+phone, без остальных полей) SessionProvider тихо синхронизирует
+// auth.users.phone старым аккаунтам при входе — см. п.4 в 0016.
 //
 // Деплой (после `supabase link`, см. supabase/README.md):
 //   supabase functions deploy update-account
@@ -26,12 +28,6 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 
-const LOGIN_RE = /^[a-zA-Z0-9._-]{3,32}$/;
-
-function loginToEmail(login: string) {
-  return `${login.toLowerCase()}@mdtrans.internal`;
-}
-
 // Единый формат телефона (Максим, 2026-09-25): +7(ХХХ)ХХХ-ХХ-ХХ везде —
 // та же логика, что в mobile/src/lib/phone.ts и web/src/lib/phone.ts.
 function formatPhone(phone: string | null): string | null {
@@ -40,6 +36,16 @@ function formatPhone(phone: string | null): string | null {
   const core = digits.length === 11 && (digits[0] === '7' || digits[0] === '8') ? digits.slice(1) : digits;
   if (core.length !== 10) return phone;
   return `+7(${core.slice(0, 3)})${core.slice(3, 6)}-${core.slice(6, 8)}-${core.slice(8, 10)}`;
+}
+
+// То же самое, но в E.164 (+7XXXXXXXXXX) — формат, который ждёт Supabase
+// Auth для входа по телефону (см. create-account/index.ts).
+function toE164(phone: string | null): string | null {
+  if (!phone) return null;
+  const digits = phone.replace(/\D/g, '');
+  const core = digits.length === 11 && (digits[0] === '7' || digits[0] === '8') ? digits.slice(1) : digits;
+  if (core.length !== 10) return null;
+  return `+7${core}`;
 }
 
 function corsHeaders(origin: string | null) {
@@ -109,31 +115,22 @@ Deno.serve(async (req) => {
   const name = has('name') ? String(body.name ?? '').trim() : (target.name as string);
   if (!name) return fail(400, 'Укажите имя', headers);
 
-  // Логин необязателен на редактировании: у сотрудников, заведённых
-  // напрямую в Supabase до входа по логину, он может быть пустым, и
-  // администратор не обязан заводить его прямо сейчас, если просто
-  // правит другое поле — пустое значение оставляет логин как был.
-  const loginInput = has('login') ? String(body.login ?? '').trim() : '';
-  let login = target.login as string | null;
-  if (loginInput) {
-    if (!LOGIN_RE.test(loginInput)) {
-      return fail(400, 'Логин — 3–32 символа: латинские буквы, цифры, точка, дефис или подчёркивание', headers);
-    }
-    login = loginInput;
-  }
   const password = body.password ? String(body.password) : '';
   if (password && password.length < 6) return fail(400, 'Пароль — минимум 6 символов', headers);
 
-  if (target.auth_user_id && login && login !== target.login) {
-    const { error: emailError } = await admin.auth.admin.updateUserById(target.auth_user_id, {
-      email: loginToEmail(login),
-    });
-    if (emailError) {
-      const message = emailError.message.toLowerCase().includes('already')
-        ? 'Такой логин уже занят'
-        : emailError.message;
-      return fail(400, message, headers);
-    }
+  const phone = has('phone') ? formatPhone(body.phone ? String(body.phone).trim() : null) : (target.phone as string | null);
+  const e164Phone = toE164(phone);
+
+  // Вход теперь по телефону (доработки 3, п.4), а не по логину — синхронизируем
+  // auth.users.phone при каждом сохранении профиля, где телефон есть. Это же
+  // тихо доводит до нужного состояния и старые аккаунты, заведённые ещё по
+  // логину (см. mobile/src/providers/SessionProvider.tsx — вызывает
+  // update-account с текущим телефоном один раз при входе). Не фатально: если
+  // не получилось (например, в Supabase ещё не включён Phone-провайдер, см.
+  // supabase/README.md), остальной профиль всё равно сохраняется — просто
+  // вход по телефону для этого сотрудника пока не заработает.
+  if (target.auth_user_id && e164Phone) {
+    await admin.auth.admin.updateUserById(target.auth_user_id, { phone: e164Phone, phone_confirm: true });
   }
   if (password && target.auth_user_id) {
     const { error: passwordError } = await admin.auth.admin.updateUserById(target.auth_user_id, { password });
@@ -145,8 +142,7 @@ Deno.serve(async (req) => {
     .update({
       name,
       last_name: has('last_name') ? (body.last_name ? String(body.last_name).trim() : null) : target.last_name,
-      phone: has('phone') ? formatPhone(body.phone ? String(body.phone).trim() : null) : target.phone,
-      login,
+      phone,
       birth_date: has('birth_date') ? (body.birth_date ? String(body.birth_date) : null) : target.birth_date,
       hire_date: has('hire_date') ? (body.hire_date ? String(body.hire_date) : null) : target.hire_date,
       address: has('address') ? (body.address ? String(body.address).trim() : null) : target.address,
@@ -165,12 +161,7 @@ Deno.serve(async (req) => {
     .select()
     .single();
 
-  if (updateError) {
-    const message = updateError.message.includes('employees_login_key')
-      ? 'Такой логин уже занят'
-      : updateError.message;
-    return fail(400, message, headers);
-  }
+  if (updateError) return fail(400, updateError.message, headers);
 
   return new Response(JSON.stringify({ employee }), { status: 200, headers });
 });

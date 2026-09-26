@@ -1,5 +1,6 @@
 // Создание аккаунта сотрудника (админ/диспетчер/водитель/грузчик) с
-// логином и паролем. Обычно вызывающий — администратор своей компании
+// телефоном и паролем — телефон и есть логин (доработки 3, п.4), отдельного
+// поля не заводим. Обычно вызывающий — администратор своей компании
 // (company_id всегда его собственный, id из тела запроса не принимаем).
 // Владелец сервиса тоже может вызвать эту функцию, но только чтобы
 // завести администратора НОВОЙ компании (role='admin' + обязательный
@@ -26,15 +27,14 @@ const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 
 const ROLES = ['admin', 'dispatcher', 'driver', 'loader'];
-// Латиница/цифры и . _ - — чтобы логин было легко произнести и он точно
-// превращался в валидный email (см. loginToEmail).
-const LOGIN_RE = /^[a-zA-Z0-9._-]{3,32}$/;
 
-function loginToEmail(login: string) {
-  // Внутренний, никуда не отправляемый адрес: Supabase Auth требует email,
-  // а мы хотим, чтобы сотрудник вводил только логин. Домен не существует и
-  // не должен существовать — писем на него никто не ждёт.
-  return `${login.toLowerCase()}@mdtrans.internal`;
+// Внутренний, никуда не отправляемый email — Supabase Admin API его всё
+// равно просит, а вход теперь только по телефону (доработки 3, п.4:
+// «логин сотрудникам не нужен»), сам сотрудник этот адрес не видит и не
+// вводит. Строим его из телефона, а не из произвольного логина — так он
+// гарантированно уникален вместе с телефоном и его не нужно спрашивать.
+function phoneToInternalEmail(e164: string) {
+  return `${e164.replace('+', '')}@mdtrans.internal`;
 }
 
 // Единый формат телефона (Максим, 2026-09-25): +7(ХХХ)ХХХ-ХХ-ХХ везде —
@@ -45,6 +45,16 @@ function formatPhone(phone: string | null): string | null {
   const core = digits.length === 11 && (digits[0] === '7' || digits[0] === '8') ? digits.slice(1) : digits;
   if (core.length !== 10) return phone;
   return `+7(${core.slice(0, 3)})${core.slice(3, 6)}-${core.slice(6, 8)}-${core.slice(8, 10)}`;
+}
+
+// То же самое, но в E.164 (+7XXXXXXXXXX, без скобок/дефисов) — формат,
+// который ждёт Supabase Auth для входа по телефону.
+function toE164(phone: string | null): string | null {
+  if (!phone) return null;
+  const digits = phone.replace(/\D/g, '');
+  const core = digits.length === 11 && (digits[0] === '7' || digits[0] === '8') ? digits.slice(1) : digits;
+  if (core.length !== 10) return null;
+  return `+7${core}`;
 }
 
 function corsHeaders(origin: string | null) {
@@ -97,11 +107,11 @@ Deno.serve(async (req) => {
     return fail(403, 'Недостаточно прав для добавления сотрудника', headers);
   }
 
-  const login = String(body.login ?? '').trim();
   const password = String(body.password ?? '');
   const name = String(body.name ?? '').trim();
   const lastName = body.last_name ? String(body.last_name).trim() : null;
   const phone = formatPhone(body.phone ? String(body.phone).trim() : null);
+  const e164Phone = toE164(phone);
   const role = String(body.role ?? '');
   const permissions = (body.permissions as Record<string, unknown>) ?? {};
   const defaultVehicleId = body.default_vehicle_id ? String(body.default_vehicle_id) : null;
@@ -124,9 +134,7 @@ Deno.serve(async (req) => {
     companyId = caller.company_id;
   }
 
-  if (!LOGIN_RE.test(login)) {
-    return fail(400, 'Логин — 3–32 символа: латинские буквы, цифры, точка, дефис или подчёркивание', headers);
-  }
+  if (!e164Phone) return fail(400, 'Укажите номер телефона — по нему сотрудник будет входить', headers);
   if (password.length < 6) return fail(400, 'Пароль — минимум 6 символов', headers);
   if (!name) return fail(400, 'Укажите имя', headers);
   if (!ROLES.includes(role)) return fail(400, 'Неизвестная роль', headers);
@@ -138,16 +146,17 @@ Deno.serve(async (req) => {
   const personalVehiclePlate = body.personal_vehicle_plate ? String(body.personal_vehicle_plate).trim() : null;
 
   const isAdminRole = role === 'admin';
-  const email = loginToEmail(login);
 
   const { data: created, error: createError } = await admin.auth.admin.createUser({
-    email,
+    email: phoneToInternalEmail(e164Phone),
+    phone: e164Phone,
     password,
     email_confirm: true,
+    phone_confirm: true,
   });
   if (createError || !created.user) {
     const message = createError?.message.toLowerCase().includes('already')
-      ? 'Такой логин уже занят'
+      ? 'Этот номер телефона уже занят другим сотрудником'
       : (createError?.message ?? 'Не удалось создать пользователя');
     return fail(400, message, headers);
   }
@@ -157,7 +166,6 @@ Deno.serve(async (req) => {
     .insert({
       auth_user_id: created.user.id,
       company_id: companyId,
-      login,
       name,
       last_name: lastName,
       phone,
@@ -172,6 +180,8 @@ Deno.serve(async (req) => {
       can_view_client_stats: isAdminRole ? true : Boolean(permissions.can_view_client_stats ?? true),
       can_view_contacts_and_amounts: isAdminRole ? true : Boolean(permissions.can_view_contacts_and_amounts ?? true),
       can_manage_own_schedule: isAdminRole ? true : Boolean(permissions.can_manage_own_schedule ?? false),
+      can_edit_order_schedule_and_price:
+        role === 'driver' ? Boolean(permissions.can_edit_order_schedule_and_price ?? false) : false,
       default_vehicle_id: role === 'driver' ? defaultVehicleId : null,
     })
     .select()
@@ -181,10 +191,7 @@ Deno.serve(async (req) => {
     // Пользователь для входа создан, а строка сотрудника — нет: не
     // оставляем "повисший" аккаунт без роли, откатываем.
     await admin.auth.admin.deleteUser(created.user.id);
-    const message = insertError.message.includes('employees_login_key')
-      ? 'Такой логин уже занят'
-      : insertError.message;
-    return fail(400, message, headers);
+    return fail(400, insertError.message, headers);
   }
 
   return new Response(JSON.stringify({ employee }), { status: 200, headers });

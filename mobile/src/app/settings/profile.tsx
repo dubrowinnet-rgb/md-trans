@@ -7,14 +7,15 @@ import { useUpdateOwnProfile } from '../../api/accounts';
 import { useSession } from '../../providers/SessionProvider';
 import { ACCOUNT_ROLE_LABELS } from '../../theme';
 
-// «Мой профиль» (доработки 1, п.2) — сотрудник сам меняет логин/телефон/
-// пароль, доступно любой роли. «Оплата профиля» — уже существующее
-// employees.paid_until (миграция 0001), просто раньше не было экрана,
-// который его показывает; «Продлить» — заглушка, как и просил Максим.
+// «Мой профиль» (доработки 1, п.2) — сотрудник сам меняет телефон/пароль,
+// доступно любой роли. Логина больше нет (доработки 3, п.4) — вход по
+// телефону и паролю, см. app/login.tsx. «Оплата профиля» — уже
+// существующее employees.paid_until (миграция 0001), просто раньше не
+// было экрана, который его показывает; «Продлить» — заглушка, как и
+// просил Максим.
 export default function ProfileSettingsScreen() {
   const { employee } = useSession();
   const updateProfile = useUpdateOwnProfile();
-  const [login, setLogin] = useState(employee?.login ?? '');
   const [phone, setPhone] = useState(employee?.phone ?? '');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -25,7 +26,7 @@ export default function ProfileSettingsScreen() {
   const handleSave = async () => {
     setError(null);
     try {
-      await updateProfile.mutateAsync({ id: employee.id, login: login.trim(), phone: phone.trim(), password });
+      await updateProfile.mutateAsync({ id: employee.id, phone: phone.trim(), password });
       setPassword('');
       setSnackbar('Сохранено');
     } catch (err) {
@@ -47,21 +48,13 @@ export default function ProfileSettingsScreen() {
 
         <TextInput
           mode="outlined"
-          label="Логин"
-          accessibilityLabel="Логин"
-          value={login}
-          onChangeText={setLogin}
-          autoCapitalize="none"
-        />
-        <HelperText type="info">Латиница, цифры, точка, дефис или подчёркивание, 3–32 символа</HelperText>
-        <TextInput
-          mode="outlined"
           label="Телефон"
           accessibilityLabel="Телефон"
           value={phone}
           onChangeText={setPhone}
           keyboardType="phone-pad"
         />
+        <HelperText type="info">По этому номеру вы входите в приложение</HelperText>
         <TextInput
           mode="outlined"
           label="Новый пароль"

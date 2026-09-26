@@ -1,7 +1,34 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { useCurrentEmployee, type Employee } from '../api/employees';
+
+// Доработки 3, п.4: вход теперь по телефону, а не по логину — но у
+// аккаунтов, заведённых до этой доработки, на auth.users телефон ещё не
+// стоит (там только email). Раз в сессию, после успешного входа СТАРЫМ
+// способом (пока он ещё поддерживается — см. app/login.tsx), тихо
+// вызываем update-account с текущим (не изменившимся) телефоном — это
+// достаточно, чтобы функция синхронизировала auth.users.phone (см.
+// supabase/functions/update-account/index.ts), и со следующего раза вход
+// по телефону уже сработает. Отмечаем флагом в AsyncStorage, чтобы не
+// дёргать функцию на каждый запуск приложения без необходимости.
+function syncPhoneAuthOnce(employee: Employee) {
+  if (!employee.phone) return;
+  const flagKey = `phoneAuthSynced:${employee.id}:${employee.phone}`;
+  AsyncStorage.getItem(flagKey)
+    .then((done) => {
+      if (done) return;
+      return supabase.functions
+        .invoke('update-account', { body: { id: employee.id, phone: employee.phone } })
+        .then(({ error }) => {
+          if (!error) return AsyncStorage.setItem(flagKey, '1');
+        });
+    })
+    .catch(() => {
+      // Не страшно — попробуем снова при следующем входе/запуске.
+    });
+}
 
 interface SessionState {
   session: Session | null;
@@ -38,6 +65,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const employeeQuery = useCurrentEmployee(session?.user.id);
+
+  useEffect(() => {
+    if (employeeQuery.data) syncPhoneAuthOnce(employeeQuery.data);
+  }, [employeeQuery.data]);
 
   const value: SessionState = {
     session,
