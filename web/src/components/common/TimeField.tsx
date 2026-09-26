@@ -19,7 +19,21 @@ export function TimeField({
     <TimePicker
       label={label}
       value={value}
-      onChange={(v) => v && onChange(v.slice(0, 5))}
+      onChange={(v) => {
+        if (!v) return;
+        onChange(v.slice(0, 5));
+        // Закрываем выпадающий список сразу после выбора часа или минут —
+        // по одному значению за раз, как и в выборе услуг (Максим,
+        // «доработки 3»): TimePicker сам не закрывается по клику
+        // (`@mantine/dates`, закрытие только по blur), нужно ещё нажатие
+        // на поле, если нужно поправить второе значение. Дать событию
+        // клика сперва доотработать (оно само возвращает фокус на
+        // часы/минуты), а потом снять фокус — так же, как закрывает клик
+        // мимо.
+        requestAnimationFrame(() => {
+          (document.activeElement as HTMLElement | null)?.blur();
+        });
+      }}
       format="24h"
       withDropdown
       minutesStep={5}

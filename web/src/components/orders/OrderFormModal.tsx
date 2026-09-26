@@ -91,6 +91,7 @@ export function OrderFormModal({
   const [clientSearch, setClientSearch] = useState('');
   const [newClientOpen, setNewClientOpen] = useState(false);
   const [serviceIds, setServiceIds] = useState<string[]>(initial?.service_ids ?? []);
+  const [servicesDropdownOpened, setServicesDropdownOpened] = useState(false);
   const primaryPickup = initial?.stops.find((s) => s.is_primary && s.type === 'pickup');
   const primaryDropoff = initial?.stops.find((s) => s.is_primary && s.type === 'dropoff');
   const [pickup, setPickup] = useState(primaryPickup?.address ?? '');
@@ -335,6 +336,10 @@ export function OrderFormModal({
               onChange={applyServices}
               searchable
               comboboxProps={{ zIndex: 500 }}
+              dropdownOpened={servicesDropdownOpened}
+              onDropdownOpen={() => setServicesDropdownOpened(true)}
+              onDropdownClose={() => setServicesDropdownOpened(false)}
+              onOptionSubmit={() => setServicesDropdownOpened(false)}
               renderOption={({ option }) => {
                 const s = services.find((x) => x.id === option.value);
                 return (
