@@ -6,7 +6,7 @@ export type DriverReportOrderRow = Database['public']['Tables']['driver_report_o
 export type DriverReportExpenseRow = Database['public']['Tables']['driver_report_expenses']['Row'];
 
 export interface DriverReportOrderLine extends Pick<DriverReportOrderRow, 'id' | 'order_id' | 'paid_by_transfer'> {
-  orders: { id: string; scheduled_start: string; cargo_description: string | null; actual_price: number | null } | null;
+  orders: { id: string; scheduled_start: string; cargo_description: string | null; actual_price: number | null; status: string } | null;
 }
 
 export type DriverReportExpenseLine = Pick<DriverReportExpenseRow, 'id' | 'description' | 'amount'>;
@@ -43,11 +43,14 @@ interface DriverReportWithEmployee extends DriverReport {
 }
 
 const REPORT_SELECT =
-  '*, driver_report_orders(id, order_id, paid_by_transfer, orders(id, scheduled_start, cargo_description, actual_price)), driver_report_expenses(id, description, amount)';
+  '*, driver_report_orders(id, order_id, paid_by_transfer, orders(id, scheduled_start, cargo_description, actual_price, status)), driver_report_expenses(id, description, amount)';
 
 function withTotals<T extends DriverReport>(raw: T): T {
+  // В наличные идут неотменённые заказы, оплаченные не переводом (ревью,
+  // задача 3): если заказ отменили уже после добавления в отчёт, он не должен
+  // раздувать «К сдаче».
   const cashCollected = raw.driver_report_orders
-    .filter((o) => !o.paid_by_transfer && (o.orders?.actual_price ?? 0) > 0)
+    .filter((o) => o.orders?.status !== 'cancelled' && !o.paid_by_transfer && (o.orders?.actual_price ?? 0) > 0)
     .reduce((sum, o) => sum + (o.orders?.actual_price ?? 0), 0);
   const expensesTotal = raw.driver_report_expenses.reduce((sum, e) => sum + e.amount, 0);
   const fuelCash = raw.fuel_payment_method === 'cash' ? (raw.fuel_amount ?? 0) : 0;
@@ -98,8 +101,11 @@ export function useDriverReports(companyId: string | undefined) {
   });
 }
 
-// Заказы дня, где сотрудник в бригаде (любой ролью) — для автозаполнения
-// формы отчёта списком заказов на выбор перевод/QR.
+// Заказы дня, где сотрудник был ВОДИТЕЛЕМ (не грузчиком на чужой машине) и
+// заказ не отменён — для автозаполнения формы отчёта о наличных (ревью,
+// задача 3). Раньше сюда попадали любые роли и отменённые заказы, отчего
+// «К сдаче» завышалась, а у администратора появлялось ложное «Расхождение».
+// То же условие, что и у напоминания remind-driver-report.
 export function useReportDayOrders(employeeId: string | undefined, reportDate: string) {
   const dayStart = `${reportDate}T00:00:00+03:00`;
   const dayEnd = `${reportDate}T23:59:59+03:00`;
@@ -109,8 +115,10 @@ export function useReportDayOrders(employeeId: string | undefined, reportDate: s
     queryFn: async () => {
       const { data, error } = await supabase
         .from('order_crew')
-        .select('order_id, orders!inner(id, scheduled_start, cargo_description, actual_price)')
+        .select('order_id, orders!inner(id, scheduled_start, cargo_description, actual_price, status)')
         .eq('employee_id', employeeId as string)
+        .eq('role', 'driver')
+        .neq('orders.status', 'cancelled')
         .gte('orders.scheduled_start', dayStart)
         .lte('orders.scheduled_start', dayEnd);
       if (error) throw error;

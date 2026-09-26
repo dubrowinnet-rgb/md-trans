@@ -83,11 +83,17 @@ export function useEmployeePayEstimate(employeeId: string | undefined, rates: Em
     ],
     enabled: Boolean(employeeId),
     queryFn: async (): Promise<PayEstimate> => {
+      // «Выполненный» заказ — неотменённый и уже прошедший (ревью, задача 2;
+      // раньше фильтр был orders.status = 'completed', который приложение
+      // больше не проставляет, отчего оценка всегда выходила нулевой). См.
+      // lib/orderCompletion.ts — то же правило в статистике и истории клиента.
+      const nowIso = new Date().toISOString();
       const { data, error } = await supabase
         .from('order_crew')
         .select('order_id, role, orders!inner(id, scheduled_start, scheduled_end)')
         .eq('employee_id', employeeId as string)
-        .eq('orders.status', 'completed')
+        .neq('orders.status', 'cancelled')
+        .lte('orders.scheduled_end', nowIso)
         .gte('orders.scheduled_start', startIso)
         .lt('orders.scheduled_start', endIso);
       if (error) throw error;

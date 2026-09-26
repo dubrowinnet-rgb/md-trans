@@ -3,10 +3,17 @@ import { ActivityIndicator, Appbar, Divider, HelperText, List, Text } from 'reac
 import { useStatsOverview } from '../../api/stats';
 import { AccountMenu } from '../../components/layout/AccountMenu';
 import { NotificationBell } from '../../components/layout/NotificationBell';
-import { ACCOUNT_ROLE_LABELS, ORDER_STATUS_LABELS } from '../../theme';
-import type { OrderStatus } from '../../types/database';
+import { ACCOUNT_ROLE_LABELS } from '../../theme';
+import type { OrderBucket } from '../../lib/orderCompletion';
 
-const STATUS_ORDER: OrderStatus[] = ['new', 'confirmed', 'in_progress', 'completed', 'cancelled'];
+// Заказы делим по факту, а не по статусу (приложение больше не пишет
+// «завершён» — см. lib/orderCompletion.ts): активные, завершённые, отменённые.
+const BUCKET_ORDER: OrderBucket[] = ['active', 'completed', 'cancelled'];
+const BUCKET_LABELS: Record<OrderBucket, string> = {
+  active: 'Активные',
+  completed: 'Завершённые',
+  cancelled: 'Отменённые',
+};
 
 // Статистика администратора: по компании и по каждому сотруднику (раздел
 // «права и доступы»). Видна только роли admin — см. (office)/_layout.tsx.
@@ -46,11 +53,11 @@ export default function StatsScreen() {
             </View>
           </View>
           <View style={styles.statusRow}>
-            {STATUS_ORDER.map((status) => (
-              <View key={status} style={styles.statusItem}>
-                <Text variant="bodyMedium">{stats.ordersByStatus[status] ?? 0}</Text>
+            {BUCKET_ORDER.map((bucket) => (
+              <View key={bucket} style={styles.statusItem}>
+                <Text variant="bodyMedium">{stats.ordersByBucket[bucket]}</Text>
                 <Text variant="bodySmall" style={styles.muted}>
-                  {ORDER_STATUS_LABELS[status]}
+                  {BUCKET_LABELS[bucket]}
                 </Text>
               </View>
             ))}
