@@ -42,12 +42,21 @@ alter table orders add column if not exists created_by uuid references employees
 -- scheduled_end/actual_price, и только в заказе, где он сам в бригаде.
 -- У всех остальных (has_order_permission() — админ/диспетчер/любой с
 -- can_manage_orders) триггер ничего не запрещает.
+-- auth.uid() is null — запрос идёт не от пользователя приложения (SQL-
+-- редактор Supabase, миграция, сервисная роль): такой вызов уже доверенный
+-- сам по себе, пропускаем без проверки (иначе любой массовый UPDATE orders
+-- из будущей миграции упадёт на первой же строке, как это случилось с
+-- бэкфиллом company_id в 0013).
 create or replace function enforce_driver_order_update()
 returns trigger
 language plpgsql
 security invoker
 as $$
 begin
+  if auth.uid() is null then
+    return new;
+  end if;
+
   if has_order_permission() then
     return new;
   end if;

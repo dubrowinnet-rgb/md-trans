@@ -14,11 +14,17 @@
 -- Остальные существующие помощники (is_admin(), has_order_permission() и
 -- т.д.) менять не нужно: они вызывают employees select РОВНО один раз,
 -- а та уже разрешается без дальнейшей рекурсии через definer-функции.
+--
+-- Весь файл написан так, что его можно запускать повторно без вреда (IF
+-- EXISTS/IF NOT EXISTS везде, ON CONFLICT на seed-строке): у одного
+-- пользователя запуск оборвался на баге ниже на середине файла, и было не
+-- проверить, откатила ли SQL-редактор Supabase уже выполненную часть или
+-- нет. Повторный запуск того же файла безопасен в любом из этих случаев.
 
 -- ==========================================================================
 -- companies — компания-тенант («клиент сервиса» в терминах Максима).
 -- ==========================================================================
-create table companies (
+create table if not exists companies (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   subscription_status text not null default 'pending_payment'
@@ -33,23 +39,25 @@ create table companies (
 -- id, чтобы ссылаться на него ниже по файлу без переменных/CTE. Ничего в
 -- работе приложения для него не меняется.
 insert into companies (id, name, subscription_status)
-values ('00000000-0000-0000-0000-000000000001', 'Основная компания', 'active');
+values ('00000000-0000-0000-0000-000000000001', 'Основная компания', 'active')
+on conflict (id) do nothing;
 
 -- ==========================================================================
 -- employees.role — новое значение 'owner'. У владельца нет company_id
 -- (не привязан ни к одной компании), у всех остальных ролей company_id
 -- обязателен — это разные ветки одного constraint'а, а не просто nullable.
 -- ==========================================================================
-alter table employees drop constraint employees_role_check;
+alter table employees drop constraint if exists employees_role_check;
 alter table employees add constraint employees_role_check
   check (role in ('owner', 'admin', 'dispatcher', 'driver', 'loader'));
 
-alter table employees add column company_id uuid references companies (id);
+alter table employees add column if not exists company_id uuid references companies (id);
 update employees set company_id = '00000000-0000-0000-0000-000000000001' where company_id is null;
+alter table employees drop constraint if exists employees_company_id_by_role;
 alter table employees add constraint employees_company_id_by_role check (
   (role = 'owner' and company_id is null) or (role <> 'owner' and company_id is not null)
 );
-create index employees_company_id_idx on employees (company_id);
+create index if not exists employees_company_id_idx on employees (company_id);
 
 -- ==========================================================================
 -- Функции-помощники для RLS — определены здесь (employees.company_id уже
@@ -80,6 +88,60 @@ grant execute on function get_my_company_id() to authenticated;
 grant execute on function is_service_owner() to authenticated;
 
 -- ==========================================================================
+-- Исправление бага из миграции 0006: enforce_driver_order_update()
+-- проверяет права через has_order_permission()/is_driver(), а те читают
+-- auth.uid() — вне запроса от авторизованного пользователя приложения
+-- (SQL-редактор Supabase, эта же миграция) auth.uid() всегда NULL, обе
+-- проверки возвращают false, и функция ошибается на первой же строке
+-- заказа: 'Недостаточно прав для изменения заказа'. Ниже по файлу как раз
+-- есть массовый update orders (простановка company_id) — он и наткнулся
+-- на эту ошибку. Тот же приём уже применён в 0014 для аналогичного триггера
+-- restrict_employee_self_role_change. Для реального пользователя приложения
+-- auth.uid() всегда есть — ограничение продолжает работать как раньше.
+-- ==========================================================================
+create or replace function enforce_driver_order_update()
+returns trigger
+language plpgsql
+security invoker
+as $$
+begin
+  if auth.uid() is null then
+    return new;
+  end if;
+
+  if has_order_permission() then
+    return new;
+  end if;
+
+  if not is_driver() then
+    raise exception 'Недостаточно прав для изменения заказа';
+  end if;
+
+  if not exists (
+    select 1 from order_crew oc
+    join employees e on e.id = oc.employee_id
+    where oc.order_id = new.id and e.auth_user_id = auth.uid()
+  ) then
+    raise exception 'Вы не назначены на этот заказ';
+  end if;
+
+  if new.id is distinct from old.id
+     or new.client_id is distinct from old.client_id
+     or new.status is distinct from old.status
+     or new.cargo_description is distinct from old.cargo_description
+     or new.comment is distinct from old.comment
+     or new.photos is distinct from old.photos
+     or new.created_by is distinct from old.created_by
+     or new.created_at is distinct from old.created_at
+  then
+    raise exception 'Водителю доступны только время и сумма заказа';
+  end if;
+
+  return new;
+end;
+$$;
+
+-- ==========================================================================
 -- Остальные таблицы «первого уровня» — company_id обязателен всегда
 -- (клиенты/заказы/услуги/техника/шаблоны/правила не бывают без компании).
 -- DEFAULT get_my_company_id() — существующий код приложения вставляет эти
@@ -89,45 +151,45 @@ grant execute on function is_service_owner() to authenticated;
 -- значение из DEFAULT — подделать компанию через явно переданное поле
 -- всё равно нельзя.
 -- ==========================================================================
-alter table clients add column company_id uuid references companies (id);
+alter table clients add column if not exists company_id uuid references companies (id);
 update clients set company_id = '00000000-0000-0000-0000-000000000001' where company_id is null;
 alter table clients alter column company_id set not null;
 alter table clients alter column company_id set default get_my_company_id();
-create index clients_company_id_idx on clients (company_id);
+create index if not exists clients_company_id_idx on clients (company_id);
 
-alter table orders add column company_id uuid references companies (id);
+alter table orders add column if not exists company_id uuid references companies (id);
 update orders set company_id = '00000000-0000-0000-0000-000000000001' where company_id is null;
 alter table orders alter column company_id set not null;
 alter table orders alter column company_id set default get_my_company_id();
-create index orders_company_id_idx on orders (company_id);
+create index if not exists orders_company_id_idx on orders (company_id);
 
-alter table services add column company_id uuid references companies (id);
+alter table services add column if not exists company_id uuid references companies (id);
 update services set company_id = '00000000-0000-0000-0000-000000000001' where company_id is null;
 alter table services alter column company_id set not null;
 alter table services alter column company_id set default get_my_company_id();
-create index services_company_id_idx on services (company_id);
+create index if not exists services_company_id_idx on services (company_id);
 
-alter table vehicles add column company_id uuid references companies (id);
+alter table vehicles add column if not exists company_id uuid references companies (id);
 update vehicles set company_id = '00000000-0000-0000-0000-000000000001' where company_id is null;
 alter table vehicles alter column company_id set not null;
 alter table vehicles alter column company_id set default get_my_company_id();
-create index vehicles_company_id_idx on vehicles (company_id);
+create index if not exists vehicles_company_id_idx on vehicles (company_id);
 
 -- sms_templates: ключ шаблона ('new_order' и т.д.) был глобальным
 -- первичным ключом — теперь у каждой компании свой набор из тех же
 -- ключей, первичный ключ расширяется до (company_id, key).
-alter table sms_templates add column company_id uuid references companies (id);
+alter table sms_templates add column if not exists company_id uuid references companies (id);
 update sms_templates set company_id = '00000000-0000-0000-0000-000000000001' where company_id is null;
 alter table sms_templates alter column company_id set not null;
 alter table sms_templates alter column company_id set default get_my_company_id();
-alter table sms_templates drop constraint sms_templates_pkey;
+alter table sms_templates drop constraint if exists sms_templates_pkey;
 alter table sms_templates add primary key (company_id, key);
 
-alter table reminder_rules add column company_id uuid references companies (id);
+alter table reminder_rules add column if not exists company_id uuid references companies (id);
 update reminder_rules set company_id = '00000000-0000-0000-0000-000000000001' where company_id is null;
 alter table reminder_rules alter column company_id set not null;
 alter table reminder_rules alter column company_id set default get_my_company_id();
-create index reminder_rules_company_id_idx on reminder_rules (company_id);
+create index if not exists reminder_rules_company_id_idx on reminder_rules (company_id);
 
 -- order_stops/order_crew/order_services/employee_schedule_days/
 -- order_reminder_log намеренно НЕ получают свой company_id — это дочерние
@@ -141,20 +203,20 @@ create index reminder_rules_company_id_idx on reminder_rules (company_id);
 -- строку может любой (как раньше), но не роль/компанию себе — это ниже,
 -- отдельным триггером.
 -- ==========================================================================
-drop policy "employees select" on employees;
+drop policy if exists "employees select" on employees;
 create policy "employees select" on employees for select to authenticated
   using (is_service_owner() or company_id = get_my_company_id());
 
-drop policy "employees insert by admin" on employees;
+drop policy if exists "employees insert by admin" on employees;
 create policy "employees insert by admin" on employees for insert to authenticated
   with check (is_admin() and company_id = get_my_company_id());
 
-drop policy "employees update" on employees;
+drop policy if exists "employees update" on employees;
 create policy "employees update" on employees for update to authenticated
   using ((is_admin() and company_id = get_my_company_id()) or auth_user_id = auth.uid())
   with check ((is_admin() and company_id = get_my_company_id()) or auth_user_id = auth.uid());
 
-drop policy "employees delete by admin" on employees;
+drop policy if exists "employees delete by admin" on employees;
 create policy "employees delete by admin" on employees for delete to authenticated
   using (is_admin() and company_id = get_my_company_id());
 
@@ -172,6 +234,7 @@ begin
 end;
 $$ language plpgsql security invoker;
 
+drop trigger if exists employees_restrict_self_role_change on employees;
 create trigger employees_restrict_self_role_change
   before update on employees
   for each row
@@ -182,18 +245,22 @@ create trigger employees_restrict_self_role_change
 -- есть читать/писать мог любой вошедший. Оставляем ту же ширину прав,
 -- добавляем только границу компании.
 -- ==========================================================================
-drop policy "authenticated full access" on clients;
+drop policy if exists "authenticated full access" on clients;
+drop policy if exists "clients select" on clients;
 create policy "clients select" on clients for select to authenticated using (company_id = get_my_company_id());
+drop policy if exists "clients insert" on clients;
 create policy "clients insert" on clients for insert to authenticated with check (company_id = get_my_company_id());
+drop policy if exists "clients update" on clients;
 create policy "clients update" on clients for update to authenticated
   using (company_id = get_my_company_id()) with check (company_id = get_my_company_id());
+drop policy if exists "clients delete" on clients;
 create policy "clients delete" on clients for delete to authenticated using (company_id = get_my_company_id());
 
 -- ==========================================================================
 -- services
 -- ==========================================================================
-drop policy "services select" on services;
-drop policy "services write by admin" on services;
+drop policy if exists "services select" on services;
+drop policy if exists "services write by admin" on services;
 create policy "services select" on services for select to authenticated using (company_id = get_my_company_id());
 create policy "services write by admin" on services for all to authenticated
   using (is_admin() and company_id = get_my_company_id())
@@ -202,10 +269,10 @@ create policy "services write by admin" on services for all to authenticated
 -- ==========================================================================
 -- vehicles
 -- ==========================================================================
-drop policy "vehicles select" on vehicles;
-drop policy "vehicles insert" on vehicles;
-drop policy "vehicles update" on vehicles;
-drop policy "vehicles delete" on vehicles;
+drop policy if exists "vehicles select" on vehicles;
+drop policy if exists "vehicles insert" on vehicles;
+drop policy if exists "vehicles update" on vehicles;
+drop policy if exists "vehicles delete" on vehicles;
 create policy "vehicles select" on vehicles for select to authenticated using (company_id = get_my_company_id());
 create policy "vehicles insert" on vehicles for insert to authenticated
   with check (has_order_permission() and company_id = get_my_company_id());
@@ -218,16 +285,16 @@ create policy "vehicles delete" on vehicles for delete to authenticated
 -- ==========================================================================
 -- sms_templates / reminder_rules
 -- ==========================================================================
-drop policy "sms_templates select" on sms_templates;
-drop policy "sms_templates update by admin" on sms_templates;
+drop policy if exists "sms_templates select" on sms_templates;
+drop policy if exists "sms_templates update by admin" on sms_templates;
 create policy "sms_templates select" on sms_templates for select to authenticated
   using (company_id = get_my_company_id());
 create policy "sms_templates update by admin" on sms_templates for update to authenticated
   using (is_admin() and company_id = get_my_company_id())
   with check (is_admin() and company_id = get_my_company_id());
 
-drop policy "reminder_rules select" on reminder_rules;
-drop policy "reminder_rules write by admin" on reminder_rules;
+drop policy if exists "reminder_rules select" on reminder_rules;
+drop policy if exists "reminder_rules write by admin" on reminder_rules;
 create policy "reminder_rules select" on reminder_rules for select to authenticated
   using (company_id = get_my_company_id());
 create policy "reminder_rules write by admin" on reminder_rules for all to authenticated
@@ -251,12 +318,16 @@ begin
     (new.id, 'completed', 'Заказ выполнен',
      '[Name], Ваш заказ выполнен! Стоимость всех работ составила [Cost]. Спасибо, что выбрали нас!'),
     (new.id, 'cancelled', 'Заказ отменён',
-     'Ваш заказ на [Day], [Date] на [Time] отменён. Извините.');
-  insert into reminder_rules (company_id, target, offset_minutes) values (new.id, 'crew_push', 30);
+     'Ваш заказ на [Day], [Date] на [Time] отменён. Извините.')
+  on conflict (company_id, key) do nothing;
+  insert into reminder_rules (company_id, target, offset_minutes)
+  values (new.id, 'crew_push', 30)
+  on conflict do nothing;
   return new;
 end;
 $$ language plpgsql security definer set search_path = public;
 
+drop trigger if exists companies_seed_defaults on companies;
 create trigger companies_seed_defaults
   after insert on companies
   for each row
@@ -266,10 +337,10 @@ create trigger companies_seed_defaults
 -- orders — политики те же, что и раньше (has_order_permission()/is_driver()
 -- из миграций 0005/0006), просто с добавленной границей компании.
 -- ==========================================================================
-drop policy "orders select" on orders;
-drop policy "orders insert" on orders;
-drop policy "orders update" on orders;
-drop policy "orders delete" on orders;
+drop policy if exists "orders select" on orders;
+drop policy if exists "orders insert" on orders;
+drop policy if exists "orders update" on orders;
+drop policy if exists "orders delete" on orders;
 create policy "orders select" on orders for select to authenticated using (company_id = get_my_company_id());
 create policy "orders insert" on orders for insert to authenticated
   with check (has_order_permission() and company_id = get_my_company_id());
@@ -281,10 +352,10 @@ create policy "orders delete" on orders for delete to authenticated
 
 -- order_stops / order_services — дочерние, своего company_id нет,
 -- граница компании проверяется через orders.
-drop policy "order_stops select" on order_stops;
-drop policy "order_stops insert" on order_stops;
-drop policy "order_stops update" on order_stops;
-drop policy "order_stops delete" on order_stops;
+drop policy if exists "order_stops select" on order_stops;
+drop policy if exists "order_stops insert" on order_stops;
+drop policy if exists "order_stops update" on order_stops;
+drop policy if exists "order_stops delete" on order_stops;
 create policy "order_stops select" on order_stops for select to authenticated
   using (exists (select 1 from orders o where o.id = order_stops.order_id and o.company_id = get_my_company_id()));
 create policy "order_stops insert" on order_stops for insert to authenticated
@@ -299,10 +370,10 @@ create policy "order_stops delete" on order_stops for delete to authenticated
   using (has_order_permission()
     and exists (select 1 from orders o where o.id = order_stops.order_id and o.company_id = get_my_company_id()));
 
-drop policy "order_services select" on order_services;
-drop policy "order_services insert" on order_services;
-drop policy "order_services update" on order_services;
-drop policy "order_services delete" on order_services;
+drop policy if exists "order_services select" on order_services;
+drop policy if exists "order_services insert" on order_services;
+drop policy if exists "order_services update" on order_services;
+drop policy if exists "order_services delete" on order_services;
 create policy "order_services select" on order_services for select to authenticated
   using (exists (select 1 from orders o where o.id = order_services.order_id and o.company_id = get_my_company_id()));
 create policy "order_services insert" on order_services for insert to authenticated
@@ -319,10 +390,10 @@ create policy "order_services delete" on order_services for delete to authentica
 
 -- order_crew — то же самое, плюс сохраняем существующую ветку «сотрудник
 -- всегда может обновить свою же строку» (отметка «принял», миграция 0005).
-drop policy "order_crew select" on order_crew;
-drop policy "order_crew insert" on order_crew;
-drop policy "order_crew update" on order_crew;
-drop policy "order_crew delete" on order_crew;
+drop policy if exists "order_crew select" on order_crew;
+drop policy if exists "order_crew insert" on order_crew;
+drop policy if exists "order_crew update" on order_crew;
+drop policy if exists "order_crew delete" on order_crew;
 create policy "order_crew select" on order_crew for select to authenticated
   using (exists (select 1 from orders o where o.id = order_crew.order_id and o.company_id = get_my_company_id()));
 create policy "order_crew insert" on order_crew for insert to authenticated
@@ -338,10 +409,10 @@ create policy "order_crew delete" on order_crew for delete to authenticated
     and exists (select 1 from orders o where o.id = order_crew.order_id and o.company_id = get_my_company_id()));
 
 -- employee_schedule_days — дочерняя от employees.
-drop policy "employee_schedule_days select" on employee_schedule_days;
-drop policy "employee_schedule_days insert" on employee_schedule_days;
-drop policy "employee_schedule_days update" on employee_schedule_days;
-drop policy "employee_schedule_days delete" on employee_schedule_days;
+drop policy if exists "employee_schedule_days select" on employee_schedule_days;
+drop policy if exists "employee_schedule_days insert" on employee_schedule_days;
+drop policy if exists "employee_schedule_days update" on employee_schedule_days;
+drop policy if exists "employee_schedule_days delete" on employee_schedule_days;
 create policy "employee_schedule_days select" on employee_schedule_days for select to authenticated
   using (exists (
     select 1 from employees e where e.id = employee_schedule_days.employee_id and e.company_id = get_my_company_id()
@@ -438,8 +509,11 @@ $$;
 -- собственный employees.paid_until, отдельная от подписки компании вещь).
 -- ==========================================================================
 alter table companies enable row level security;
+drop policy if exists "companies select by owner" on companies;
 create policy "companies select by owner" on companies for select to authenticated using (is_service_owner());
+drop policy if exists "companies insert by owner" on companies;
 create policy "companies insert by owner" on companies for insert to authenticated with check (is_service_owner());
+drop policy if exists "companies update by owner" on companies;
 create policy "companies update by owner" on companies for update to authenticated
   using (is_service_owner()) with check (is_service_owner());
 
@@ -450,7 +524,7 @@ create policy "companies update by owner" on companies for update to authenticat
 -- только он; отвечать в переписке — тоже он (в своей компании) или
 -- владелец (в любой).
 -- ==========================================================================
-create table support_tickets (
+create table if not exists support_tickets (
   id uuid primary key default gen_random_uuid(),
   company_id uuid not null references companies (id),
   created_by uuid not null references employees (id),
@@ -460,26 +534,30 @@ create table support_tickets (
   updated_at timestamptz not null default now()
 );
 
-create index support_tickets_company_id_idx on support_tickets (company_id);
+create index if not exists support_tickets_company_id_idx on support_tickets (company_id);
 
 alter table support_tickets enable row level security;
+drop trigger if exists support_tickets_set_updated_at on support_tickets;
 create trigger support_tickets_set_updated_at
   before update on support_tickets
   for each row
   execute function set_updated_at();
 
+drop policy if exists "support_tickets select" on support_tickets;
 create policy "support_tickets select" on support_tickets for select to authenticated
   using (is_service_owner() or company_id = get_my_company_id());
+drop policy if exists "support_tickets insert" on support_tickets;
 create policy "support_tickets insert" on support_tickets for insert to authenticated
   with check (
     is_admin() and company_id = get_my_company_id()
     and created_by = (select id from employees where auth_user_id = auth.uid())
   );
+drop policy if exists "support_tickets update" on support_tickets;
 create policy "support_tickets update" on support_tickets for update to authenticated
   using (is_service_owner() or (is_admin() and company_id = get_my_company_id()))
   with check (is_service_owner() or (is_admin() and company_id = get_my_company_id()));
 
-create table support_ticket_messages (
+create table if not exists support_ticket_messages (
   id uuid primary key default gen_random_uuid(),
   ticket_id uuid not null references support_tickets (id) on delete cascade,
   sender_id uuid not null references employees (id),
@@ -487,16 +565,18 @@ create table support_ticket_messages (
   created_at timestamptz not null default now()
 );
 
-create index support_ticket_messages_ticket_id_idx on support_ticket_messages (ticket_id);
+create index if not exists support_ticket_messages_ticket_id_idx on support_ticket_messages (ticket_id);
 
 alter table support_ticket_messages enable row level security;
 
+drop policy if exists "support_ticket_messages select" on support_ticket_messages;
 create policy "support_ticket_messages select" on support_ticket_messages for select to authenticated
   using (exists (
     select 1 from support_tickets t
     where t.id = support_ticket_messages.ticket_id
       and (is_service_owner() or t.company_id = get_my_company_id())
   ));
+drop policy if exists "support_ticket_messages insert" on support_ticket_messages;
 create policy "support_ticket_messages insert" on support_ticket_messages for insert to authenticated
   with check (
     sender_id = (select id from employees where auth_user_id = auth.uid())
@@ -523,6 +603,7 @@ begin
 end;
 $$ language plpgsql security definer set search_path = public;
 
+drop trigger if exists support_tickets_notify_owner on support_tickets;
 create trigger support_tickets_notify_owner
   after insert on support_tickets
   for each row
