@@ -375,12 +375,15 @@ function DayModal({
       opened
       onClose={onClose}
       title={
-        <div>
-          <Text fw={600}>{cell.employee.name}</Text>
-          <Text size="sm" c="dimmed">
+        <span>
+          <Text span fw={600}>
+            {cell.employee.name}
+          </Text>
+          <br />
+          <Text span size="sm" c="dimmed">
             {dayjs(fromDateKey(cell.day)).format('dddd, D MMMM')}
           </Text>
-        </div>
+        </span>
       }
       size="sm"
     >

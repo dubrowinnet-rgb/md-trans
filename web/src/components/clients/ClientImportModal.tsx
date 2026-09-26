@@ -154,7 +154,7 @@ export function ClientImportModal({
   };
 
   return (
-    <Modal opened onClose={onClose} size="lg" title={<Title order={4}>Импорт клиентов из файла</Title>}>
+    <Modal opened onClose={onClose} size="lg" title={<Title order={4} component="span">Импорт клиентов из файла</Title>}>
       <Stack>
         {!result && (
           <>

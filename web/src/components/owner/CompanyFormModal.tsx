@@ -37,7 +37,7 @@ export function CompanyFormModal({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <Modal opened onClose={onClose} title={<Title order={4}>Новый клиент сервиса</Title>}>
+    <Modal opened onClose={onClose} title={<Title order={4} component="span">Новый клиент сервиса</Title>}>
       <Stack>
         <TextInput label="Название компании *" value={name} onChange={(e) => setName(e.currentTarget.value)} data-autofocus />
         <TextInput label="Тариф" placeholder="Например, «Стандарт»" value={plan} onChange={(e) => setPlan(e.currentTarget.value)} />

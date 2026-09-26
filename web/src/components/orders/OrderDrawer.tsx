@@ -119,7 +119,7 @@ export function OrderDrawer({ orderId, onClose }: { orderId: string | null; onCl
       position="right"
       size={480}
       zIndex={300}
-      title={<Title order={4}>Заказ</Title>}
+      title={<Title order={4} component="span">Заказ</Title>}
     >
       {orderQuery.isLoading && <Loader />}
       {orderQuery.isError && <Alert color="red">{orderQuery.error.message}</Alert>}

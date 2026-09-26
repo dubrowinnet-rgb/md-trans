@@ -56,7 +56,7 @@ export function CopyMoveModal({
       opened
       onClose={onClose}
       zIndex={400}
-      title={<Title order={4}>{mode === 'copy' ? 'Копировать заказ' : 'Перенести заказ'}</Title>}
+      title={<Title order={4} component="span">{mode === 'copy' ? 'Копировать заказ' : 'Перенести заказ'}</Title>}
     >
       <Stack>
         <Text size="sm" c="dimmed">

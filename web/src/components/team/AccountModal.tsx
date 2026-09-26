@@ -197,7 +197,7 @@ export function AccountModal({ account, onClose }: { account: Account | null; on
   };
 
   return (
-    <Modal opened onClose={onClose} size="lg" title={<Title order={4}>{account ? account.name : 'Новый аккаунт'}</Title>}>
+    <Modal opened onClose={onClose} size="lg" title={<Title order={4} component="span">{account ? account.name : 'Новый аккаунт'}</Title>}>
       <Stack>
         <SimpleGrid cols={2}>
           <TextInput label="Имя *" value={name} onChange={(e) => setName(e.currentTarget.value)} />

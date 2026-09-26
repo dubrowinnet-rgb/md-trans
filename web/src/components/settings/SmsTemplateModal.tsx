@@ -23,7 +23,7 @@ export function SmsTemplateModal({ template, onClose }: { template: SmsTemplate;
   };
 
   return (
-    <Modal opened onClose={onClose} title={<Title order={4}>{template.label}</Title>}>
+    <Modal opened onClose={onClose} title={<Title order={4} component="span">{template.label}</Title>}>
       <Stack>
         <Textarea
           label="Текст сообщения"

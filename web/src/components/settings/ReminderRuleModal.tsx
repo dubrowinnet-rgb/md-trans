@@ -25,7 +25,7 @@ export function ReminderRuleModal({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <Modal opened onClose={onClose} title={<Title order={4}>Новое напоминание</Title>}>
+    <Modal opened onClose={onClose} title={<Title order={4} component="span">Новое напоминание</Title>}>
       <Stack>
         <NumberInput
           label="За сколько минут до начала заказа"

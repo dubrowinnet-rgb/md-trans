@@ -279,7 +279,7 @@ export function OrderFormModal({
       onClose={onClose}
       size={1100}
       zIndex={400}
-      title={<Title order={4}>{order ? 'Изменить заказ' : 'Новый заказ'}</Title>}
+      title={<Title order={4} component="span">{order ? 'Изменить заказ' : 'Новый заказ'}</Title>}
     >
       <Grid gap="xl">
         <Grid.Col span={7}>

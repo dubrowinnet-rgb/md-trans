@@ -38,11 +38,13 @@ export function DriverReportDetailModal({
       onClose={onClose}
       size="lg"
       title={
-        <Group gap="xs">
-          <Title order={4}>
+        <Group gap="xs" component="span">
+          <Title order={4} component="span">
             {employeeName} · {formatDate(report.report_date)}
           </Title>
-          <Badge color={DRIVER_REPORT_STATUS_COLORS[report.status]}>{DRIVER_REPORT_STATUS_LABELS[report.status]}</Badge>
+          <Badge component="span" color={DRIVER_REPORT_STATUS_COLORS[report.status]}>
+            {DRIVER_REPORT_STATUS_LABELS[report.status]}
+          </Badge>
         </Group>
       }
     >

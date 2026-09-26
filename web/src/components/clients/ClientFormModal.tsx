@@ -56,7 +56,7 @@ export function ClientFormModal({
       opened
       onClose={onClose}
       zIndex={zIndex}
-      title={<Title order={4}>{client ? 'Изменить клиента' : 'Новый клиент'}</Title>}
+      title={<Title order={4} component="span">{client ? 'Изменить клиента' : 'Новый клиент'}</Title>}
     >
       <Stack>
         <TextInput label="Имя *" value={name} onChange={(e) => setName(e.currentTarget.value)} data-autofocus />

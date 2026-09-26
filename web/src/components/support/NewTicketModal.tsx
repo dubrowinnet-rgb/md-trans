@@ -34,7 +34,7 @@ export function NewTicketModal({
   };
 
   return (
-    <Modal opened onClose={onClose} title={<Title order={4}>Новое обращение в поддержку</Title>}>
+    <Modal opened onClose={onClose} title={<Title order={4} component="span">Новое обращение в поддержку</Title>}>
       <Stack>
         <TextInput label="Тема *" value={subject} onChange={(e) => setSubject(e.currentTarget.value)} data-autofocus />
         <Textarea label="Вопрос *" autosize minRows={3} value={body} onChange={(e) => setBody(e.currentTarget.value)} />

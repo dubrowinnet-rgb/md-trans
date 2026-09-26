@@ -65,7 +65,7 @@ export function ClientModal({ clientId, onClose }: { clientId: string; onClose: 
     });
 
   return (
-    <Modal opened onClose={onClose} size={900} title={<Title order={4}>Клиент</Title>}>
+    <Modal opened onClose={onClose} size={900} title={<Title order={4} component="span">Клиент</Title>}>
       {clientQuery.isLoading && <Loader />}
       {clientQuery.isError && <Alert color="red">{clientQuery.error.message}</Alert>}
       {client && (

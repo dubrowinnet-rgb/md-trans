@@ -86,7 +86,7 @@ export function VehicleModal({ vehicle, onClose }: { vehicle: Vehicle | null; on
     });
 
   return (
-    <Modal opened onClose={onClose} size="lg" title={<Title order={4}>{vehicle ? vehicle.name : 'Новая машина'}</Title>}>
+    <Modal opened onClose={onClose} size="lg" title={<Title order={4} component="span">{vehicle ? vehicle.name : 'Новая машина'}</Title>}>
       <Stack>
         <SimpleGrid cols={2}>
           <TextInput label="Название *" placeholder="Газель" value={name} onChange={(e) => setName(e.currentTarget.value)} />

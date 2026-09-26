@@ -48,7 +48,7 @@ export function ServiceModal({ service, onClose }: { service: Service | null; on
   };
 
   return (
-    <Modal opened onClose={onClose} title={<Title order={4}>{service ? 'Изменить услугу' : 'Новая услуга'}</Title>}>
+    <Modal opened onClose={onClose} title={<Title order={4} component="span">{service ? 'Изменить услугу' : 'Новая услуга'}</Title>}>
       <Stack>
         <TextInput label="Название *" value={name} onChange={(e) => setName(e.currentTarget.value)} data-autofocus />
         <TextInput label="Категория" value={category} onChange={(e) => setCategory(e.currentTarget.value)} />
