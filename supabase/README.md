@@ -199,6 +199,13 @@ npx -y supabase functions deploy notify-order-changed --no-verify-jwt
 Тексты шаблонов (в том числе «заказ принят») по-прежнему можно менять в
 приложении: Настройки → Шаблоны СМС.
 
+Для веб-кабинета (`web/`) нужна ещё одна функция — `send-push`: через неё
+кабинет шлёт push бригаде (из браузера напрямую в Expo отправить нельзя).
+
+```bash
+supabase functions deploy send-push
+```
+
 ## Что создаётся
 
 7 основных таблиц: `employees`, `clients`, `services`, `orders`,
