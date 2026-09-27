@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Alert, Badge, Box, Button, Group, Loader, Paper, Table, Text } from '@mantine/core';
-import { IconCheck, IconPlus } from '@tabler/icons-react';
+import { IconCheck, IconDeviceMobile, IconPlus } from '@tabler/icons-react';
 import { useAllAccounts, type Account } from '@/api/accounts';
 import { useVehicles } from '@/api/vehicles';
 import { useSession } from '@/providers/SessionProvider';
@@ -10,6 +10,7 @@ import { ACCOUNT_ROLE_LABELS } from '@/lib/labels';
 import { formatPhone } from '@/lib/phone';
 import { PageHeader } from '@/components/common/PageHeader';
 import { AccountModal } from '@/components/team/AccountModal';
+import { InstallLinkModal } from '@/components/install/InstallLinkModal';
 
 // 'owner' сюда никогда не попадает (RLS не отдаёт эту роль в списке
 // сотрудников компании — см. lib/ownerAccess.ts), запись только ради
@@ -26,6 +27,7 @@ export default function TeamPage() {
   const accountsQuery = useAllAccounts();
   const vehicles = useVehicles().data ?? [];
   const [editing, setEditing] = useState<Account | 'new' | null>(null);
+  const [installOpen, setInstallOpen] = useState(false);
 
   if (employee?.role !== 'admin') {
     return (
@@ -38,6 +40,9 @@ export default function TeamPage() {
   return (
     <Box p="lg">
       <PageHeader title="Команда" subtitle="Телефоны, роли и права сотрудников">
+        <Button variant="default" leftSection={<IconDeviceMobile size={16} />} onClick={() => setInstallOpen(true)}>
+          Установка приложения
+        </Button>
         <Button leftSection={<IconPlus size={16} />} onClick={() => setEditing('new')}>
           Добавить аккаунт
         </Button>
@@ -105,6 +110,7 @@ export default function TeamPage() {
         </Table>
       </Paper>
       {editing && <AccountModal account={editing === 'new' ? null : editing} onClose={() => setEditing(null)} />}
+      {installOpen && <InstallLinkModal onClose={() => setInstallOpen(false)} />}
     </Box>
   );
 }

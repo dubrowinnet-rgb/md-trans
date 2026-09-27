@@ -102,6 +102,9 @@ export default function LoginPage() {
             </Anchor>
           </Stack>
         </form>
+        <Anchor href="/install/" size="sm" display="block" ta="center" mt="lg">
+          Установить приложение на телефон
+        </Anchor>
       </Paper>
     </Center>
   );

@@ -55,6 +55,27 @@ volumes/proxy/mdtrans/
 Официальные файлы Supabase не меняются, поэтому их `update.sh` обновляет
 без конфликтов.
 
+## Страница «Установка приложения»
+
+`https://<домен>/install/` — открывается без входа, её ссылку и QR-код
+администратор берёт в «Команде» → «Установка приложения». Что на ней
+показать, страница читает из `files/install.json` (кабинет пересобирать не
+нужно, достаточно положить файлы):
+
+```json
+{
+  "android": { "url": "/files/md-trans.apk", "version": "1.0.3" },
+  "ios": { "mode": "testflight", "url": "https://testflight.apple.com/join/…" }
+}
+```
+
+- `android` — ссылка на APK; без `install.json` страница сама проверяет,
+  лежит ли `files/md-trans.apk`.
+- `ios.mode` — `testflight` (приглашение TestFlight) или `adhoc` (`url` —
+  `itms-services://…` или страница установки, `registerUrl` — где
+  зарегистрировать новый iPhone).
+- Ссылки принимаются только вида `/…`, `https://…` и `itms-services://…`.
+
 ## Проверено
 
 Официальный Supabase `self-hosted/v0.8.2` (Postgres 17, Envoy) + все
