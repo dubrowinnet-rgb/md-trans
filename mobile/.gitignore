@@ -41,3 +41,6 @@ yarn-error.*
 /ios
 /android
 .env
+
+# Firebase (пуши на Android): подставляется при сборке EAS, см. app.config.js
+google-services.json

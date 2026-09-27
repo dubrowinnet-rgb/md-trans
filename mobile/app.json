@@ -3,16 +3,24 @@
     "name": "Грузоперевозки",
     "slug": "md-trans",
     "version": "1.0.0",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "mdtrans",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "ru.mdtrans.app",
+      "config": {
+        "usesNonExemptEncryption": false
+      }
     },
     "android": {
+      "package": "ru.mdtrans.app",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#5b21b6",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
@@ -38,6 +46,14 @@
         "expo-contacts",
         {
           "contactsPermission": "Приложение открывает контакты, чтобы добавить клиента из записной книжки."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Камера нужна, чтобы сфотографировать одометр для отчёта за день.",
+          "photosPermission": false,
+          "microphonePermission": false
         }
       ]
     ],

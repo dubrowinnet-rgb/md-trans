@@ -1,4 +1,5 @@
-# Общие функции для install.sh, update.sh и backup.sh. Сам по себе не
+# shellcheck shell=bash
+# Общие функции для install.sh, update.sh, backup.sh и publish-app.sh. Сам по себе не
 # запускается — его подключают остальные скрипты (source).
 #
 # Раскладка на сервере:
@@ -59,9 +60,10 @@ set_kv() {
   rm -f "$file.tmp"
 }
 
+# Пустая строка, если ключа нет (без ошибки — скрипты работают с set -e).
 get_kv() {
   [ -f "$1" ] || return 0
-  grep "^$2=" "$1" | head -n1 | cut -d= -f2- | tr -d '\r'
+  K="$2=" awk 'BEGIN { k = ENVIRON["K"] } index($0, k) == 1 { sub(/\r$/, ""); print substr($0, length(k) + 1); exit }' "$1"
 }
 
 config_get() { get_kv "$MDTRANS_CONFIG" "$1"; }
@@ -225,6 +227,78 @@ deploy_web() {
   fi
   sh "$dir/deploy/web/setup-web.sh" "$SUPABASE_DIR" \
     || warn "Веб-кабинет не собрался (API и приложения это не затрагивает). Пришлите Claude текст ошибки выше."
+}
+
+# --- Приложение для телефонов ------------------------------------------------
+
+# Выкладывает последнюю сборку приложения на страницу «Установка приложения»
+# веб-кабинета (https://<домен>/install/). Какая сборка последняя, написано в
+# deploy/app-release.json (его обновляет тот, кто собирает приложение):
+#   {
+#     "android": { "version": "1.0.0 (3)", "url": "https://expo.dev/artifacts/eas/….apk", "sha256": "…" },
+#     "ios": { "mode": "adhoc", "url": "https://expo.dev/…", "registerUrl": "https://expo.dev/register-device/…", "version": "1.0.0 (3)" }
+#   }
+# APK скачивается на свой сервер (files/md-trans.apk) — сотрудники качают его
+# с вашего домена. Для iPhone ссылки передаются как есть: ставит приложение
+# и регистрирует новый iPhone сам Expo. Страница читает files/install.json
+# (формат — web/src/lib/installInfo.ts в ветке кабинета).
+#   $1 — путь к app-release.json
+publish_app_files() {
+  local release="$1"
+  local files="$SUPABASE_DIR/volumes/proxy/mdtrans/files"
+  local apk_url apk_version apk_sha published android_mode="" tmp
+  [ -f "$release" ] || return 0
+  if [ ! -d "$files" ]; then
+    info "Веб-кабинета на сервере нет — страницу установки приложения обновлять негде."
+    return 0
+  fi
+  jq -e 'type == "object"' "$release" >/dev/null 2>&1 \
+    || { warn "Файл сборок приложения повреждён ($release) — страницу установки не трогаю."; return 0; }
+
+  apk_url=$(jq -r '.android.url // empty' "$release")
+  apk_version=$(jq -r '.android.version // empty' "$release")
+  apk_sha=$(jq -r '.android.sha256 // empty' "$release")
+  published=$(config_get apk_published)
+  if [ -n "$apk_url" ]; then
+    if [ "$published" = "$apk_version $apk_url" ] && [ -f "$files/md-trans.apk" ]; then
+      android_mode=local
+    else
+      info "Скачиваю приложение для Android, версия ${apk_version:-без номера}"
+      if curl -fsSL --retry 3 --max-time 600 -o "$files/md-trans.apk.part" "$apk_url" \
+        && { [ -z "$apk_sha" ] || printf '%s  %s\n' "$apk_sha" "$files/md-trans.apk.part" | sha256sum -c --status; }; then
+        chmod 644 "$files/md-trans.apk.part"
+        mv -f "$files/md-trans.apk.part" "$files/md-trans.apk"
+        config_set apk_published "$apk_version $apk_url"
+        android_mode=local
+      else
+        rm -f "$files/md-trans.apk.part"
+        warn "Не удалось скачать APK — на странице установки будет прямая ссылка на сервер Expo. Следующая попытка — при следующей проверке."
+        android_mode=remote
+      fi
+    fi
+  fi
+
+  tmp="$files/install.json.tmp"
+  jq --arg mode "$android_mode" --arg url "$apk_url" --arg version "$apk_version" '{
+      android: (if $mode == "local" then { url: "/files/md-trans.apk", version: $version }
+                elif $mode == "remote" then { url: $url, version: $version }
+                else null end),
+      ios: (.ios // null)
+    }' "$release" > "$tmp" || { rm -f "$tmp"; warn "Не удалось записать install.json."; return 0; }
+  chmod 644 "$tmp"
+  if cmp -s "$tmp" "$files/install.json"; then
+    rm -f "$tmp"
+  else
+    mv -f "$tmp" "$files/install.json"
+    info "Страница установки приложения обновлена"
+  fi
+}
+
+# Не даёт обновлению сервера и ежечасной выкладке приложения работать
+# одновременно. $1 — параметры flock: -n (не ждать) или -w <секунд>.
+take_lock() {
+  exec 9>"$MDTRANS_BASE/.lock"
+  flock "$@" 9
 }
 
 # --- Проверки --------------------------------------------------------------

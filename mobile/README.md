@@ -13,7 +13,9 @@ cp .env.example .env   # заполнить EXPO_PUBLIC_SUPABASE_URL и EXPO_PUB
 npx expo start
 ```
 
-Значения для `.env` — в Supabase Dashboard → Project Settings → API. После
+Значения для `.env` — адрес `https://api.<домен>` и anon key своего сервера
+(их печатает установщик, `../deploy/selfhost/README.md`), для облачного
+проекта — Supabase Dashboard → Project Settings → API. После
 `git pull` один раз выполните `npx expo install --check`, чтобы сверить версии
 нативных пакетов с SDK (из среды разработки нет доступа к `api.expo.dev`).
 
@@ -228,9 +230,104 @@ key, которому нельзя оказаться в мобильном пр
 
 Логика та же, что в старой версии (`src/lib/pushNotifications.ts`): экран
 сотрудника регистрирует push-токен, создание заказа шлёт уведомление экипажу.
-Для реальной доставки нужен EAS project ID: `npx eas init` локально.
+Для доставки на телефоны нужен EAS projectId — см. «Сборка приложения» ниже.
 
 Отдельно — пуш-напоминание «скоро заказ» (доработки 1, п.1): не с
 клиента, а с сервера, по расписанию (`supabase/functions/send-crew-reminders`,
 раз в 5 минут через pg_cron — см. `../supabase/README.md`). За сколько
 минут напоминать — настраивается в Настройки → Напоминания сотрудникам.
+
+Тексты пушей проходят через серверы Expo, Apple и Google за пределами
+России, поэтому в них нет адресов, имён и телефонов (152-ФЗ) — только
+общие фразы, дата и время заказа. Подробности сотрудник видит в самом
+заказе.
+
+## Сборка приложения (установка файлом)
+
+Приложение собирается на серверах Expo (EAS Build) и ставится файлом, без
+App Store и Google Play: на Android — APK, на iPhone — по ссылке на
+заранее зарегистрированный телефон (ad hoc). Готовые сборки появляются на
+странице `https://<домен>/install/` веб-кабинета
+(`../deploy/selfhost/README.md`).
+
+Настройки сборки: `eas.json` (профиль `preview` — APK и ad hoc,
+`production` — на случай магазинов или TestFlight), `app.json` (пакет
+`ru.mdtrans.app` на обеих платформах, `runtimeVersion` = версия
+приложения) и `app.config.js` (Firebase и проверка адреса сервера).
+
+### Что нужно один раз (делает владелец)
+
+- **Аккаунт Expo** (бесплатный, expo.dev) и access token (Account
+  settings → Access tokens). Токен — в настройках проекта Claude
+  (Project settings → environment) переменной `EXPO_TOKEN`, там же в
+  Network access разрешить `expo.dev` и `api.expo.dev`. В чат токен не
+  присылать.
+- **Пуши на Android** — бесплатный проект Firebase
+  (console.firebase.google.com), в нём Android-приложение с пакетом
+  `ru.mdtrans.app`:
+  - `google-services.json` → на expo.dev: проект → Environment variables
+    → новая переменная `GOOGLE_SERVICES_JSON`, тип «файл», видимость
+    Secret, окружения preview и production (репозиторий публичный,
+    поэтому в git этот файл не кладём);
+  - ключ FCM V1 (Firebase → Project settings → Service accounts →
+    Generate new private key) → на expo.dev: проект → Credentials →
+    Android → `ru.mdtrans.app` → FCM V1 service account key.
+- **iPhone** — платный Apple Developer Program ($99 в год). Без него
+  поставить своё приложение на iPhone нельзя. Первая сборка под iOS
+  спрашивает вход в аккаунт Apple (сертификат, профиль и ключ пушей EAS
+  создаёт сам) — её делаем вместе, или владелец создаёт ключ App Store
+  Connect API.
+
+### Сборка (делает Claude)
+
+1. Адрес сервера и публичный ключ — в `mobile/.env.production` (это не
+   секреты: они и так зашиты в приложение; установщик сервера печатает
+   их в конце). Файл берут и сборка, и обновления по воздуху; `npx expo
+   start` при разработке его не читает, там по-прежнему `.env`:
+
+   ```
+   EXPO_PUBLIC_SUPABASE_URL=https://api.<домен>
+   EXPO_PUBLIC_SUPABASE_ANON_KEY=<anon key>
+   ```
+
+   Без этих строк сборка в EAS сразу останавливается (`app.config.js`).
+   Подсказки адресов Яндекса (`EXPO_PUBLIC_YANDEX_SUGGEST_API_KEY`) — сюда
+   же, по желанию.
+2. Один раз — проект на expo.dev: `npx eas-cli@latest init`. Если EAS
+   не сможет записать сам (у нас есть `app.config.js`), впишите в
+   `app.json`: `"owner": "<аккаунт>"`, `"extra": { "eas": { "projectId":
+   "<id>" } }` и `"updates": { "url": "https://u.expo.dev/<id>" }`. Без
+   projectId не будет пушей (`src/lib/pushNotifications.ts`) и обновлений
+   по воздуху.
+3. Android: `npx eas-cli build --platform android --profile preview
+   --non-interactive --json` → ссылка на APK в `artifacts.buildUrl`.
+4. iPhone: новый телефон регистрируется ссылкой из `npx eas-cli
+   device:create` (сотрудник открывает её в Safari и ставит профиль),
+   потом `npx eas-cli build --platform ios --profile preview` — в сборку
+   попадают все зарегистрированные iPhone, поэтому после каждого нового
+   iPhone нужна новая сборка. Ссылка на установку — страница сборки на
+   expo.dev.
+5. Выложить: в `../deploy/app-release.json` — версия («1.0.0 (5)»),
+   ссылка на APK (и `sha256`, если файл удалось скачать), для iPhone —
+   `"mode": "adhoc"`, ссылка на установку и `registerUrl`. Закоммитить и
+   запушить: сервер владельца сам скачает APK и обновит страницу
+   установки в течение часа (`../deploy/selfhost/publish-app.sh`).
+
+На iPhone с iOS 16 и новее перед первым запуском нужно включить «Режим
+разработчика»: Настройки → Конфиденциальность и безопасность → Режим
+разработчика, телефон перезагрузится и попросит подтвердить. Для сборок
+ad hoc этого требует Apple.
+
+### Обновления без переустановки
+
+Исправления в коде приложения (JS) доставляются по воздуху:
+
+```
+npx eas-cli update --channel preview --message "что изменилось"
+```
+
+Приложение скачивает обновление при запуске и применяет при следующем.
+Всё, что меняет нативную часть (новые пакеты с нативным кодом, иконка,
+разрешения, `app.json`), — только новой сборкой, и перед ней нужно поднять
+`version` в `app.json`: обновления по воздуху доходят только до сборок с
+той же версией, так старые сборки не получат несовместимый код.
