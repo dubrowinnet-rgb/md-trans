@@ -35,7 +35,8 @@ import {
 import { useDeleteOrder, useOrder, useUpdateOrderStatus, type OrderWithDetails } from '@/api/orders';
 import { useSession } from '@/providers/SessionProvider';
 import { canManageOrders, canViewClientPhone, canViewOrderAmount } from '@/lib/permissions';
-import { CREW_STATUS_LABELS } from '@/lib/labels';
+import { CREW_STATUS_LABELS, ORDER_BUCKET_BADGES } from '@/lib/labels';
+import { orderBucket } from '@/lib/orderCompletion';
 import { ACTIVE_ORDER_STATUS } from '@/api/orders';
 import { dayjs, formatMoney, formatTime } from '@/lib/dates';
 import { formatPhone } from '@/lib/phone';
@@ -176,6 +177,7 @@ function OrderDetails({
   const end = new Date(order.scheduled_end);
   const stops = [...order.order_stops].sort((a, b) => a.order_index - b.order_index);
   const crew = mergeCrew(order);
+  const badge = ORDER_BUCKET_BADGES[orderBucket(order)];
 
   return (
     <Stack gap="md">
@@ -189,13 +191,8 @@ function OrderDetails({
       </div>
 
       <Group gap="xs">
-        <Badge
-          size="lg"
-          color={order.status === 'cancelled' ? 'red' : 'green'}
-          variant="light"
-          style={{ textTransform: 'none' }}
-        >
-          {order.status === 'cancelled' ? 'Заказ отменён' : 'Активен'}
+        <Badge size="lg" color={badge.color} variant="light" style={{ textTransform: 'none' }}>
+          {order.status === 'cancelled' ? 'Заказ отменён' : badge.label}
         </Badge>
         {canManage && (
           <Button

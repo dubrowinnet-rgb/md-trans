@@ -349,7 +349,7 @@ export function useDeleteOrder() {
 // Статусы заказа сведены к «активен/отменён» (доработки 2, п.2) — new/
 // confirmed/in_progress/completed больше не выбираются вручную ни в
 // одном интерфейсе; «завершён» теперь определяется по времени
-// (см. orderLayout.ts), а не проставляется руками. ACTIVE_ORDER_STATUS —
+// (см. lib/orderCompletion.ts), а не проставляется руками. ACTIVE_ORDER_STATUS —
 // значение, в которое переходит заказ при возврате из «отменён» (то же,
 // что и DEFAULT в БД для новых заказов).
 export const ACTIVE_ORDER_STATUS: OrderStatus = 'new';
@@ -368,29 +368,28 @@ export function useUpdateOrderStatus() {
 export interface OrdersFilter {
   from: Date;
   to: Date;
-  statuses: OrderStatus[];
 }
 
-// Список заказов за период — для таблицы «Заказы» и выгрузки.
+// Список заказов за период — для таблицы «Заказы» и выгрузки. По состоянию
+// (активные/завершённые/отменённые) фильтруют сами экраны — «завершён»
+// считается по времени, а не хранится в статусе.
 export function useOrdersList(filter: OrdersFilter) {
   const fromIso = filter.from.toISOString();
   const toIso = filter.to.toISOString();
   return useQuery({
-    queryKey: ['orders', 'list', fromIso, toIso, filter.statuses.join(',')],
+    queryKey: ['orders', 'list', fromIso, toIso],
     queryFn: () => fetchOrdersList(filter),
     placeholderData: keepPreviousData,
   });
 }
 
 export async function fetchOrdersList(filter: OrdersFilter) {
-  let query = supabase
+  const { data, error } = await supabase
     .from('orders')
     .select(ORDER_SELECT)
     .gte('scheduled_start', filter.from.toISOString())
     .lt('scheduled_start', filter.to.toISOString())
     .order('scheduled_start', { ascending: true });
-  if (filter.statuses.length > 0) query = query.in('status', filter.statuses);
-  const { data, error } = await query;
   if (error) throw error;
   return data as unknown as OrderWithDetails[];
 }

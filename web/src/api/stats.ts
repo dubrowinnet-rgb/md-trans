@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
+import { isOrderCompleted, orderBucket, type OrderBucket } from '@/lib/orderCompletion';
 import type { AccountRole, OrderStatus } from '@/types/database';
 
 export interface EmployeeStat {
@@ -12,7 +13,7 @@ export interface EmployeeStat {
 
 export interface StatsOverview {
   totalOrders: number;
-  ordersByStatus: Partial<Record<OrderStatus, number>>;
+  ordersByBucket: Record<OrderBucket, number>;
   totalRevenue: number;
   employees: EmployeeStat[];
 }
@@ -20,15 +21,17 @@ export interface StatsOverview {
 interface StatsOrderRow {
   status: OrderStatus;
   actual_price: number | null;
+  scheduled_end: string;
   created_by: string | null;
   order_crew: { employee_id: string }[];
 }
 
 // Статистика для администратора (раздел «видит все срезы статистики по
-// компании и по каждому сотруднику»): по компании — число заказов по
-// статусам и выручка по завершённым; по сотруднику — те же два среза,
-// посчитанные по его заказам (в бригаде — для водителя/грузчика, среди
-// созданных — для диспетчера/админа через orders.created_by, миграция 0006).
+// компании и по каждому сотруднику»): по компании — активные/завершённые/
+// отменённые (lib/orderCompletion.ts) и выручка по завершённым; по
+// сотруднику — те же два среза, посчитанные по его заказам (в бригаде —
+// для водителя/грузчика, среди созданных — для диспетчера/админа через
+// orders.created_by, миграция 0006).
 // Считаем на клиенте одним запросом — так же, как useClientOrderStats.
 // В кабинете, в отличие от мобильного приложения, можно выбрать период
 // (по дате начала заказа); range = null — за всё время.
@@ -38,7 +41,7 @@ export function useStatsOverview(range: { from: Date; to: Date } | null) {
   return useQuery({
     queryKey: ['stats-overview', fromIso, toIso],
     queryFn: async (): Promise<StatsOverview> => {
-      let ordersQuery = supabase.from('orders').select('status, actual_price, created_by, order_crew(employee_id)');
+      let ordersQuery = supabase.from('orders').select('status, actual_price, scheduled_end, created_by, order_crew(employee_id)');
       if (fromIso && toIso) ordersQuery = ordersQuery.gte('scheduled_start', fromIso).lt('scheduled_start', toIso);
       const [ordersRes, accountsRes] = await Promise.all([
         ordersQuery,
@@ -50,13 +53,14 @@ export function useStatsOverview(range: { from: Date; to: Date } | null) {
       const orders = ordersRes.data as unknown as StatsOrderRow[];
       const accounts = accountsRes.data as { id: string; name: string; role: AccountRole }[];
 
-      const ordersByStatus: Partial<Record<OrderStatus, number>> = {};
+      const now = new Date();
+      const ordersByBucket: Record<OrderBucket, number> = { active: 0, completed: 0, cancelled: 0 };
       let totalRevenue = 0;
       const perEmployee = new Map<string, { orders: number; revenue: number }>();
 
       for (const order of orders) {
-        ordersByStatus[order.status] = (ordersByStatus[order.status] ?? 0) + 1;
-        const isCompleted = order.status === 'completed';
+        ordersByBucket[orderBucket(order, now)] += 1;
+        const isCompleted = isOrderCompleted(order, now);
         if (isCompleted) totalRevenue += Number(order.actual_price ?? 0);
 
         const creditedIds = new Set<string>();
@@ -81,7 +85,7 @@ export function useStatsOverview(range: { from: Date; to: Date } | null) {
         }))
         .sort((a, b) => b.ordersCount - a.ordersCount);
 
-      return { totalOrders: orders.length, ordersByStatus, totalRevenue, employees };
+      return { totalOrders: orders.length, ordersByBucket, totalRevenue, employees };
     },
   });
 }

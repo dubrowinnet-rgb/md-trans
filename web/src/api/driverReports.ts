@@ -8,7 +8,13 @@ interface DriverReportOrderRow {
   id: string;
   order_id: string;
   paid_by_transfer: boolean;
-  orders: { id: string; scheduled_start: string; cargo_description: string | null; actual_price: number | null } | null;
+  orders: {
+    id: string;
+    scheduled_start: string;
+    cargo_description: string | null;
+    actual_price: number | null;
+    status: string;
+  } | null;
 }
 
 interface DriverReportExpenseRow {
@@ -33,8 +39,9 @@ interface DriverReportRow {
 }
 
 export interface DriverReport extends DriverReportRow {
-  // Собрано наличными: заказы с суммой > 0, не отмеченные водителем как
-  // «перевод/QR» (см. память — 0/пусто в заказе уже значит безнал).
+  // Собрано наличными: неотменённые заказы с суммой > 0, не отмеченные
+  // водителем как «перевод/QR» (0/пусто в заказе уже значит безнал). Заказ,
+  // отменённый уже после отчёта, в кассу не идёт — как в мобильном.
   cashCollected: number;
   expensesTotal: number;
   fuelCash: number;
@@ -46,10 +53,11 @@ export interface DriverReport extends DriverReportRow {
 }
 
 const REPORT_SELECT =
-  '*, driver_report_orders(id, order_id, paid_by_transfer, orders(id, scheduled_start, cargo_description, actual_price)), driver_report_expenses(id, description, amount)';
+  '*, driver_report_orders(id, order_id, paid_by_transfer, orders(id, scheduled_start, cargo_description, actual_price, status)), driver_report_expenses(id, description, amount)';
 
 function withTotals(row: DriverReportRow): DriverReport {
   const cashCollected = row.driver_report_orders.reduce((sum, line) => {
+    if (line.orders?.status === 'cancelled') return sum;
     const price = line.orders?.actual_price ?? 0;
     return price > 0 && !line.paid_by_transfer ? sum + price : sum;
   }, 0);

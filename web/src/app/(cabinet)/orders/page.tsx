@@ -10,19 +10,15 @@ import { useSession } from '@/providers/SessionProvider';
 import { canManageOrders, canViewClientPhone, canViewOrderAmount } from '@/lib/permissions';
 import { dayjs, formatMoney, fromDateKey, toDateKey } from '@/lib/dates';
 import { formatPhone } from '@/lib/phone';
-import type { OrderStatus } from '@/types/database';
+import { ORDER_BUCKETS, ORDER_BUCKET_BADGES, ORDER_BUCKET_LABELS } from '@/lib/labels';
+import { orderBucket, type OrderBucket } from '@/lib/orderCompletion';
 import { PageHeader } from '@/components/common/PageHeader';
 import { useOrderUI } from '@/components/orders/OrderUIProvider';
 import { mergeCrew } from '@/components/orders/OrderDrawer';
 
-// Активные статусы — всё, кроме «отменён» (доработки 2, п.2: статусы
-// заказа сведены к активен/отменён, промежуточные new/confirmed/
-// in_progress/completed вручную больше не выбираются).
-const ACTIVE_ORDER_STATUSES: OrderStatus[] = ['new', 'confirmed', 'in_progress', 'completed'];
 const ORDER_FILTER_OPTIONS = [
   { value: 'all', label: 'Все' },
-  { value: 'active', label: 'Активные' },
-  { value: 'cancelled', label: 'Отменённые' },
+  ...ORDER_BUCKETS.map((b) => ({ value: b, label: ORDER_BUCKET_LABELS[b] })),
 ];
 
 // Все заказы за период одной таблицей — удобно искать, сверять суммы и
@@ -32,8 +28,7 @@ export default function OrdersPage() {
     toDateKey(dayjs().startOf('month').toDate()),
     toDateKey(dayjs().endOf('month').toDate()),
   ]);
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'cancelled'>('all');
-  const statuses = statusFilter === 'active' ? ACTIVE_ORDER_STATUSES : statusFilter === 'cancelled' ? ['cancelled' as OrderStatus] : [];
+  const [statusFilter, setStatusFilter] = useState<'all' | OrderBucket>('all');
   const [employeeId, setEmployeeId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const { employee } = useSession();
@@ -44,11 +39,13 @@ export default function OrdersPage() {
 
   const from = range[0] ? fromDateKey(range[0]) : dayjs().startOf('month').toDate();
   const to = dayjs(range[1] ? fromDateKey(range[1]) : from).add(1, 'day').toDate();
-  const query = useOrdersList({ from, to, statuses: statuses as OrderStatus[] });
+  const query = useOrdersList({ from, to });
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
+    const now = new Date();
     return (query.data ?? []).filter((o) => {
+      if (statusFilter !== 'all' && orderBucket(o, now) !== statusFilter) return false;
       if (employeeId && !o.order_crew.some((c) => c.employee_id === employeeId)) return false;
       if (!q) return true;
       const hay = [
@@ -62,7 +59,7 @@ export default function OrdersPage() {
         .toLowerCase();
       return hay.includes(q);
     });
-  }, [query.data, search, employeeId, showPhone]);
+  }, [query.data, search, employeeId, showPhone, statusFilter]);
 
   const total = rows.filter((o) => o.status !== 'cancelled').reduce((s, o) => s + Number(o.actual_price ?? 0), 0);
 
@@ -139,6 +136,7 @@ export default function OrdersPage() {
             {rows.map((o) => {
               const stops = [...o.order_stops].sort((a, b) => a.order_index - b.order_index);
               const crew = mergeCrew(o);
+              const badge = ORDER_BUCKET_BADGES[orderBucket(o)];
               return (
                 <Table.Tr key={o.id} style={{ cursor: 'pointer' }} onClick={() => ui.openOrder(o.id)}>
                   <Table.Td style={{ whiteSpace: 'nowrap' }}>
@@ -186,15 +184,9 @@ export default function OrdersPage() {
                     )}
                   </Table.Td>
                   <Table.Td>
-                    {o.status === 'cancelled' ? (
-                      <Badge color="red" variant="light" style={{ textTransform: 'none' }}>
-                        Отменён
-                      </Badge>
-                    ) : (
-                      <Badge color="green" variant="light" style={{ textTransform: 'none' }}>
-                        Активен
-                      </Badge>
-                    )}
+                    <Badge color={badge.color} variant="light" style={{ textTransform: 'none' }}>
+                      {badge.label}
+                    </Badge>
                   </Table.Td>
                   {showAmount && (
                     <Table.Td ta="right" style={{ whiteSpace: 'nowrap' }}>

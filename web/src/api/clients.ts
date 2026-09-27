@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { formatPhone } from '@/lib/phone';
+import { isOrderCompleted } from '@/lib/orderCompletion';
 import type { Database, OrderStatus } from '@/types/database';
 
 export type Client = Database['public']['Tables']['clients']['Row'];
@@ -20,7 +21,7 @@ export interface ClientWithStats extends Client {
 export async function fetchClientsWithStats(): Promise<ClientWithStats[]> {
   const [clientsRes, ordersRes] = await Promise.all([
     supabase.from('clients').select('*').order('name', { ascending: true }),
-    supabase.from('orders').select('client_id, status, actual_price, scheduled_start'),
+    supabase.from('orders').select('client_id, status, actual_price, scheduled_start, scheduled_end'),
   ]);
   if (clientsRes.error) throw clientsRes.error;
   if (ordersRes.error) throw ordersRes.error;
@@ -29,13 +30,15 @@ export async function fetchClientsWithStats(): Promise<ClientWithStats[]> {
     status: OrderStatus;
     actual_price: number | null;
     scheduled_start: string;
+    scheduled_end: string;
   }[];
+  const now = new Date();
   const byClient = new Map<string, { count: number; completed: number; revenue: number; last: string | null }>();
   for (const o of orders) {
     if (!o.client_id) continue;
     const entry = byClient.get(o.client_id) ?? { count: 0, completed: 0, revenue: 0, last: null };
     entry.count += 1;
-    if (o.status === 'completed') {
+    if (isOrderCompleted(o, now)) {
       entry.completed += 1;
       entry.revenue += Number(o.actual_price ?? 0);
     }

@@ -70,7 +70,14 @@ export function DriverReportDetailModal({
               <Table.Tbody>
                 {report.driver_report_orders.map((line) => {
                   const price = line.orders?.actual_price ?? 0;
-                  const paymentLabel = price <= 0 ? 'безнал (заказ)' : line.paid_by_transfer ? 'перевод/QR' : 'наличные';
+                  const paymentLabel =
+                    line.orders?.status === 'cancelled'
+                      ? 'заказ отменён'
+                      : price <= 0
+                        ? 'безнал (заказ)'
+                        : line.paid_by_transfer
+                          ? 'перевод/QR'
+                          : 'наличные';
                   return (
                     <Table.Tr key={line.id}>
                       <Table.Td>{line.orders ? formatTime(line.orders.scheduled_start) : '—'}</Table.Td>

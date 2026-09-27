@@ -25,7 +25,8 @@ import { fetchClientsWithStats, type ClientWithStats } from '@/api/clients';
 import { fetchOrdersList, type OrderWithDetails } from '@/api/orders';
 import { useSession } from '@/providers/SessionProvider';
 import { canViewClientPhone, canViewClientStats, canViewOrderAmount } from '@/lib/permissions';
-import { ORDER_STATUSES, ORDER_STATUS_LABELS } from '@/lib/labels';
+import { ORDER_BUCKETS, ORDER_BUCKET_LABELS } from '@/lib/labels';
+import { orderBucket } from '@/lib/orderCompletion';
 import { dayjs, fromDateKey, toDateKey } from '@/lib/dates';
 import {
   CLIENT_COLUMNS,
@@ -35,7 +36,6 @@ import {
   type ColumnGuard,
   type ExportColumn,
 } from '@/lib/exportData';
-import type { OrderStatus } from '@/types/database';
 import { PageHeader } from '@/components/common/PageHeader';
 
 type Dataset = 'clients' | 'orders';
@@ -80,7 +80,7 @@ export default function ExportPage() {
     toDateKey(dayjs().startOf('month').toDate()),
     toDateKey(dayjs().endOf('month').toDate()),
   ]);
-  const [statuses, setStatuses] = useState<string[]>([]);
+  const [buckets, setBuckets] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -107,10 +107,16 @@ export default function ExportPage() {
     enabled: dataset === 'clients',
   });
   const ordersQuery = useQuery({
-    queryKey: ['orders', 'list', from.toISOString(), to.toISOString(), statuses.join(',')],
-    queryFn: () => fetchOrdersList({ from, to, statuses: statuses as OrderStatus[] }),
+    queryKey: ['orders', 'list', from.toISOString(), to.toISOString()],
+    queryFn: () => fetchOrdersList({ from, to }),
     enabled: dataset === 'orders',
   });
+  const orderRows = useMemo(() => {
+    const all = ordersQuery.data ?? [];
+    if (buckets.length === 0) return all;
+    const now = new Date();
+    return all.filter((o) => buckets.includes(orderBucket(o, now)));
+  }, [ordersQuery.data, buckets]);
 
   const clientRows = useMemo(
     () =>
@@ -126,7 +132,7 @@ export default function ExportPage() {
   const isAllowed = <T,>(c: ExportColumn<T>) => !c.guard || allowed[c.guard];
   const activeClientCols = CLIENT_COLUMNS.filter((c) => clientCols.includes(c.key) && isAllowed(c));
   const activeOrderCols = ORDER_COLUMNS.filter((c) => orderCols.includes(c.key) && isAllowed(c));
-  const rowsCount = dataset === 'clients' ? clientRows.length : (ordersQuery.data ?? []).length;
+  const rowsCount = dataset === 'clients' ? clientRows.length : orderRows.length;
   const loading = dataset === 'clients' ? clientsQuery.isLoading : ordersQuery.isLoading;
   const error = dataset === 'clients' ? clientsQuery.error : ordersQuery.error;
 
@@ -142,9 +148,8 @@ export default function ExportPage() {
         if (format === 'csv') downloadCsv(clientRows, activeClientCols, `${fileBase}.csv`);
         else await downloadXlsx(clientRows, activeClientCols, `${fileBase}.xlsx`);
       } else {
-        const rows = ordersQuery.data ?? [];
-        if (format === 'csv') downloadCsv(rows, activeOrderCols, `${fileBase}.csv`);
-        else await downloadXlsx(rows, activeOrderCols, `${fileBase}.xlsx`);
+        if (format === 'csv') downloadCsv(orderRows, activeOrderCols, `${fileBase}.csv`);
+        else await downloadXlsx(orderRows, activeOrderCols, `${fileBase}.xlsx`);
       }
       notifications.show({ message: `Файл выгружен: ${rowsCount} строк`, color: 'green' });
     } catch (err) {
@@ -171,7 +176,7 @@ export default function ExportPage() {
   );
 
   const previewCols: ExportColumn<unknown>[] = (dataset === 'clients' ? activeClientCols : activeOrderCols) as ExportColumn<unknown>[];
-  const previewRows: unknown[] = (dataset === 'clients' ? clientRows : (ordersQuery.data ?? [])).slice(0, 8) as (
+  const previewRows: unknown[] = (dataset === 'clients' ? clientRows : orderRows).slice(0, 8) as (
     | ClientWithStats
     | OrderWithDetails
   )[];
@@ -222,10 +227,10 @@ export default function ExportPage() {
                   />
                   <MultiSelect
                     label="Статусы"
-                    placeholder={statuses.length ? undefined : 'Любые'}
-                    data={ORDER_STATUSES.map((s) => ({ value: s, label: ORDER_STATUS_LABELS[s] }))}
-                    value={statuses}
-                    onChange={setStatuses}
+                    placeholder={buckets.length ? undefined : 'Любые'}
+                    data={ORDER_BUCKETS.map((b) => ({ value: b, label: ORDER_BUCKET_LABELS[b] }))}
+                    value={buckets}
+                    onChange={setBuckets}
                     style={{ flex: 1 }}
                   />
                 </Group>

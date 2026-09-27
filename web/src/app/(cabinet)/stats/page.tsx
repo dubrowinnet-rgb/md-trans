@@ -5,7 +5,7 @@ import { Alert, Box, Group, Loader, Paper, SegmentedControl, SimpleGrid, Table, 
 import { DatePickerInput } from '@mantine/dates';
 import { useStatsOverview } from '@/api/stats';
 import { useSession } from '@/providers/SessionProvider';
-import { ACCOUNT_ROLE_LABELS, ORDER_STATUSES, ORDER_STATUS_LABELS } from '@/lib/labels';
+import { ACCOUNT_ROLE_LABELS, ORDER_BUCKETS, ORDER_BUCKET_LABELS } from '@/lib/labels';
 import { dayjs, formatMoney, fromDateKey } from '@/lib/dates';
 import { PageHeader } from '@/components/common/PageHeader';
 
@@ -72,8 +72,8 @@ export default function StatsPage() {
     );
   }
 
-  const completed = stats?.ordersByStatus.completed ?? 0;
-  const maxStatus = Math.max(0, ...ORDER_STATUSES.map((s) => stats?.ordersByStatus[s] ?? 0));
+  const completed = stats?.ordersByBucket.completed ?? 0;
+  const maxBucket = Math.max(0, ...ORDER_BUCKETS.map((b) => stats?.ordersByBucket[b] ?? 0));
   const maxRevenue = Math.max(0, ...(stats?.employees ?? []).map((e) => e.revenue));
 
   return (
@@ -107,7 +107,7 @@ export default function StatsPage() {
         <>
           <SimpleGrid cols={4} mb="lg">
             <Tile label="Заказов" value={String(stats.totalOrders)} />
-            <Tile label="Завершено" value={String(completed)} />
+            <Tile label="Завершено" value={String(completed)} hint="уже прошли и не отменены" />
             <Tile label="Выручка" value={formatMoney(stats.totalRevenue)} />
             <Tile
               label="Средний чек"
@@ -123,14 +123,14 @@ export default function StatsPage() {
               </Text>
               <Table>
                 <Table.Tbody>
-                  {ORDER_STATUSES.map((s) => (
-                    <Table.Tr key={s}>
-                      <Table.Td w={140}>{ORDER_STATUS_LABELS[s]}</Table.Td>
+                  {ORDER_BUCKETS.map((b) => (
+                    <Table.Tr key={b}>
+                      <Table.Td w={140}>{ORDER_BUCKET_LABELS[b]}</Table.Td>
                       <Table.Td>
-                        <Bar value={stats.ordersByStatus[s] ?? 0} max={maxStatus} />
+                        <Bar value={stats.ordersByBucket[b]} max={maxBucket} />
                       </Table.Td>
                       <Table.Td ta="right" w={60} fw={600}>
-                        {stats.ordersByStatus[s] ?? 0}
+                        {stats.ordersByBucket[b]}
                       </Table.Td>
                     </Table.Tr>
                   ))}

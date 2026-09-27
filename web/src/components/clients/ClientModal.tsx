@@ -23,7 +23,8 @@ import { useClient, useDeleteClient } from '@/api/clients';
 import { useClientOrders } from '@/api/orders';
 import { useSession } from '@/providers/SessionProvider';
 import { canManageOrders, canViewClientPhone, canViewClientStats, canViewOrderAmount } from '@/lib/permissions';
-import { ORDER_STATUS_COLORS, ORDER_STATUS_LABELS } from '@/lib/labels';
+import { ORDER_BUCKET_BADGES } from '@/lib/labels';
+import { isOrderCompleted, orderBucket } from '@/lib/orderCompletion';
 import { dayjs, formatMoney } from '@/lib/dates';
 import { formatPhone } from '@/lib/phone';
 import { useOrderUI } from '@/components/orders/OrderUIProvider';
@@ -43,7 +44,8 @@ export function ClientModal({ clientId, onClose }: { clientId: string; onClose: 
   const showAmount = canViewOrderAmount(employee);
   const canManage = canManageOrders(employee);
 
-  const completed = orders.filter((o) => o.status === 'completed');
+  const now = new Date();
+  const completed = orders.filter((o) => isOrderCompleted(o, now));
   const revenue = completed.reduce((sum, o) => sum + Number(o.actual_price ?? 0), 0);
 
   const confirmDelete = () =>
@@ -138,6 +140,7 @@ export function ClientModal({ clientId, onClose }: { clientId: string; onClose: 
                 <Table.Tbody>
                   {orders.map((o) => {
                     const stops = [...o.order_stops].sort((a, b) => a.order_index - b.order_index);
+                    const badge = ORDER_BUCKET_BADGES[orderBucket(o, now)];
                     return (
                       <Table.Tr key={o.id} style={{ cursor: 'pointer' }} onClick={() => ui.openOrder(o.id)}>
                         <Table.Td>{dayjs(o.scheduled_start).format('DD.MM.YYYY HH:mm')}</Table.Td>
@@ -148,11 +151,8 @@ export function ClientModal({ clientId, onClose }: { clientId: string; onClose: 
                           </Text>
                         </Table.Td>
                         <Table.Td>
-                          <Badge
-                            variant="light"
-                            style={{ background: ORDER_STATUS_COLORS[o.status].bg, color: '#111', textTransform: 'none' }}
-                          >
-                            {ORDER_STATUS_LABELS[o.status]}
+                          <Badge variant="light" color={badge.color} style={{ textTransform: 'none' }}>
+                            {badge.label}
                           </Badge>
                         </Table.Td>
                         {showAmount && <Table.Td ta="right">{formatMoney(o.actual_price)}</Table.Td>}

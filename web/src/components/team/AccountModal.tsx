@@ -34,6 +34,7 @@ import {
 } from '@/api/accounts';
 import { useVehicles } from '@/api/vehicles';
 import { useEmployeePayEstimate, useUpdateEmployeeRates, type EmployeeRates, type RateMode } from '@/api/payroll';
+import { useSession } from '@/providers/SessionProvider';
 import { ACCOUNT_ROLE_LABELS } from '@/lib/labels';
 import type { AccountRole } from '@/types/database';
 
@@ -77,6 +78,9 @@ const PERMISSION_LABELS: {
 // пароль — необязательные поля: пусто значит «не менять», см.
 // useUpdateAccountProfile).
 export function AccountModal({ account, onClose }: { account: Account | null; onClose: () => void }) {
+  const { employee: me } = useSession();
+  // Свою роль база не даст сменить (миграция 0017) — не предлагаем и кнопку.
+  const isSelf = Boolean(account && me && account.id === me.id);
   const [name, setName] = useState(account?.name ?? '');
   const [lastName, setLastName] = useState(account?.last_name ?? '');
   const [phone, setPhone] = useState(account?.phone ?? '');
@@ -294,9 +298,15 @@ export function AccountModal({ account, onClose }: { account: Account | null; on
           ) : (
             <Group justify="space-between">
               <Text size="sm">{ACCOUNT_ROLE_LABELS[role]}</Text>
-              <Button variant="subtle" size="xs" onClick={() => setRoleEditing(true)}>
-                Изменить
-              </Button>
+              {isSelf ? (
+                <Text size="xs" c="dimmed">
+                  Свою роль сменить нельзя
+                </Text>
+              ) : (
+                <Button variant="subtle" size="xs" onClick={() => setRoleEditing(true)}>
+                  Изменить
+                </Button>
+              )}
             </Group>
           )}
         </div>

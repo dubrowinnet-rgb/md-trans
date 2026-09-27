@@ -1,24 +1,22 @@
-import type { AccountRole, AccountStatus, CrewStatus, OrderStatus } from '@/types/database';
+import type { AccountRole, AccountStatus, CrewStatus } from '@/types/database';
 import type { TicketStatus } from '@/api/supportTickets';
 import type { DriverReportStatus } from '@/api/driverReports';
+import type { OrderBucket } from './orderCompletion';
 
-// Те же подписи и цвета, что в мобильном приложении (mobile/src/theme.ts).
-export const ORDER_STATUSES: OrderStatus[] = ['new', 'confirmed', 'in_progress', 'completed', 'cancelled'];
+// Заказы делятся по факту, а не по статусу — см. lib/orderCompletion.ts.
+// Те же подписи, что в мобильной «Статистике» (mobile/src/app/(office)/stats.tsx).
+export const ORDER_BUCKETS: OrderBucket[] = ['active', 'completed', 'cancelled'];
 
-export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
-  new: 'Новый',
-  confirmed: 'Подтверждён',
-  in_progress: 'В работе',
-  completed: 'Завершён',
-  cancelled: 'Отменён',
+export const ORDER_BUCKET_LABELS: Record<OrderBucket, string> = {
+  active: 'Активные',
+  completed: 'Завершённые',
+  cancelled: 'Отменённые',
 };
 
-export const ORDER_STATUS_COLORS: Record<OrderStatus, { bg: string; border: string }> = {
-  new: { bg: '#e5e7eb', border: '#9ca3af' },
-  confirmed: { bg: '#dbeafe', border: '#3b82f6' },
-  in_progress: { bg: '#fef3c7', border: '#f59e0b' },
-  completed: { bg: '#dcfce7', border: '#22c55e' },
-  cancelled: { bg: '#fee2e2', border: '#ef4444' },
+export const ORDER_BUCKET_BADGES: Record<OrderBucket, { label: string; color: string }> = {
+  active: { label: 'Активен', color: 'blue' },
+  completed: { label: 'Завершён', color: 'green' },
+  cancelled: { label: 'Отменён', color: 'red' },
 };
 
 export const CREW_STATUS_LABELS: Record<CrewStatus, string> = {

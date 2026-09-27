@@ -1,6 +1,7 @@
 import type { ClientWithStats } from '@/api/clients';
 import type { OrderWithDetails } from '@/api/orders';
-import { ORDER_STATUS_LABELS } from './labels';
+import { ORDER_BUCKET_BADGES } from './labels';
+import { orderBucket } from './orderCompletion';
 import { dayjs } from './dates';
 import { formatPhone } from './phone';
 
@@ -64,7 +65,7 @@ export const ORDER_COLUMNS: ExportColumn<OrderWithDetails>[] = [
     defaultOn: true,
     value: (o) => `${dayjs(o.scheduled_start).format('HH:mm')}–${dayjs(o.scheduled_end).format('HH:mm')}`,
   },
-  { key: 'status', label: 'Статус', width: 14, defaultOn: true, value: (o) => ORDER_STATUS_LABELS[o.status] },
+  { key: 'status', label: 'Статус', width: 14, defaultOn: true, value: (o) => ORDER_BUCKET_BADGES[orderBucket(o)].label },
   { key: 'client', label: 'Клиент', width: 26, defaultOn: true, value: (o) => o.clients?.name ?? null },
   {
     key: 'phone',

@@ -25,7 +25,8 @@ export interface EmployeePayEstimate {
 }
 
 // Предварительный расчёт зарплаты за период: часы = сумма длительностей
-// заказов, где сотрудник в экипаже (order_crew), по завершённым заказам.
+// заказов, где сотрудник в экипаже (order_crew), по завершённым заказам
+// (не отменён и уже закончился — lib/orderCompletion.ts, как в мобильном).
 // «Оплата» считается по режиму ставки: combined — вся продолжительность
 // по hourly_rate; split — по ставке, соответствующей роли назначения в
 // заказе (driving_hourly_rate для role='driver', loading_hourly_rate для
@@ -43,7 +44,8 @@ export function useEmployeePayEstimate(employeeId: string | undefined, rates: Em
         .from('order_crew')
         .select('order_id, employee_id, role, orders!inner(scheduled_start, scheduled_end, status)')
         .eq('employee_id', employeeId as string)
-        .eq('orders.status', 'completed')
+        .neq('orders.status', 'cancelled')
+        .lte('orders.scheduled_end', new Date().toISOString())
         .gte('orders.scheduled_start', periodStart)
         .lt('orders.scheduled_start', periodEnd);
       if (error) throw error;
