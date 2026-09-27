@@ -5,11 +5,12 @@
 // веб-кабинет), поэтому без пользовательского JWT, под service role —
 // как и notify-owner-new-ticket.
 //
-// Деплой (после `supabase link`, см. supabase/README.md) — обязательно
-// с флагом --no-verify-jwt, иначе триггер получит 401:
+// Деплой: на своём сервере — deploy/selfhost/update.sh (функции копирует
+// сам, снаружи сервера эта функция закрыта). В облачном Supabase — как
+// раньше, обязательно с --no-verify-jwt, иначе триггер получит 401:
 //   supabase functions deploy notify-order-changed --no-verify-jwt
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -41,22 +42,24 @@ Deno.serve(async (req) => {
 
   const { data: order } = await admin
     .from('orders')
-    .select('scheduled_start, order_crew(employee_id), order_stops(address, type, is_primary)')
+    .select('scheduled_start, order_crew(employee_id)')
     .eq('id', orderId)
     .maybeSingle();
   if (!order) return new Response(JSON.stringify({ sent: 0 }), { status: 200, headers });
 
   const crew = (order.order_crew as unknown as { employee_id: string }[]) ?? [];
-  const stops = (order.order_stops as unknown as { address: string; type: string; is_primary: boolean }[]) ?? [];
-  const pickup = stops.find((s) => s.is_primary && s.type === 'pickup')?.address;
+  // Только дата и время, без адреса и клиента: текст пуша проходит через
+  // серверы Expo, Apple и Google за пределами России, а персональные данные
+  // по 152-ФЗ должны оставаться на своём сервере. Подробности сотрудник
+  // видит, открыв заказ в приложении.
   const start = new Date(order.scheduled_start as string);
+  const date = new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: '2-digit', timeZone: 'Europe/Moscow' }).format(start);
   const time = new Intl.DateTimeFormat('ru-RU', {
     hour: '2-digit',
     minute: '2-digit',
     hour12: false,
     timeZone: 'Europe/Moscow',
   }).format(start);
-  const where = pickup ? ` — ${pickup}` : '';
 
   const employeeIds = [...new Set(crew.map((c) => c.employee_id))];
   if (employeeIds.length === 0) return new Response(JSON.stringify({ sent: 0 }), { status: 200, headers });
@@ -67,7 +70,9 @@ Deno.serve(async (req) => {
     .filter((t): t is string => Boolean(t));
 
   const title = cancelled ? 'Заказ отменён' : 'Изменения в заказе';
-  const msgBody = cancelled ? `Заказ в ${time}${where} отменён` : `Заказ в ${time}${where}: обновлена информация`;
+  const msgBody = cancelled
+    ? `Заказ на ${date} в ${time} отменён`
+    : `Заказ на ${date} в ${time}: обновлена информация`;
   await sendExpoPush(tokens, title, msgBody, { orderId });
 
   return new Response(JSON.stringify({ sent: tokens.length }), { status: 200, headers });

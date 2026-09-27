@@ -15,12 +15,13 @@
 // используется, и наружу он не выходит: платформа сама подставляет его в
 // переменную окружения SUPABASE_SERVICE_ROLE_KEY при вызове функции.
 //
-// Деплой (после `supabase link`, см. supabase/README.md):
+// Деплой: на своём сервере — deploy/selfhost/update.sh, в облачном Supabase
+// (после `supabase link`, см. supabase/README.md):
 //   supabase functions deploy create-account
 // Больше ничего настраивать не нужно — SUPABASE_URL, SUPABASE_ANON_KEY и
 // SUPABASE_SERVICE_ROLE_KEY функция получает от платформы автоматически.
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;

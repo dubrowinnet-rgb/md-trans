@@ -19,10 +19,11 @@
 // id+phone, без остальных полей) SessionProvider тихо синхронизирует
 // auth.users.phone старым аккаунтам при входе — см. п.4 в 0016.
 //
-// Деплой (после `supabase link`, см. supabase/README.md):
+// Деплой: на своём сервере — deploy/selfhost/update.sh, в облачном Supabase
+// (после `supabase link`, см. supabase/README.md):
 //   supabase functions deploy update-account
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
