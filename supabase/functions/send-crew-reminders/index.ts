@@ -7,11 +7,12 @@
 // Настройках), order_reminder_log не даёт напомнить о одном и том же
 // заказе по одному и тому же правилу дважды.
 //
-// Деплой (после `supabase link`, см. supabase/README.md) — обязательно
-// с флагом --no-verify-jwt, иначе pg_cron получит 401:
+// Деплой: на своём сервере — deploy/selfhost/update.sh (функции копирует
+// сам, снаружи сервера эта функция закрыта). В облачном Supabase — как
+// раньше, обязательно с --no-verify-jwt, иначе pg_cron получит 401:
 //   supabase functions deploy send-crew-reminders --no-verify-jwt
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -46,15 +47,13 @@ Deno.serve(async () => {
     const threshold = new Date(now.getTime() + rule.offset_minutes * 60_000);
     const { data: orders } = await admin
       .from('orders')
-      .select('id, scheduled_start, order_crew(employee_id), order_stops(address, type, is_primary)')
+      .select('id, scheduled_start, order_crew(employee_id)')
       .gt('scheduled_start', now.toISOString())
       .lte('scheduled_start', threshold.toISOString())
       .not('status', 'eq', 'cancelled');
 
     for (const order of orders ?? []) {
       const crew = (order.order_crew as unknown as { employee_id: string }[]) ?? [];
-      const stops = (order.order_stops as unknown as { address: string; type: string; is_primary: boolean }[]) ?? [];
-      const pickup = stops.find((s) => s.is_primary && s.type === 'pickup')?.address;
       const start = new Date(order.scheduled_start as string);
       const time = new Intl.DateTimeFormat('ru-RU', {
         hour: '2-digit',
@@ -86,11 +85,14 @@ Deno.serve(async () => {
         // [now, now+offset] и мы будем пытаться напомнить бесконечно.
         await admin.from('order_reminder_log').insert({ order_id: order.id, employee_id: employeeId, rule_id: rule.id });
 
+        // Без адреса: текст пуша проходит через серверы Expo, Apple и
+        // Google за пределами России (152-ФЗ) — адрес сотрудник видит в
+        // самом заказе в приложении.
         if (token) {
           await sendExpoPush(
             [token],
             'Скоро заказ',
-            `Заказ в ${time}${pickup ? ` — ${pickup}` : ''} (через ${rule.offset_minutes} мин.)`,
+            `Заказ в ${time} (через ${rule.offset_minutes} мин.)`,
             { orderId: order.id }
           );
           sent += 1;

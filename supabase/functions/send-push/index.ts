@@ -4,12 +4,18 @@
 // так нельзя: Expo не отвечает на запросы с других сайтов (CORS). Поэтому
 // кабинет зовёт эту функцию, а она уже с сервера отправляет в Expo.
 // Push-токены сотрудников функция находит сама по их id — наружу токены
-// не отдаются.
+// не отдаются, и только среди сотрудников своей компании: иначе
+// администратор одной компании мог бы рассылать пуши чужим сотрудникам.
 //
-// Деплой (после `supabase link`, см. supabase/README.md):
+// Текст пуша проходит через серверы Expo, Apple и Google за пределами
+// России, поэтому кабинет шлёт только общие фразы («Вам назначен новый
+// заказ») — без адресов, имён и телефонов (152-ФЗ).
+//
+// Деплой: на своём сервере — deploy/selfhost/update.sh. В облачном
+// Supabase (после `supabase link`, см. supabase/README.md):
 //   supabase functions deploy send-push
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -44,10 +50,10 @@ Deno.serve(async (req) => {
   // и на создание заказа (has_order_permission в миграции 0005).
   const { data: caller } = await admin
     .from('employees')
-    .select('role, can_manage_orders')
+    .select('role, can_manage_orders, company_id')
     .eq('auth_user_id', userData.user.id)
     .maybeSingle();
-  if (!caller || (caller.role !== 'admin' && !caller.can_manage_orders)) {
+  if (!caller?.company_id || (caller.role !== 'admin' && !caller.can_manage_orders)) {
     return reply(403, { error: 'Недостаточно прав' }, headers);
   }
 
@@ -62,7 +68,11 @@ Deno.serve(async (req) => {
   const text = String(body.body ?? '').slice(0, 300);
   if (ids.length === 0 || !title) return reply(400, { error: 'Некому или нечего отправлять' }, headers);
 
-  const { data: employees, error } = await admin.from('employees').select('expo_push_token').in('id', ids);
+  const { data: employees, error } = await admin
+    .from('employees')
+    .select('expo_push_token')
+    .in('id', ids)
+    .eq('company_id', caller.company_id);
   if (error) return reply(500, { error: error.message }, headers);
   const tokens = (employees ?? []).map((e) => e.expo_push_token).filter((t): t is string => Boolean(t));
   if (tokens.length === 0) return reply(200, { sent: 0 }, headers);

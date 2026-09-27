@@ -4,11 +4,12 @@
 // стороны (мобильное приложение или веб-кабинет), поэтому без
 // пользовательского JWT, под service role — как и send-crew-reminders.
 //
-// Деплой (после `supabase link`, см. supabase/README.md) — обязательно
-// с флагом --no-verify-jwt, иначе триггер получит 401:
+// Деплой: на своём сервере — deploy/selfhost/update.sh (функции копирует
+// сам, снаружи сервера эта функция закрыта). В облачном Supabase — как
+// раньше, обязательно с --no-verify-jwt, иначе триггер получит 401:
 //   supabase functions deploy notify-owner-new-ticket --no-verify-jwt
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -37,11 +38,7 @@ Deno.serve(async (req) => {
 
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
-  const { data: ticket } = await admin
-    .from('support_tickets')
-    .select('subject, companies(name)')
-    .eq('id', ticketId)
-    .maybeSingle();
+  const { data: ticket } = await admin.from('support_tickets').select('id').eq('id', ticketId).maybeSingle();
   if (!ticket) return new Response(JSON.stringify({ sent: 0 }), { status: 200, headers });
 
   const { data: owners } = await admin.from('employees').select('expo_push_token').eq('role', 'owner');
@@ -49,8 +46,10 @@ Deno.serve(async (req) => {
     .map((o) => o.expo_push_token as string | null)
     .filter((t): t is string => Boolean(t));
 
-  const companyName = (ticket.companies as unknown as { name: string } | null)?.name ?? '—';
-  await sendExpoPush(tokens, 'Новое обращение в поддержку', `${companyName}: ${ticket.subject}`, { ticketId });
+  // Без названия компании и темы: текст пуша проходит через серверы Expo,
+  // Apple и Google за пределами России, а в теме (и в названии ИП) могут
+  // быть персональные данные — по 152-ФЗ им место на своём сервере.
+  await sendExpoPush(tokens, 'Новое обращение в поддержку', 'Прочитать его можно в кабинете владельца.', { ticketId });
 
   return new Response(JSON.stringify({ sent: tokens.length }), { status: 200, headers });
 });

@@ -5,11 +5,12 @@
 // без пользовательского JWT и работает под service role — как и
 // send-crew-reminders.
 //
-// Деплой (после `supabase link`, см. supabase/README.md) — обязательно
-// с флагом --no-verify-jwt:
+// Деплой: на своём сервере — deploy/selfhost/update.sh (функции копирует
+// сам, снаружи сервера эта функция закрыта). В облачном Supabase — как
+// раньше, обязательно с --no-verify-jwt:
 //   supabase functions deploy remind-driver-report --no-verify-jwt
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
