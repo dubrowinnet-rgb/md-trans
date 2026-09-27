@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
+import { orderBucket, isOrderCompleted, type OrderBucket } from '../lib/orderCompletion';
 import type { AccountRole, OrderStatus } from '../types/database';
 
 export interface EmployeeStat {
@@ -12,7 +13,7 @@ export interface EmployeeStat {
 
 export interface StatsOverview {
   totalOrders: number;
-  ordersByStatus: Partial<Record<OrderStatus, number>>;
+  ordersByBucket: Record<OrderBucket, number>;
   totalRevenue: number;
   employees: EmployeeStat[];
 }
@@ -20,6 +21,7 @@ export interface StatsOverview {
 interface StatsOrderRow {
   status: OrderStatus;
   actual_price: number | null;
+  scheduled_end: string;
   created_by: string | null;
   order_crew: { employee_id: string }[];
 }
@@ -35,7 +37,7 @@ export function useStatsOverview() {
     queryKey: ['stats-overview'],
     queryFn: async (): Promise<StatsOverview> => {
       const [ordersRes, accountsRes] = await Promise.all([
-        supabase.from('orders').select('status, actual_price, created_by, order_crew(employee_id)'),
+        supabase.from('orders').select('status, actual_price, scheduled_end, created_by, order_crew(employee_id)'),
         supabase.from('employees').select('id, name, role').order('role').order('name'),
       ]);
       if (ordersRes.error) throw ordersRes.error;
@@ -44,13 +46,17 @@ export function useStatsOverview() {
       const orders = ordersRes.data as unknown as StatsOrderRow[];
       const accounts = accountsRes.data as { id: string; name: string; role: AccountRole }[];
 
-      const ordersByStatus: Partial<Record<OrderStatus, number>> = {};
+      // «Завершён»/«Активен»/«Отменён» считаем по времени, а не по статусу
+      // (ревью, задача 2): приложение больше не пишет 'completed'. Выручка —
+      // по завершённым. См. lib/orderCompletion.ts (то же правило в веб-кабинете).
+      const now = new Date();
+      const ordersByBucket: Record<OrderBucket, number> = { active: 0, completed: 0, cancelled: 0 };
       let totalRevenue = 0;
       const perEmployee = new Map<string, { orders: number; revenue: number }>();
 
       for (const order of orders) {
-        ordersByStatus[order.status] = (ordersByStatus[order.status] ?? 0) + 1;
-        const isCompleted = order.status === 'completed';
+        ordersByBucket[orderBucket(order, now)] += 1;
+        const isCompleted = isOrderCompleted(order, now);
         if (isCompleted) totalRevenue += order.actual_price ?? 0;
 
         const creditedIds = new Set<string>();
@@ -75,7 +81,7 @@ export function useStatsOverview() {
         }))
         .sort((a, b) => b.ordersCount - a.ordersCount);
 
-      return { totalOrders: orders.length, ordersByStatus, totalRevenue, employees };
+      return { totalOrders: orders.length, ordersByBucket, totalRevenue, employees };
     },
   });
 }

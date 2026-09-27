@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { formatPhone } from '../lib/phone';
+import { isOrderCompleted } from '../lib/orderCompletion';
 import type { Database } from '../types/database';
 
 export type Client = Database['public']['Tables']['clients']['Row'];
@@ -60,11 +61,15 @@ export function useClientOrderStats(clientId: string | undefined) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('orders')
-        .select('status, actual_price')
+        .select('status, actual_price, scheduled_end')
         .eq('client_id', clientId as string);
       if (error) throw error;
-      const rows = data as { status: string; actual_price: number | null }[];
-      const completed = rows.filter((r) => r.status === 'completed');
+      const rows = data as { status: string; actual_price: number | null; scheduled_end: string }[];
+      // «Завершён» = не отменён и уже прошёл (ревью, задача 2) — см.
+      // lib/orderCompletion.ts. Раньше считали по status='completed',
+      // которого приложение больше не ставит.
+      const now = new Date();
+      const completed = rows.filter((r) => isOrderCompleted(r, now));
       return {
         totalOrders: rows.length,
         completedOrders: completed.length,
