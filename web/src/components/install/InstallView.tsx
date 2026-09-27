@@ -209,7 +209,10 @@ function IosCard({ info }: { info: InstallInfo | null }) {
               )}
             </List.Item>
             <List.Item>Откройте эту страницу в Safari и нажмите «Установить на iPhone».</List.Item>
-            <List.Item>Приложение появится на экране «Домой».</List.Item>
+            <List.Item>
+              При первом запуске iPhone попросит включить режим разработчика: «Настройки» → «Конфиденциальность и
+              безопасность» → «Режим разработчика». Включите его, дождитесь перезагрузки и подтвердите «Включить».
+            </List.Item>
           </List>
           <Button component="a" href={ios.url} leftSection={<IconDownload size={18} />} size="md">
             Установить на iPhone
