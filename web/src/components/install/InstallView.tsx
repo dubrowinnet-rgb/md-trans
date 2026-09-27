@@ -18,6 +18,7 @@ import {
 import { IconBrandAndroid, IconBrandApple, IconDownload, IconExternalLink } from '@tabler/icons-react';
 import { QrCode } from '@/components/install/QrCode';
 import { detectDevice, installPageUrl, loadInstallInfo, type DeviceKind, type InstallInfo } from '@/lib/installInfo';
+import { OPERATOR, PRIVACY_PATH } from '@/lib/operator';
 
 const TESTFLIGHT_APP_STORE = 'https://apps.apple.com/app/testflight/id899247664';
 
@@ -86,9 +87,16 @@ export function InstallView() {
           </Text>
         </Paper>
 
-        <Anchor href="/login/" size="sm">
-          Вход в веб-кабинет для диспетчеров и администраторов
-        </Anchor>
+        <Group gap="lg">
+          <Anchor href="/login/" size="sm">
+            Вход в веб-кабинет для диспетчеров и администраторов
+          </Anchor>
+          {OPERATOR && (
+            <Anchor href={PRIVACY_PATH} size="sm" c="dimmed">
+              Политика обработки персональных данных
+            </Anchor>
+          )}
+        </Group>
       </Stack>
     </Container>
   );

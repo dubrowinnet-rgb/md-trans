@@ -6,6 +6,7 @@ import { Alert, Anchor, Button, Center, Paper, PasswordInput, Stack, Text, TextI
 import { supabase, supabaseConfigured } from '@/lib/supabase';
 import { loginInputToE164, loginInputToEmail } from '@/lib/accountLogin';
 import { useSession } from '@/providers/SessionProvider';
+import { OPERATOR, PRIVACY_PATH } from '@/lib/operator';
 
 // Вход по телефону и паролю (доработки 3, п.4 — логин сотрудникам больше не
 // нужен), те же учётные данные, что и в мобильном приложении. «Войти по
@@ -105,6 +106,11 @@ export default function LoginPage() {
         <Anchor href="/install/" size="sm" display="block" ta="center" mt="lg">
           Установить приложение на телефон
         </Anchor>
+        {OPERATOR && (
+          <Anchor href={PRIVACY_PATH} size="xs" c="dimmed" display="block" ta="center" mt="xs">
+            Политика обработки персональных данных
+          </Anchor>
+        )}
       </Paper>
     </Center>
   );
