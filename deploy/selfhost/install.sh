@@ -60,30 +60,6 @@ fi
 
 # --- Вопросы ---------------------------------------------------------------
 
-# Пояснение к вопросам — в терминал (при установке без терминала, в тестовом
-# режиме, — просто в stderr).
-say() {
-  { printf '%s\n' "$*" >/dev/tty; } 2>/dev/null || printf '%s\n' "$*" >&2
-}
-
-# ask ПЕРЕМЕННАЯ "Вопрос" [ответ по умолчанию] — пропускается, если значение
-# уже задано (при повторном запуске или в тестовом режиме).
-ask() {
-  local var="$1" prompt="$2" def="${3:-}" reply
-  [ -n "${!var:-}" ] && return 0
-  while :; do
-    if [ -n "$def" ]; then
-      printf '%s [%s]: ' "$prompt" "$def" >/dev/tty
-    else
-      printf '%s: ' "$prompt" >/dev/tty
-    fi
-    IFS= read -r reply </dev/tty || die "Не удалось прочитать ответ."
-    reply="${reply:-$def}"
-    [ -n "$reply" ] && break
-  done
-  printf -v "$var" '%s' "$reply"
-}
-
 # ask_password ПЕРЕМЕННАЯ "Вопрос" [значение, если нажали Enter]
 ask_password() {
   local var="$1" prompt="$2" fallback="${3:-}" p1 p2
@@ -348,16 +324,6 @@ ensure_secrets() {
   fi
   log "Генерирую пароли и ключи сервера"
   (cd "$SUPABASE_DIR" && sh utils/generate-keys.sh --update-env >/dev/null && sh utils/add-new-auth-keys.sh --update-env >/dev/null)
-}
-
-start_stack() {
-  log "Запускаю сервер (первый запуск — несколько минут)"
-  if ! (cd "$SUPABASE_DIR" && sh run.sh start); then
-    warn "Не все части сервера поднялись с первого раза — пробую ещё раз."
-    sleep 15
-    (cd "$SUPABASE_DIR" && sh run.sh start) \
-      || die "Сервер не запустился. Посмотреть состояние: cd $SUPABASE_DIR && sh run.sh status — и пришлите Claude, что там написано."
-  fi
 }
 
 # --- Аккаунты ----------------------------------------------------------------

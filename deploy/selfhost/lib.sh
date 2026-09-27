@@ -1,6 +1,7 @@
 # shellcheck shell=bash
-# Общие функции для install.sh, update.sh, backup.sh и publish-app.sh. Сам по себе не
-# запускается — его подключают остальные скрипты (source).
+# Общие функции для install.sh, update.sh, backup.sh, publish-app.sh и
+# import-from-cloud.sh. Сам по себе не запускается — его подключают
+# остальные скрипты (source).
 #
 # Раскладка на сервере:
 #   /opt/md-trans/repo      — копия репозитория (миграции, функции, эти скрипты)
@@ -46,6 +47,30 @@ require_root() {
   [ "$(id -u)" = "0" ] || die "Запустите скрипт от имени root (на сервере: sudo -i, затем команду ещё раз)."
 }
 
+# Пояснение к вопросам — в терминал (при установке без терминала, в тестовом
+# режиме, — просто в stderr).
+say() {
+  { printf '%s\n' "$*" >/dev/tty; } 2>/dev/null || printf '%s\n' "$*" >&2
+}
+
+# ask ПЕРЕМЕННАЯ "Вопрос" [ответ по умолчанию] — пропускается, если значение
+# уже задано (при повторном запуске или в тестовом режиме).
+ask() {
+  local var="$1" prompt="$2" def="${3:-}" reply
+  [ -n "${!var:-}" ] && return 0
+  while :; do
+    if [ -n "$def" ]; then
+      printf '%s [%s]: ' "$prompt" "$def" >/dev/tty
+    else
+      printf '%s: ' "$prompt" >/dev/tty
+    fi
+    IFS= read -r reply </dev/tty || die "Не удалось прочитать ответ."
+    reply="${reply:-$def}"
+    [ -n "$reply" ] && break
+  done
+  printf -v "$var" '%s' "$reply"
+}
+
 # Заменяет строку KEY=... в файле (или дописывает её в конец). awk, а не
 # sed: в значениях бывают / | & — sed пришлось бы экранировать. Файл
 # перезаписывается на месте, права (chmod 600 у .env) сохраняются.
@@ -73,6 +98,17 @@ env_set()    { set_kv "$SUPABASE_DIR/.env" "$1" "$2"; }
 
 compose() {
   (cd "$SUPABASE_DIR" && docker compose "$@")
+}
+
+# Запускает все контейнеры Supabase и ждёт, пока они станут здоровыми.
+start_stack() {
+  log "Запускаю сервер (первый запуск — несколько минут)"
+  if ! (cd "$SUPABASE_DIR" && sh run.sh start); then
+    warn "Не все части сервера поднялись с первого раза — пробую ещё раз."
+    sleep 15
+    (cd "$SUPABASE_DIR" && sh run.sh start) \
+      || die "Сервер не запустился. Посмотреть состояние: cd $SUPABASE_DIR && sh run.sh status — и пришлите Claude, что там написано."
+  fi
 }
 
 # --- Репозиторий -----------------------------------------------------------
@@ -106,8 +142,10 @@ db_psql() {
 # Накатывает все ещё не выполненные миграции из supabase/migrations по
 # порядку. Какие уже выполнены — помнит таблица private.applied_migrations.
 # Каждая миграция — в одной транзакции: если упала, база остаётся как до неё.
+#   $1 — необязательно: номер последней миграции, до которой накатывать
+#        (13 — до 0013 включительно; нужно переносу данных из облака).
 run_migrations() {
-  local file name
+  local upto="${1:-}" file name
   db_psql <<'SQL' >/dev/null
 create schema if not exists private;
 revoke all on schema private from public;
@@ -122,6 +160,9 @@ SQL
     case "$name" in
       *[!A-Za-z0-9_.-]*) die "Странное имя файла миграции: $name" ;;
     esac
+    if [ -n "$upto" ] && [ "$((10#${name%%_*}))" -gt "$upto" ]; then
+      break
+    fi
     if [ "$(db_psql -tA -c "select 1 from private.applied_migrations where filename = '$name'")" = "1" ]; then
       continue
     fi
@@ -131,7 +172,13 @@ SQL
       || die "Миграция $name не выполнилась, база осталась как до неё. Пришлите Claude текст ошибки выше."
   done
   # Внутренний адрес функций для pg_cron и триггеров (миграция 0018).
-  db_psql -c "update private.app_settings set value = '$FUNCTIONS_INTERNAL_URL' where key = 'functions_base_url'" >/dev/null
+  db_psql >/dev/null <<SQL
+do \$\$ begin
+  if to_regclass('private.app_settings') is not null then
+    update private.app_settings set value = '$FUNCTIONS_INTERNAL_URL' where key = 'functions_base_url';
+  end if;
+end \$\$;
+SQL
 }
 
 # --- Edge Functions --------------------------------------------------------
