@@ -130,9 +130,15 @@ phone_pretty() {
 }
 
 # «https://www.Example.ru/» → «example.ru». Пусто, если на домен не похоже.
+# Кириллический домен (например, .рф) переводится в punycode (xn--…) — в
+# таком виде его понимают DNS и сертификаты, а браузер покажет кириллицей.
 normalize_domain() {
   local d
-  d=$(printf '%s' "$1" | tr 'A-Z' 'a-z' | sed -e 's#^[a-z]*://##' -e 's#/.*$##' -e 's#^www\.##' -e 's#^api\.##')
+  d=$(printf '%s' "$1" | sed -e 's#^[A-Za-z]*://##' -e 's#/.*$##')
+  if printf '%s' "$d" | LC_ALL=C grep -q '[^ -~]'; then
+    d=$(python3 -c 'import sys; print(sys.argv[1].lower().encode("idna").decode())' "$d" 2>/dev/null) || return 1
+  fi
+  d=$(printf '%s' "$d" | tr 'A-Z' 'a-z' | sed -e 's#^www\.##' -e 's#^api\.##')
   case "$d" in *.*) ;; *) return 1 ;; esac
   case "$d" in *[!a-z0-9.-]*|.*|*.) return 1 ;; esac
   printf '%s' "$d"
@@ -142,7 +148,7 @@ ask_questions() {
   DOMAIN="${MDTRANS_DOMAIN:-$(config_get domain)}"
   if [ -z "$DOMAIN" ]; then
     say ""
-    say "Домен, который вы купили для сервиса, латиницей (например, mdtrans.ru)."
+    say "Домен, который вы купили для сервиса (например, mdtrans.ru)."
     say "У домена должны быть три DNS-записи A на IP этого сервера: @, www и api."
     while :; do
       ask DOMAIN_INPUT "Домен"
@@ -407,7 +413,7 @@ SQL
 
 # --- Резервные копии -----------------------------------------------------------
 
-setup_backups() {
+setup_cron() {
   [ -n "${MDTRANS_SKIP_SYSTEM:-}" ] && return 0
   mkdir -p "$BACKUP_DIR"
   chmod 700 "$BACKUP_DIR"
@@ -415,7 +421,11 @@ setup_backups() {
 # Резервная копия базы, фото и ключей «Грузоперевозок» — каждую ночь (deploy/selfhost/backup.sh).
 30 0 * * * root bash $MDTRANS_REPO/deploy/selfhost/backup.sh >> $BACKUP_DIR/backup.log 2>&1
 EOF
-  chmod 644 /etc/cron.d/md-trans-backup
+  cat > /etc/cron.d/md-trans-app <<EOF
+# Новая сборка приложения для телефонов — на страницу установки, раз в час (deploy/selfhost/publish-app.sh).
+23 * * * * root bash $MDTRANS_REPO/deploy/selfhost/publish-app.sh >> $MDTRANS_BASE/publish-app.log 2>&1
+EOF
+  chmod 644 /etc/cron.d/md-trans-backup /etc/cron.d/md-trans-app
 }
 
 # --- Проверка и итог ---------------------------------------------------------
@@ -473,6 +483,8 @@ EOF
 
 main() {
   require_root
+  mkdir -p "$MDTRANS_BASE"
+  take_lock -n || die "Установка или обновление уже идёт в другом окне — дождитесь, пока оно закончится."
   printf '\nУстановка сервера «Грузоперевозок». Сначала несколько вопросов — дальше\n'
   printf 'всё пойдёт само, обычно 15–30 минут. Окно не закрывайте.\n'
   ask_questions
@@ -499,8 +511,9 @@ main() {
   if [ -z "${MDTRANS_SKIP_WEB:-}" ]; then
     log "Веб-кабинет"
     deploy_web
+    publish_app_files "$MDTRANS_REPO/deploy/app-release.json"
   fi
-  setup_backups
+  setup_cron
   check_health
   print_summary
 }

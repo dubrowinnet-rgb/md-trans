@@ -31,6 +31,7 @@ main() {
     exec bash "$MDTRANS_REPO/deploy/selfhost/update.sh" --fetched
   fi
 
+  take_lock -w 600 || die "Другое обновление не закончилось за 10 минут — повторите позже."
   bash "$MDTRANS_REPO/deploy/selfhost/backup.sh"
 
   log "Настройки сервера"
@@ -56,6 +57,7 @@ main() {
   if [ -z "${MDTRANS_SKIP_WEB:-}" ]; then
     log "Веб-кабинет"
     deploy_web
+    publish_app_files "$MDTRANS_REPO/deploy/app-release.json"
   fi
 
   log "Проверяю, что сервер отвечает"
