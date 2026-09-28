@@ -57,6 +57,35 @@ function rateForOrder(rates: EmployeeRates, roles: Set<EmployeeRole>): number {
   return candidates.length > 0 ? Math.max(...candidates) : 0;
 }
 
+// Сборный груз: водитель может вести несколько заказов с пересекающимся
+// временем (в отличие от грузчика — см. check_employee_availability,
+// миграция 0007). По решению Максима (карточка решения, 2026-09-28) общее
+// пересекающееся время оплачивается ОДИН раз — тем же правилом «одно время —
+// одна оплата», что и для дубль-роли на одном заказе выше, только теперь
+// между разными заказами: два заказа 10:00–14:00 дают 4 часа, а не 8. Если
+// ставки на пересекающихся заказах различаются (режим 'split', на одном
+// заказе он ещё и грузчик), за пересечение платится по большей.
+//
+// Считаем разверткой границ интервалов, а не суммой строк: между каждыми
+// двумя соседними границами берём час(ы) сегмента один раз, по максимальной
+// ставке среди заказов, которые в этот сегмент идут.
+function unionPay(orders: { start: number; end: number; rate: number }[]): { hours: number; amount: number } {
+  if (orders.length === 0) return { hours: 0, amount: 0 };
+  const bounds = [...new Set(orders.flatMap((o) => [o.start, o.end]))].sort((a, b) => a - b);
+  let hours = 0;
+  let amount = 0;
+  for (let i = 0; i < bounds.length - 1; i++) {
+    const segStart = bounds[i];
+    const segEnd = bounds[i + 1];
+    const activeRates = orders.filter((o) => o.start <= segStart && o.end >= segEnd).map((o) => o.rate);
+    if (activeRates.length === 0) continue;
+    const segHours = (segEnd - segStart) / 3_600_000;
+    hours += segHours;
+    amount += segHours * Math.max(...activeRates);
+  }
+  return { hours, amount };
+}
+
 interface CrewOrderRow {
   order_id: string;
   role: EmployeeRole;
@@ -109,27 +138,35 @@ export function useEmployeePayEstimate(employeeId: string | undefined, rates: Em
         }
       }
 
-      const lines: PayEstimateLine[] = [...byOrder.entries()]
-        .map(([orderId, o]) => {
-          const hours = (new Date(o.end).getTime() - new Date(o.start).getTime()) / 3_600_000;
-          const rate = rateForOrder(rates, o.roles);
-          return {
-            orderId,
-            scheduledStart: o.start,
-            scheduledEnd: o.end,
-            hours,
-            roles: [...o.roles],
-            rate,
-            amount: hours * rate,
-          };
-        })
+      const entries = [...byOrder.entries()].map(([orderId, o]) => {
+        const rate = rateForOrder(rates, o.roles);
+        const startMs = new Date(o.start).getTime();
+        const endMs = new Date(o.end).getTime();
+        return { orderId, start: o.start, end: o.end, startMs, endMs, roles: o.roles, rate };
+      });
+
+      // Строки списка — по-прежнему по каждому заказу отдельно (для
+      // прозрачности: видно, за что именно начислено); а итог — сведением
+      // пересекающихся интервалов (unionPay), чтобы не задвоить время
+      // сборного груза. На несовпадающих по времени заказах итог совпадает
+      // с суммой строк, как и раньше.
+      const lines: PayEstimateLine[] = entries
+        .map((e) => ({
+          orderId: e.orderId,
+          scheduledStart: e.start,
+          scheduledEnd: e.end,
+          hours: (e.endMs - e.startMs) / 3_600_000,
+          roles: [...e.roles],
+          rate: e.rate,
+          amount: ((e.endMs - e.startMs) / 3_600_000) * e.rate,
+        }))
         .sort((a, b) => a.scheduledStart.localeCompare(b.scheduledStart));
 
-      return {
-        lines,
-        totalHours: lines.reduce((sum, l) => sum + l.hours, 0),
-        totalAmount: lines.reduce((sum, l) => sum + l.amount, 0),
-      };
+      const { hours: totalHours, amount: totalAmount } = unionPay(
+        entries.map((e) => ({ start: e.startMs, end: e.endMs, rate: e.rate }))
+      );
+
+      return { lines, totalHours, totalAmount };
     },
   });
 }
