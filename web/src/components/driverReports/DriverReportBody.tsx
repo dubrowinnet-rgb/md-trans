@@ -9,6 +9,20 @@ import type { DriverReport } from '@/api/driverReports';
 // таблицы, только для чтения: менять отчёт может лишь сам водитель.
 // Разбито на две части, чтобы лента на широком экране ставила кассу
 // колонкой справа, а окно отчёта — одну под другой (DriverReportBody).
+// Превью фото одометра уменьшает сервер: снимок с камеры весит 1–2 МБ, а
+// показываем 144×96, и лента крупной компании тянула бы десятки мегабайт.
+// Уменьшает imgproxy из self-hosted Supabase (/storage/v1/render/image);
+// где этого нет (облачный Supabase на бесплатном тарифе), Image сам
+// покажет оригинал через fallbackSrc. Ширина и высота вдвое — для
+// экранов с высокой плотностью.
+const PUBLIC_OBJECT_PATH = '/storage/v1/object/public/';
+
+function photoPreviewUrl(url: string): string {
+  if (!url.includes(PUBLIC_OBJECT_PATH)) return url;
+  const base = url.split('?')[0].replace(PUBLIC_OBJECT_PATH, '/storage/v1/render/image/public/');
+  return `${base}?width=288&height=192&resize=cover&quality=70`;
+}
+
 export function DriverReportDetails({ report }: { report: DriverReport }) {
   return (
     <Stack>
@@ -100,7 +114,16 @@ export function DriverReportDetails({ report }: { report: DriverReport }) {
           {/* Размер задан заранее: в ленте иначе догрузка картинки сдвигает
               прокрутку, которая стоит на последнем отчёте. */}
           <Anchor href={report.odometer_photo_url} target="_blank" rel="noopener noreferrer" title="Открыть фото целиком">
-            <Image src={report.odometer_photo_url} alt="Фото одометра" w={144} h={96} fit="cover" radius="sm" />
+            <Image
+              src={photoPreviewUrl(report.odometer_photo_url)}
+              fallbackSrc={report.odometer_photo_url}
+              loading="lazy"
+              alt="Фото одометра"
+              w={144}
+              h={96}
+              fit="cover"
+              radius="sm"
+            />
           </Anchor>
         </div>
       )}
