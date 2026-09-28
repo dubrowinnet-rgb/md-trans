@@ -39,6 +39,9 @@ export default function EmployeeCalendarScreen() {
         />
         <Appbar.Action icon="calendar-today" onPress={nav.goToday} accessibilityLabel="Сегодня" />
         <Appbar.Action icon="calendar-remove-outline" onPress={() => router.push('/my-schedule')} accessibilityLabel="Мой график" />
+        {employee?.role === 'driver' && (
+          <Appbar.Action icon="clipboard-text-outline" onPress={() => router.push('/settings/driver-feed')} accessibilityLabel="Мои отчёты" />
+        )}
         <AccountMenu />
       </Appbar.Header>
 

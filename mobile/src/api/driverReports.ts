@@ -1,5 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { format } from 'date-fns';
 import { supabase } from '../lib/supabase';
+import { sendPushNotifications } from '../lib/pushNotifications';
 import type { Database, DriverReportStatus, FuelPaymentMethod } from '../types/database';
 
 export type DriverReportOrderRow = Database['public']['Tables']['driver_report_orders']['Row'];
@@ -10,6 +12,12 @@ export interface DriverReportOrderLine extends Pick<DriverReportOrderRow, 'id' |
 }
 
 export type DriverReportExpenseLine = Pick<DriverReportExpenseRow, 'id' | 'description' | 'amount'>;
+
+interface PersonRef {
+  id: string;
+  name: string;
+  last_name: string | null;
+}
 
 export interface DriverReport {
   id: string;
@@ -23,10 +31,18 @@ export interface DriverReport {
   fuel_amount: number | null;
   fuel_payment_method: FuelPaymentMethod | null;
   odometer_photo_url: string | null;
+  submitted_at: string | null;
+  edited_at: string | null;
+  rejected_by: string | null;
+  rejected_at: string | null;
+  rejection_comment: string | null;
   created_at: string;
   updated_at: string;
   driver_report_orders: DriverReportOrderLine[];
   driver_report_expenses: DriverReportExpenseLine[];
+  // Кто не согласовал / согласовал — для строки замечания в ленте.
+  reviewer: PersonRef | null;
+  approver: PersonRef | null;
   // Сверка кассы — та же формула, что уже в веб-кабинете
   // (web/src/api/driverReports.ts, withTotals), намеренно продублирована
   // здесь 1-в-1, а не вынесена в общий пакет (мобильное и веб-приложение —
@@ -38,12 +54,10 @@ export interface DriverReport {
   discrepancy: number | null;
 }
 
-interface DriverReportWithEmployee extends DriverReport {
-  employees: { id: string; name: string; last_name: string | null } | null;
-}
-
+// Три связи с employees (автор, согласовавший, не согласовавший) — PostgREST
+// требует указать, по какой из них подтягивать имя.
 const REPORT_SELECT =
-  '*, driver_report_orders(id, order_id, paid_by_transfer, orders(id, scheduled_start, cargo_description, actual_price, status)), driver_report_expenses(id, description, amount)';
+  '*, driver_report_orders(id, order_id, paid_by_transfer, orders(id, scheduled_start, cargo_description, actual_price, status)), driver_report_expenses(id, description, amount), reviewer:employees!rejected_by(id, name, last_name), approver:employees!confirmed_by(id, name, last_name)';
 
 function withTotals<T extends DriverReport>(raw: T): T {
   // В наличные идут неотменённые заказы, оплаченные не переводом (ревью,
@@ -65,7 +79,22 @@ function withTotals<T extends DriverReport>(raw: T): T {
   };
 }
 
-// Отчёт конкретного водителя за один день — форма «Мой отчёт».
+// Правила из миграции 0019 — здесь только чтобы показать кнопку «Исправить»
+// и срок; проверяет их всё равно база (save_driver_report).
+export const DRIVER_REPORT_EDIT_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+export function driverReportEditDeadline(report: Pick<DriverReport, 'submitted_at'>): Date | null {
+  return report.submitted_at ? new Date(new Date(report.submitted_at).getTime() + DRIVER_REPORT_EDIT_WINDOW_MS) : null;
+}
+
+export function canAuthorEditReport(report: Pick<DriverReport, 'status' | 'submitted_at'>, now = new Date()): boolean {
+  if (report.status === 'draft' || report.status === 'rejected') return true;
+  if (report.status !== 'submitted') return false;
+  const deadline = driverReportEditDeadline(report);
+  return deadline != null && now < deadline;
+}
+
+// Отчёт водителя за один день — форма «Написать / исправить отчёт».
 export function useDriverReport(employeeId: string | undefined, reportDate: string) {
   return useQuery({
     queryKey: ['driver-report', employeeId, reportDate],
@@ -83,20 +112,52 @@ export function useDriverReport(employeeId: string | undefined, reportDate: stri
   });
 }
 
-// Все отчёты компании — экран подтверждения у администратора. Статус не
-// фильтруем (видит и черновики), как и веб-кабинет.
-export function useDriverReports(companyId: string | undefined) {
+// Лента отчётов одного водителя — одна и та же у него самого и у
+// администратора/диспетчера (Максим, 2026-09-28): по дате отчёта, с начала
+// месяца вниз к сегодняшнему дню. Какие месяцы видно, решает база: водителю
+// — только текущий (плюс ещё открытые отчёты, см. миграцию 0019), поэтому
+// для него month не передаётся; проверяющий листает любой месяц. Черновики
+// приходят только самому водителю — в ленту они не входят, экран
+// показывает их отдельно, как неотправленное сообщение.
+export function useDriverReportFeed(employeeId: string | undefined, month?: { start: string; end: string }) {
   return useQuery({
-    queryKey: ['driver-reports', companyId],
-    enabled: Boolean(companyId),
+    queryKey: ['driver-report-feed', employeeId, month?.start ?? null, month?.end ?? null],
+    enabled: Boolean(employeeId),
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('driver_reports')
-        .select(`${REPORT_SELECT}, employees!employee_id(id, name, last_name)`)
-        .eq('company_id', companyId as string)
-        .order('report_date', { ascending: false });
+        .select(REPORT_SELECT)
+        .eq('employee_id', employeeId as string)
+        .order('report_date', { ascending: true });
+      if (month) query = query.gte('report_date', month.start).lt('report_date', month.end);
+      const { data, error } = await query;
       if (error) throw error;
-      return (data ?? []).map((r) => withTotals(r as unknown as DriverReportWithEmployee));
+      return (data ?? []).map((r) => withTotals(r as unknown as DriverReport));
+    },
+  });
+}
+
+export interface ReportDriver {
+  id: string;
+  name: string;
+  last_name: string | null;
+  pending: number;
+}
+
+// Список водителей для проверяющего — с числом отчётов «на проверке».
+export function useReportDrivers() {
+  return useQuery({
+    queryKey: ['driver-report-drivers'],
+    queryFn: async (): Promise<ReportDriver[]> => {
+      const [driversRes, pendingRes] = await Promise.all([
+        supabase.from('employees').select('id, name, last_name').eq('role', 'driver').order('name'),
+        supabase.from('driver_reports').select('employee_id').eq('status', 'submitted'),
+      ]);
+      if (driversRes.error) throw driversRes.error;
+      if (pendingRes.error) throw pendingRes.error;
+      const pendingBy = new Map<string, number>();
+      for (const r of pendingRes.data ?? []) pendingBy.set(r.employee_id, (pendingBy.get(r.employee_id) ?? 0) + 1);
+      return (driversRes.data ?? []).map((d) => ({ ...d, pending: pendingBy.get(d.id) ?? 0 }));
     },
   });
 }
@@ -132,92 +193,79 @@ export function useReportDayOrders(employeeId: string | undefined, reportDate: s
 }
 
 export interface SaveDriverReportInput {
-  employee_id: string;
   report_date: string;
-  status: 'draft' | 'submitted';
+  submit: boolean;
   fuel_amount: number | null;
   fuel_payment_method: FuelPaymentMethod | null;
   odometer_photo_url: string | null;
+  cash_handed_in: number | null;
   orders: { order_id: string; paid_by_transfer: boolean }[];
   expenses: { description: string; amount: number }[];
 }
 
-// Сохраняет форму отчёта целиком: сам отчёт (upsert по employee_id+report_date
-// — уникальный ключ, один отчёт на сотрудника на день) и обе дочерние
-// таблицы — удалить всё и вставить заново, форма всегда отправляет полный
-// список заказов/расходов, а не отдельные правки строк.
+function invalidateReports(queryClient: ReturnType<typeof useQueryClient>) {
+  queryClient.invalidateQueries({ queryKey: ['driver-report'] });
+  queryClient.invalidateQueries({ queryKey: ['driver-report-feed'] });
+  queryClient.invalidateQueries({ queryKey: ['driver-report-drivers'] });
+}
+
+// Отчёт целиком одной функцией базы (миграция 0019): она же проверяет
+// 24 часа, «согласованный не меняется» и ставит время отправки/правки —
+// напрямую в таблицы отчётов приложение больше не пишет. «Сдано» теперь
+// часть отчёта: сданную позже кассу водитель вписывает исправлением.
 export function useSaveDriverReport() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (input: SaveDriverReportInput) => {
-      const { orders, expenses, ...core } = input;
-      const { data: report, error } = await supabase
-        .from('driver_reports')
-        .upsert(core, { onConflict: 'employee_id,report_date' })
-        .select('id')
-        .single();
+      const { data, error } = await supabase.rpc('save_driver_report', {
+        p_report_date: input.report_date,
+        p_submit: input.submit,
+        p_orders: input.orders,
+        p_expenses: input.expenses,
+        p_fuel_amount: input.fuel_amount,
+        p_fuel_payment_method: input.fuel_payment_method,
+        p_odometer_photo_url: input.odometer_photo_url,
+        p_cash_handed_in: input.cash_handed_in,
+      });
       if (error) throw error;
-      const reportId = report.id as string;
-
-      const { error: delOrdersError } = await supabase.from('driver_report_orders').delete().eq('report_id', reportId);
-      if (delOrdersError) throw delOrdersError;
-      if (orders.length > 0) {
-        const { error: insOrdersError } = await supabase
-          .from('driver_report_orders')
-          .insert(orders.map((o) => ({ report_id: reportId, ...o })));
-        if (insOrdersError) throw insOrdersError;
-      }
-
-      const { error: delExpError } = await supabase.from('driver_report_expenses').delete().eq('report_id', reportId);
-      if (delExpError) throw delExpError;
-      if (expenses.length > 0) {
-        const { error: insExpError } = await supabase
-          .from('driver_report_expenses')
-          .insert(expenses.map((e) => ({ report_id: reportId, ...e })));
-        if (insExpError) throw insExpError;
-      }
-
-      return reportId;
+      return data as string;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['driver-report'] });
-      queryClient.invalidateQueries({ queryKey: ['driver-reports'] });
-    },
+    onSuccess: () => invalidateReports(queryClient),
   });
 }
 
-// «Сдать кассу» — отдельная кнопка с ручным вводом суммы (Максим, п. «отчёты
-// водителей»), не часть формы отчёта.
-export function useHandInCash() {
+// Проверка администратором или диспетчером: отчёт они не правят, только
+// согласуют или не согласуют с комментарием (Максим, 2026-09-28).
+export function useApproveDriverReport() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ reportId, amount }: { reportId: string; amount: number }) => {
-      const { error } = await supabase.from('driver_reports').update({ cash_handed_in: amount }).eq('id', reportId);
+    mutationFn: async (reportId: string) => {
+      const { error } = await supabase.rpc('approve_driver_report', { p_report_id: reportId });
       if (error) throw error;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['driver-report'] });
-      queryClient.invalidateQueries({ queryKey: ['driver-reports'] });
-    },
+    onSuccess: () => invalidateReports(queryClient),
   });
 }
 
-// Подтверждение отчёта администратором — фиксирует его в финансовых отчётах
-// (Максим). RLS разрешает только администратору своей компании.
-export function useConfirmDriverReport() {
+export function useRejectDriverReport() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ reportId, confirmedBy }: { reportId: string; confirmedBy: string }) => {
-      const { error } = await supabase
-        .from('driver_reports')
-        .update({ status: 'confirmed', confirmed_by: confirmedBy, confirmed_at: new Date().toISOString() })
-        .eq('id', reportId);
+    mutationFn: async ({ report, comment }: { report: Pick<DriverReport, 'id' | 'employee_id' | 'report_date'>; comment: string }) => {
+      const { error } = await supabase.rpc('reject_driver_report', { p_report_id: report.id, p_comment: comment });
       if (error) throw error;
+
+      // Пуш водителю — без текста замечания: пуши идут через серверы за
+      // пределами России (152-ФЗ), само замечание он прочитает в ленте.
+      const { data: driver } = await supabase.from('employees').select('expo_push_token').eq('id', report.employee_id).maybeSingle();
+      const day = format(new Date(`${report.report_date}T00:00:00`), 'dd.MM');
+      await sendPushNotifications(
+        driver?.expo_push_token ? [driver.expo_push_token] : [],
+        'Отчёт не согласован',
+        `Отчёт за ${day} не согласован. Откройте «Мои отчёты» и исправьте.`,
+        { kind: 'driver-report', reportId: report.id }
+      );
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['driver-report'] });
-      queryClient.invalidateQueries({ queryKey: ['driver-reports'] });
-    },
+    onSuccess: () => invalidateReports(queryClient),
   });
 }
 
