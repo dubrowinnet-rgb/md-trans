@@ -10,6 +10,7 @@ import { DRIVER_REPORT_STATUS_COLORS, DRIVER_REPORT_STATUS_LABELS } from '@/lib/
 import { dayjs, formatDate, formatMoney } from '@/lib/dates';
 import { PageHeader } from '@/components/common/PageHeader';
 import { DriverReportDetailModal } from '@/components/driverReports/DriverReportDetailModal';
+import { DriverReportFeed } from '@/components/driverReports/DriverReportFeed';
 
 type Period = 'week' | 'month' | 'year' | 'all' | 'custom';
 
@@ -58,7 +59,9 @@ function buildMonthlyRollup(reports: DriverReport[], namesById: Map<string, stri
 
 // Отчёты водителей (касса, расходы, топливо, подтверждение) — админская
 // сторона запроса Максима от 2026-09-25. Мобильный тред владеет схемой,
-// фото одометра и напоминанием 21:00; здесь только чтение/подтверждение.
+// фото одометра и напоминанием 21:00; здесь только чтение, подтверждение
+// и «не согласовать» с комментарием. Основной вид — лента (доработка
+// 2026-09-28), таблица и помесячный итог остались соседними вкладками.
 export default function DriverReportsPage() {
   const { employee } = useSession();
   const [period, setPeriod] = useState<Period>('month');
@@ -95,13 +98,15 @@ export default function DriverReportsPage() {
   }
 
   const reports = reportsQuery.data?.reports ?? [];
-  const namesById = new Map((accountsQuery.data ?? []).map((a) => [a.id, a.name]));
+  const accounts = accountsQuery.data ?? [];
+  const namesById = new Map(accounts.map((a) => [a.id, [a.name, a.last_name].filter(Boolean).join(' ')]));
+  const pendingCount = reports.filter((r) => r.status === 'submitted').length;
   const openReport = reports.find((r) => r.id === openReportId) ?? null;
   const monthlyRows = buildMonthlyRollup(reports, namesById);
 
   return (
     <Box p="lg">
-      <PageHeader title="Отчёты водителей" subtitle="Касса, расходы, топливо и подтверждение сдачи">
+      <PageHeader title="Отчёты водителей" subtitle="Лента отчётов: заказы, касса, расходы, топливо и проверка">
         <SegmentedControl
           value={period}
           onChange={(v) => setPeriod(v as Period)}
@@ -126,21 +131,36 @@ export default function DriverReportsPage() {
       </PageHeader>
 
       {reportsQuery.isError && <Alert color="red">Не удалось загрузить отчёты</Alert>}
-      {reportsQuery.isLoading && <Loader />}
-      <Tabs defaultValue="reports">
+      <Tabs defaultValue="feed" keepMounted={false}>
         <Tabs.List mb="md">
-          <Tabs.Tab value="reports">
-            Отчёты
-            {reports.some((r) => r.status === 'submitted') && (
-              <Badge ml={6} size="xs" color="yellow" circle>
-                {reports.filter((r) => r.status === 'submitted').length}
-              </Badge>
-            )}
+          <Tabs.Tab
+            value="feed"
+            rightSection={
+              pendingCount > 0 ? (
+                <Badge size="xs" color="yellow" circle>
+                  {pendingCount}
+                </Badge>
+              ) : undefined
+            }
+          >
+            Лента
           </Tabs.Tab>
+          <Tabs.Tab value="reports">Таблица</Tabs.Tab>
           <Tabs.Tab value="monthly">Помесячно</Tabs.Tab>
         </Tabs.List>
 
+        <Tabs.Panel value="feed">
+          <DriverReportFeed
+            reports={reports}
+            accounts={accounts}
+            namesById={namesById}
+            currentEmployeeId={employee.id}
+            loading={reportsQuery.isLoading}
+          />
+        </Tabs.Panel>
+
         <Tabs.Panel value="reports">
+          {reportsQuery.isLoading && <Loader mb="md" />}
           <Paper withBorder>
             <Table highlightOnHover striped>
               <Table.Thead>
@@ -234,11 +254,10 @@ export default function DriverReportsPage() {
         </Tabs.Panel>
       </Tabs>
 
-      {openReport && employee && (
+      {openReport && (
         <DriverReportDetailModal
           report={openReport}
-          employeeName={namesById.get(openReport.employee_id) ?? '—'}
-          confirmedByName={openReport.confirmed_by ? namesById.get(openReport.confirmed_by) ?? null : null}
+          namesById={namesById}
           currentEmployeeId={employee.id}
           onClose={() => setOpenReportId(null)}
         />

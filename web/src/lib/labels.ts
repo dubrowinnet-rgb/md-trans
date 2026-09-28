@@ -64,10 +64,12 @@ export const DRIVER_REPORT_STATUS_LABELS: Record<DriverReportStatus, string> = {
   draft: 'Заполняется',
   submitted: 'Отправлен',
   confirmed: 'Подтверждён',
+  rejected: 'Не согласован',
 };
 
 export const DRIVER_REPORT_STATUS_COLORS: Record<DriverReportStatus, string> = {
   draft: 'gray',
   submitted: 'yellow',
   confirmed: 'green',
+  rejected: 'red',
 };

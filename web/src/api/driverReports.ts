@@ -34,6 +34,14 @@ interface DriverReportRow {
   fuel_amount: number | null;
   fuel_payment_method: FuelPaymentMethod | null;
   odometer_photo_url: string | null;
+  created_at: string;
+  // Доработка «лента отчётов» (Максим, 2026-09-28) — см. DriverReportStatus
+  // в types/database.ts: колонок пока нет, select('*') их просто не вернёт.
+  submitted_at?: string | null;
+  driver_edited_at?: string | null;
+  review_comment?: string | null;
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
   driver_report_orders: DriverReportOrderRow[];
   driver_report_expenses: DriverReportExpenseRow[];
 }
@@ -87,6 +95,24 @@ export function useDriverReports(period: { from: string; to: string } | null) {
   });
 }
 
+// Когда водитель написал отчёт и когда (если было) правил его сам —
+// Максим хочет видеть оба времени в ленте. Пока в базе нет времени
+// отправки, «написан» — время создания отчёта.
+export function reportWrittenAt(report: DriverReport): string {
+  return report.submitted_at ?? report.created_at;
+}
+
+export function reportEditedAt(report: DriverReport): string | null {
+  return report.driver_edited_at ?? null;
+}
+
+// «Не согласовать» появляется, только когда в базе уже есть колонки для
+// комментария (миграция мобильного треда): существующая колонка приходит
+// в ответе как null, отсутствующая — не приходит совсем.
+export function canRejectReport(report: DriverReport): boolean {
+  return 'review_comment' in report;
+}
+
 // Подтверждение отчёта и сданной кассы администратором — после этого он
 // считается зафиксированным в финансовых отчётах (Максим); дальше отчёт
 // нигде не редактируется.
@@ -97,6 +123,30 @@ export function useConfirmDriverReport() {
       const { error } = await supabase
         .from('driver_reports')
         .update({ status: 'confirmed', confirmed_by: confirmedBy, confirmed_at: new Date().toISOString() })
+        .eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['driver-reports'] });
+    },
+  });
+}
+
+// «Не согласовать» с комментарием: отчёт возвращается водителю, он
+// исправляет и отправляет заново. Сам отчёт администратор/диспетчер не
+// меняет — только статус и комментарий (Максим, 2026-09-28).
+export function useRejectDriverReport() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, reviewedBy, comment }: { id: string; reviewedBy: string; comment: string }) => {
+      const { error } = await supabase
+        .from('driver_reports')
+        .update({
+          status: 'rejected',
+          review_comment: comment,
+          reviewed_by: reviewedBy,
+          reviewed_at: new Date().toISOString(),
+        })
         .eq('id', id);
       if (error) throw error;
     },

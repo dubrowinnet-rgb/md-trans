@@ -20,7 +20,11 @@ export type ScheduleDayStatus = 'off' | 'on';
 // Режим ставки водителя/грузчика (миграция 0014): combined — одна ставка
 // за час на любой роли в заказе; split — раздельно вождение/погрузка.
 export type RateMode = 'combined' | 'split';
-export type DriverReportStatus = 'draft' | 'submitted' | 'confirmed';
+// 'rejected' — «не согласован» с комментарием (доработка Максима
+// 2026-09-28, лента отчётов). Схему делает мобильный тред; до его миграции
+// значение и поля ниже (submitted_at … reviewed_at) — рабочие имена веба,
+// сверить и переименовать, когда миграция появится в ветке.
+export type DriverReportStatus = 'draft' | 'submitted' | 'confirmed' | 'rejected';
 export type FuelPaymentMethod = 'cash' | 'cashless';
 
 export interface Database {
@@ -397,6 +401,12 @@ export interface Database {
           odometer_photo_url: string | null;
           created_at: string;
           updated_at: string;
+          // Необязательные: колонок пока нет в базе (см. DriverReportStatus).
+          submitted_at?: string | null;
+          driver_edited_at?: string | null;
+          review_comment?: string | null;
+          reviewed_by?: string | null;
+          reviewed_at?: string | null;
         };
         Insert: {
           id?: string;
@@ -410,6 +420,9 @@ export interface Database {
           fuel_amount?: number | null;
           fuel_payment_method?: FuelPaymentMethod | null;
           odometer_photo_url?: string | null;
+          review_comment?: string | null;
+          reviewed_by?: string | null;
+          reviewed_at?: string | null;
         };
         Update: Partial<Database['public']['Tables']['driver_reports']['Insert']>;
         Relationships: [];
