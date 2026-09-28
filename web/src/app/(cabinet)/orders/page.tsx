@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Alert, Badge, Box, Button, Group, Loader, Paper, Select, Table, Text, TextInput } from '@mantine/core';
+import { Alert, Badge, Box, Button, Group, Loader, Pagination, Paper, Select, Table, Text, TextInput } from '@mantine/core';
 import { DatePickerInput } from '@mantine/dates';
 import { IconPlus, IconSearch } from '@tabler/icons-react';
 import { useOrdersList } from '@/api/orders';
@@ -15,6 +15,10 @@ import { orderBucket, type OrderBucket } from '@/lib/orderCompletion';
 import { PageHeader } from '@/components/common/PageHeader';
 import { useOrderUI } from '@/components/orders/OrderUIProvider';
 import { mergeCrew } from '@/components/orders/OrderDrawer';
+
+// Сколько строк рисуем за раз: у крупной компании за месяц заказов тысячи,
+// и таблица на все сразу подвешивает браузер.
+const PAGE_SIZE = 100;
 
 const ORDER_FILTER_OPTIONS = [
   { value: 'all', label: 'Все' },
@@ -31,6 +35,7 @@ export default function OrdersPage() {
   const [statusFilter, setStatusFilter] = useState<'all' | OrderBucket>('all');
   const [employeeId, setEmployeeId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
   const { employee } = useSession();
   const showAmount = canViewOrderAmount(employee);
   const showPhone = canViewClientPhone(employee);
@@ -62,6 +67,10 @@ export default function OrdersPage() {
   }, [query.data, search, employeeId, showPhone, statusFilter]);
 
   const total = rows.filter((o) => o.status !== 'cancelled').reduce((s, o) => s + Number(o.actual_price ?? 0), 0);
+  const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  // Сменили фильтр — строк стало меньше, текущая страница могла исчезнуть.
+  const currentPage = Math.min(page, pages);
+  const pageRows = rows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   return (
     <Box p="lg">
@@ -78,7 +87,10 @@ export default function OrdersPage() {
             type="range"
             label="Период"
             value={range}
-            onChange={(v) => setRange(v as [string | null, string | null])}
+            onChange={(v) => {
+              setRange(v as [string | null, string | null]);
+              setPage(1);
+            }}
             valueFormat="D MMM YYYY"
             w={260}
           />
@@ -86,7 +98,10 @@ export default function OrdersPage() {
             label="Статус"
             data={ORDER_FILTER_OPTIONS}
             value={statusFilter}
-            onChange={(v) => setStatusFilter((v as typeof statusFilter) ?? 'all')}
+            onChange={(v) => {
+              setStatusFilter((v as typeof statusFilter) ?? 'all');
+              setPage(1);
+            }}
             w={200}
             allowDeselect={false}
           />
@@ -95,7 +110,10 @@ export default function OrdersPage() {
             placeholder="Все"
             data={employees.map((e) => ({ value: e.id, label: e.name }))}
             value={employeeId}
-            onChange={setEmployeeId}
+            onChange={(v) => {
+              setEmployeeId(v);
+              setPage(1);
+            }}
             clearable
             searchable
             w={200}
@@ -105,7 +123,10 @@ export default function OrdersPage() {
             placeholder="Клиент, адрес, груз…"
             leftSection={<IconSearch size={16} />}
             value={search}
-            onChange={(e) => setSearch(e.currentTarget.value)}
+            onChange={(e) => {
+              setSearch(e.currentTarget.value);
+              setPage(1);
+            }}
             style={{ flex: 1 }}
           />
         </Group>
@@ -133,7 +154,7 @@ export default function OrdersPage() {
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
-            {rows.map((o) => {
+            {pageRows.map((o) => {
               const stops = [...o.order_stops].sort((a, b) => a.order_index - b.order_index);
               const crew = mergeCrew(o);
               const badge = ORDER_BUCKET_BADGES[orderBucket(o)];
@@ -208,6 +229,11 @@ export default function OrdersPage() {
           </Table.Tbody>
         </Table>
       </Paper>
+      {pages > 1 && (
+        <Group justify="center" mt="md">
+          <Pagination value={currentPage} onChange={setPage} total={pages} />
+        </Group>
+      )}
     </Box>
   );
 }

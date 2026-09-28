@@ -1,5 +1,7 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
+import { fetchAllPages } from '@/lib/supabaseQuery';
+import { useCompanyId } from '@/providers/SessionProvider';
 import { notifyEmployees } from '@/lib/push';
 import { friendlyOrderError } from '@/lib/errors';
 import type { Database, EmployeeRole, OrderStatus, StopType } from '@/types/database';
@@ -29,26 +31,70 @@ function invalidateOrders(queryClient: ReturnType<typeof useQueryClient>) {
   queryClient.invalidateQueries({ queryKey: ['orders'] });
   queryClient.invalidateQueries({ queryKey: ['busy-employees'] });
   queryClient.invalidateQueries({ queryKey: ['client-orders'] });
-  queryClient.invalidateQueries({ queryKey: ['client-stats'] });
+  queryClient.invalidateQueries({ queryKey: ['clients', 'with-stats'] });
   queryClient.invalidateQueries({ queryKey: ['stats-overview'] });
 }
 
+// Нижняя граница по началу заказа для запросов «пересекается с периодом»:
+// без неё условие scheduled_end > начало периода заставляет базу перебрать
+// все прошлые заказы компании (неделя календаря крупной компании: 0,76 с →
+// 0,09 с на тестовой базе). Заказ длиннее месяца не бывает.
+const MAX_ORDER_SPAN_MS = 31 * 24 * 60 * 60 * 1000;
+
+function spanFloor(start: Date) {
+  return new Date(start.getTime() - MAX_ORDER_SPAN_MS).toISOString();
+}
+
 export function useOrdersForRange(rangeStart: Date, rangeEnd: Date) {
+  const companyId = useCompanyId();
   const startIso = rangeStart.toISOString();
   const endIso = rangeEnd.toISOString();
 
   return useQuery({
-    queryKey: ['orders', 'range', startIso, endIso],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('orders')
-        .select(ORDER_SELECT)
-        .lt('scheduled_start', endIso)
-        .gt('scheduled_end', startIso)
-        .order('scheduled_start', { ascending: true });
-      if (error) throw error;
-      return data as unknown as OrderWithDetails[];
-    },
+    queryKey: ['orders', 'range', companyId, startIso, endIso],
+    queryFn: () =>
+      fetchAllPages<OrderWithDetails>((from, to) => {
+        let query = supabase
+          .from('orders')
+          .select(ORDER_SELECT)
+          .lt('scheduled_start', endIso)
+          .gte('scheduled_start', spanFloor(rangeStart))
+          .gt('scheduled_end', startIso);
+        if (companyId) query = query.eq('company_id', companyId);
+        return query.order('scheduled_start', { ascending: true }).order('id', { ascending: true }).range(from, to);
+      }),
+    placeholderData: keepPreviousData,
+  });
+}
+
+export interface CrewLoadOrder {
+  id: string;
+  status: OrderStatus;
+  scheduled_start: string;
+  order_crew: { employee_id: string }[];
+}
+
+// Заказы сотрудников по дням для экрана «График»: только время и бригада,
+// без клиентов, адресов и услуг (крупной компании за месяц — 0,25 МБ
+// вместо 2 МБ). Отменённые не нужны.
+export function useCrewLoad(rangeStart: Date, rangeEnd: Date) {
+  const companyId = useCompanyId();
+  const startIso = rangeStart.toISOString();
+  const endIso = rangeEnd.toISOString();
+
+  return useQuery({
+    queryKey: ['orders', 'crew-load', companyId, startIso, endIso],
+    queryFn: () =>
+      fetchAllPages<CrewLoadOrder>((from, to) => {
+        let query = supabase
+          .from('orders')
+          .select('id, status, scheduled_start, order_crew(employee_id)')
+          .neq('status', 'cancelled')
+          .gte('scheduled_start', startIso)
+          .lt('scheduled_start', endIso);
+        if (companyId) query = query.eq('company_id', companyId);
+        return query.order('scheduled_start', { ascending: true }).order('id', { ascending: true }).range(from, to);
+      }),
     placeholderData: keepPreviousData,
   });
 }
@@ -71,42 +117,46 @@ export function useOrder(orderId: string | null) {
 
 // История заказов клиента — для карточки клиента.
 export function useClientOrders(clientId: string | null) {
+  const companyId = useCompanyId();
   return useQuery({
-    queryKey: ['client-orders', clientId],
+    queryKey: ['client-orders', companyId, clientId],
     enabled: Boolean(clientId),
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('orders')
-        .select(ORDER_SELECT)
-        .eq('client_id', clientId as string)
-        .order('scheduled_start', { ascending: false });
-      if (error) throw error;
-      return data as unknown as OrderWithDetails[];
-    },
+    queryFn: () =>
+      fetchAllPages<OrderWithDetails>((from, to) => {
+        let query = supabase.from('orders').select(ORDER_SELECT).eq('client_id', clientId as string);
+        if (companyId) query = query.eq('company_id', companyId);
+        return query.order('scheduled_start', { ascending: false }).order('id', { ascending: true }).range(from, to);
+      }),
   });
 }
 
 // Кто из сотрудников занят другим заказом в этот интервал (для точек
 // доступности в форме). excludeOrderId — сам редактируемый заказ, иначе
-// его бригада считалась бы занятой сама собой.
+// его бригада считалась бы занятой сама собой. Идём от заказов компании,
+// а не от order_crew: у бригад нет своей колонки компании, и такой запрос
+// перебирал строки бригад всех компаний сервиса (0,2–0,5 с → 0,01 с).
 export function useBusyEmployeeIds(start: Date | null, end: Date | null, excludeOrderId?: string | null) {
+  const companyId = useCompanyId();
   const startIso = start?.toISOString() ?? null;
   const endIso = end?.toISOString() ?? null;
 
   return useQuery({
-    queryKey: ['busy-employees', startIso, endIso, excludeOrderId ?? null],
-    enabled: Boolean(startIso && endIso),
+    queryKey: ['busy-employees', companyId, startIso, endIso, excludeOrderId ?? null],
+    enabled: Boolean(start && end),
     queryFn: async () => {
-      let query = supabase
-        .from('order_crew')
-        .select('employee_id, orders!inner(id, scheduled_start, scheduled_end, status)')
-        .neq('orders.status', 'cancelled')
-        .lt('orders.scheduled_start', endIso as string)
-        .gt('orders.scheduled_end', startIso as string);
-      if (excludeOrderId) query = query.neq('order_id', excludeOrderId);
-      const { data, error } = await query;
-      if (error) throw error;
-      return new Set((data as { employee_id: string }[]).map((row) => row.employee_id));
+      const rows = await fetchAllPages<{ id: string; order_crew: { employee_id: string }[] }>((from, to) => {
+        let query = supabase
+          .from('orders')
+          .select('id, order_crew(employee_id)')
+          .neq('status', 'cancelled')
+          .lt('scheduled_start', endIso as string)
+          .gte('scheduled_start', spanFloor(start as Date))
+          .gt('scheduled_end', startIso as string);
+        if (companyId) query = query.eq('company_id', companyId);
+        if (excludeOrderId) query = query.neq('id', excludeOrderId);
+        return query.order('id', { ascending: true }).range(from, to);
+      });
+      return new Set(rows.flatMap((o) => o.order_crew.map((c) => c.employee_id)));
     },
   });
 }
@@ -374,22 +424,24 @@ export interface OrdersFilter {
 // (активные/завершённые/отменённые) фильтруют сами экраны — «завершён»
 // считается по времени, а не хранится в статусе.
 export function useOrdersList(filter: OrdersFilter) {
+  const companyId = useCompanyId();
   const fromIso = filter.from.toISOString();
   const toIso = filter.to.toISOString();
   return useQuery({
-    queryKey: ['orders', 'list', fromIso, toIso],
-    queryFn: () => fetchOrdersList(filter),
+    queryKey: ['orders', 'list', companyId, fromIso, toIso],
+    queryFn: () => fetchOrdersList(filter, companyId),
     placeholderData: keepPreviousData,
   });
 }
 
-export async function fetchOrdersList(filter: OrdersFilter) {
-  const { data, error } = await supabase
-    .from('orders')
-    .select(ORDER_SELECT)
-    .gte('scheduled_start', filter.from.toISOString())
-    .lt('scheduled_start', filter.to.toISOString())
-    .order('scheduled_start', { ascending: true });
-  if (error) throw error;
-  return data as unknown as OrderWithDetails[];
+export function fetchOrdersList(filter: OrdersFilter, companyId: string | null) {
+  return fetchAllPages<OrderWithDetails>((from, to) => {
+    let query = supabase
+      .from('orders')
+      .select(ORDER_SELECT)
+      .gte('scheduled_start', filter.from.toISOString())
+      .lt('scheduled_start', filter.to.toISOString());
+    if (companyId) query = query.eq('company_id', companyId);
+    return query.order('scheduled_start', { ascending: true }).order('id', { ascending: true }).range(from, to);
+  });
 }

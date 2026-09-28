@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Alert, Badge, Box, Loader, Paper, SegmentedControl, Table, Tabs, Text } from '@mantine/core';
+import { Alert, Badge, Box, Group, Loader, Pagination, Paper, SegmentedControl, Table, Tabs, Text } from '@mantine/core';
 import { DatePickerInput } from '@mantine/dates';
 import { useDriverReports, type DriverReport } from '@/api/driverReports';
 import { useAllAccounts } from '@/api/accounts';
@@ -13,6 +13,9 @@ import { DriverReportDetailModal } from '@/components/driverReports/DriverReport
 import { DriverReportFeed } from '@/components/driverReports/DriverReportFeed';
 
 type Period = 'week' | 'month' | 'year' | 'all' | 'custom';
+
+// Строк таблицы за раз: у крупной компании отчётов за месяц больше тысячи.
+const TABLE_PAGE = 100;
 
 interface MonthlyRow {
   key: string;
@@ -69,6 +72,7 @@ export default function DriverReportsPage() {
   const [period, setPeriod] = useState<Period>('month');
   const [custom, setCustom] = useState<[string | null, string | null]>([null, null]);
   const [openReportId, setOpenReportId] = useState<string | null>(null);
+  const [tablePage, setTablePage] = useState(1);
 
   const range = useMemo(() => {
     const now = dayjs();
@@ -105,13 +109,19 @@ export default function DriverReportsPage() {
   const pendingCount = reports.filter((r) => r.status === 'submitted').length;
   const openReport = reports.find((r) => r.id === openReportId) ?? null;
   const monthlyRows = buildMonthlyRollup(reports, namesById);
+  const tablePages = Math.max(1, Math.ceil(reports.length / TABLE_PAGE));
+  const currentTablePage = Math.min(tablePage, tablePages);
+  const tableRows = reports.slice((currentTablePage - 1) * TABLE_PAGE, currentTablePage * TABLE_PAGE);
 
   return (
     <Box p="lg">
       <PageHeader title="Отчёты водителей" subtitle="Лента отчётов: заказы, касса, расходы, топливо и проверка">
         <SegmentedControl
           value={period}
-          onChange={(v) => setPeriod(v as Period)}
+          onChange={(v) => {
+            setPeriod(v as Period);
+            setTablePage(1);
+          }}
           data={[
             { value: 'week', label: 'Неделя' },
             { value: 'month', label: 'Месяц' },
@@ -125,7 +135,10 @@ export default function DriverReportsPage() {
             type="range"
             placeholder="Выберите даты"
             value={custom}
-            onChange={(v) => setCustom(v as [string | null, string | null])}
+            onChange={(v) => {
+              setCustom(v as [string | null, string | null]);
+              setTablePage(1);
+            }}
             valueFormat="D MMM YYYY"
             w={240}
           />
@@ -139,7 +152,7 @@ export default function DriverReportsPage() {
             value="feed"
             rightSection={
               pendingCount > 0 ? (
-                <Badge size="xs" color="yellow" circle>
+                <Badge size="sm" color="yellow" circle={pendingCount < 10}>
                   {pendingCount}
                 </Badge>
               ) : undefined
@@ -175,7 +188,7 @@ export default function DriverReportsPage() {
                 </Table.Tr>
               </Table.Thead>
               <Table.Tbody>
-                {reports.map((r) => (
+                {tableRows.map((r) => (
                   <Table.Tr key={r.id} style={{ cursor: 'pointer' }} onClick={() => setOpenReportId(r.id)}>
                     <Table.Td>{formatDate(r.report_date)}</Table.Td>
                     <Table.Td>{namesById.get(r.employee_id) ?? '—'}</Table.Td>
@@ -202,6 +215,11 @@ export default function DriverReportsPage() {
               </Table.Tbody>
             </Table>
           </Paper>
+          {tablePages > 1 && (
+            <Group justify="center" mt="md">
+              <Pagination value={currentTablePage} onChange={setTablePage} total={tablePages} />
+            </Group>
+          )}
         </Tabs.Panel>
 
         <Tabs.Panel value="monthly">

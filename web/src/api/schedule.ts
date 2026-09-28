@@ -1,5 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
+import { fetchAllPages } from '@/lib/supabaseQuery';
+import { useCompanyId } from '@/providers/SessionProvider';
 import type { ScheduleDayStatus, ScheduleMode } from '@/types/database';
 
 // График сотрудников (миграция 0008, та же модель, что в
@@ -24,19 +26,34 @@ export function formatTimeShort(time: string) {
   return time.slice(0, 5);
 }
 
+// Отметки сотрудников своей компании: у employee_schedule_days нет своей
+// колонки компании, поэтому ограничиваем через сотрудника
+// (employees!inner() — пустое вложение только для фильтра). Иначе база
+// перебирает отметки всех компаний сервиса за эти дни.
+function companySchedule(columns: string, companyId: string | null) {
+  if (!companyId) return supabase.from('employee_schedule_days').select(columns);
+  return supabase
+    .from('employee_schedule_days')
+    .select(`${columns}, employees!inner()`)
+    .eq('employees.company_id', companyId);
+}
+
 // Все отметки за период (экран «График»); ключ карты — `${employee_id}:${day}`.
 export function useScheduleDaysInRange(fromKey: string, toKey: string) {
+  const companyId = useCompanyId();
   return useQuery({
-    queryKey: ['schedule-days-range', fromKey, toKey],
+    queryKey: ['schedule-days-range', companyId, fromKey, toKey],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('employee_schedule_days')
-        .select('employee_id, day, status, start_time, end_time')
-        .gte('day', fromKey)
-        .lte('day', toKey);
-      if (error) throw error;
+      const rows = await fetchAllPages<ScheduleRow>((from, to) =>
+        companySchedule('employee_id, day, status, start_time, end_time', companyId)
+          .gte('day', fromKey)
+          .lte('day', toKey)
+          .order('employee_id', { ascending: true })
+          .order('day', { ascending: true })
+          .range(from, to)
+      );
       const map = new Map<string, ScheduleDay>();
-      for (const r of data as ScheduleRow[]) {
+      for (const r of rows) {
         map.set(`${r.employee_id}:${r.day}`, { status: r.status, start_time: r.start_time, end_time: r.end_time });
       }
       return map;
@@ -99,17 +116,19 @@ export function useClearScheduleDay() {
 
 // Явные отметки на конкретный день — для доступности бригады в форме заказа.
 export function useScheduleDaysOn(day: string | null) {
+  const companyId = useCompanyId();
   return useQuery({
-    queryKey: ['schedule-days-on', day],
+    queryKey: ['schedule-days-on', companyId, day],
     enabled: Boolean(day),
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('employee_schedule_days')
-        .select('employee_id, status, start_time, end_time')
-        .eq('day', day as string);
-      if (error) throw error;
+      const rows = await fetchAllPages<Omit<ScheduleRow, 'day'>>((from, to) =>
+        companySchedule('employee_id, status, start_time, end_time', companyId)
+          .eq('day', day as string)
+          .order('employee_id', { ascending: true })
+          .range(from, to)
+      );
       const map = new Map<string, ScheduleDay>();
-      for (const r of data as Omit<ScheduleRow, 'day'>[]) {
+      for (const r of rows) {
         map.set(r.employee_id, { status: r.status, start_time: r.start_time, end_time: r.end_time });
       }
       return map;

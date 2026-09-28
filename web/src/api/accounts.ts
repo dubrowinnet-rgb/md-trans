@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
+import { REFERENCE_STALE_TIME } from '@/lib/supabaseQuery';
+import { useCompanyId } from '@/providers/SessionProvider';
 import type { AccountRole, Database } from '@/types/database';
 
 export type Account = Database['public']['Tables']['employees']['Row'];
@@ -61,12 +63,14 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<AccountRole, AccountPermissions> =
 // Все аккаунты (админы, диспетчеры, водители, грузчики) — для экрана
 // «Команда», который видит только администратор.
 export function useAllAccounts() {
+  const companyId = useCompanyId();
   return useQuery({
-    queryKey: ['accounts'],
+    queryKey: ['accounts', companyId],
+    staleTime: REFERENCE_STALE_TIME,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('employees')
-        .select('*')
+      let query = supabase.from('employees').select('*');
+      if (companyId) query = query.eq('company_id', companyId);
+      const { data, error } = await query
         .order('role', { ascending: true })
         .order('name', { ascending: true });
       if (error) throw error;
@@ -118,6 +122,7 @@ export function useCreateAccount() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
       queryClient.invalidateQueries({ queryKey: ['employees'] });
+      queryClient.invalidateQueries({ queryKey: ['current-employee'] });
     },
   });
 }
@@ -151,6 +156,7 @@ export function useUpdateAccount() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
       queryClient.invalidateQueries({ queryKey: ['employees'] });
+      queryClient.invalidateQueries({ queryKey: ['current-employee'] });
     },
   });
 }
@@ -193,6 +199,7 @@ export function useUpdateAccountProfile() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
       queryClient.invalidateQueries({ queryKey: ['employees'] });
+      queryClient.invalidateQueries({ queryKey: ['current-employee'] });
     },
   });
 }

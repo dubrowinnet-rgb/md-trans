@@ -14,6 +14,11 @@ import { DriverReportReview } from '@/components/driverReports/DriverReportRevie
 
 const ALL = 'all';
 
+// Сколько карточек ленты рисуем сразу: у крупной компании отчётов за месяц
+// больше тысячи, а каждая карточка — с таблицами. Более ранние
+// открываются кнопкой сверху, по столько же.
+const FEED_STEP = 30;
+
 const STATUS_STRIPE: Record<DriverReportStatus, string> = {
   draft: 'var(--mantine-color-gray-4)',
   submitted: 'var(--mantine-color-yellow-5)',
@@ -71,19 +76,22 @@ export function DriverReportFeed({
   );
 
   const drivers = useMemo<DriverEntry[]>(() => {
+    const counts = new Map<string, { total: number; pending: number; rejected: number }>();
+    for (const r of sent) {
+      const entry = counts.get(r.employee_id) ?? { total: 0, pending: 0, rejected: 0 };
+      entry.total += 1;
+      if (r.status === 'submitted') entry.pending += 1;
+      if (r.status === 'rejected') entry.rejected += 1;
+      counts.set(r.employee_id, entry);
+    }
     const ids = new Set(accounts.filter((a) => a.role === 'driver' && a.account_status === 'active').map((a) => a.id));
-    for (const r of sent) ids.add(r.employee_id);
+    for (const id of counts.keys()) ids.add(id);
     return [...ids]
-      .map((id) => {
-        const own = sent.filter((r) => r.employee_id === id);
-        return {
-          id,
-          name: namesById.get(id) ?? '—',
-          total: own.length,
-          pending: own.filter((r) => r.status === 'submitted').length,
-          rejected: own.filter((r) => r.status === 'rejected').length,
-        };
-      })
+      .map((id) => ({
+        id,
+        name: namesById.get(id) ?? '—',
+        ...(counts.get(id) ?? { total: 0, pending: 0, rejected: 0 }),
+      }))
       .sort((a, b) => a.name.localeCompare(b.name, 'ru'));
   }, [accounts, sent, namesById]);
 
@@ -91,6 +99,13 @@ export function DriverReportFeed({
   const pendingInFeed = feed.filter((r) => r.status === 'submitted');
   const pendingTotal = sent.filter((r) => r.status === 'submitted').length;
   const selectedName = selected === ALL ? 'Все водители' : namesById.get(selected) ?? '—';
+
+  // Другой водитель или период — снова последние FEED_STEP карточек.
+  const feedKey = `${selected}|${feed[0]?.id ?? ''}|${feed.length}`;
+  const [shown, setShown] = useState({ key: '', count: FEED_STEP });
+  const shownCount = shown.key === feedKey ? shown.count : FEED_STEP;
+  const visible = feed.slice(Math.max(0, feed.length - shownCount));
+  const hiddenCount = feed.length - visible.length;
 
   // Высота ленты — до низа окна, чтобы она листалась сама по себе, как
   // переписка, а список водителей слева оставался на месте.
@@ -112,9 +127,37 @@ export function DriverReportFeed({
     return () => cancelAnimationFrame(frame);
   }, [selected, feed.length, loading, feedHeight]);
 
+  // Раскрыли более ранние карточки сверху — оставляем на экране то же, что
+  // было (иначе новые карточки сдвинут ленту вниз), или едем к нужной.
+  const keepFromBottomRef = useRef<number | null>(null);
+  const scrollToIdRef = useRef<string | null>(null);
+  useLayoutEffect(() => {
+    const el = viewportRef.current;
+    if (scrollToIdRef.current) {
+      document.getElementById(`report-${scrollToIdRef.current}`)?.scrollIntoView({ block: 'start' });
+      scrollToIdRef.current = null;
+    } else if (el && keepFromBottomRef.current !== null) {
+      el.scrollTop = el.scrollHeight - keepFromBottomRef.current;
+    }
+    keepFromBottomRef.current = null;
+  }, [shownCount]);
+
+  const showEarlier = () => {
+    const el = viewportRef.current;
+    keepFromBottomRef.current = el ? el.scrollHeight - el.scrollTop : null;
+    setShown({ key: feedKey, count: shownCount + FEED_STEP });
+  };
+
   const showFirstPending = () => {
     const first = pendingInFeed[0];
-    if (first) document.getElementById(`report-${first.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (!first) return;
+    const needed = feed.length - feed.indexOf(first);
+    if (needed > shownCount) {
+      scrollToIdRef.current = first.id;
+      setShown({ key: feedKey, count: needed });
+      return;
+    }
+    document.getElementById(`report-${first.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   return (
@@ -129,7 +172,7 @@ export function DriverReportFeed({
               leftSection={<IconUsers size={16} />}
               rightSection={
                 pendingTotal > 0 ? (
-                  <Badge size="sm" color="yellow" circle>
+                  <Badge size="sm" color="yellow" circle={pendingTotal < 10}>
                     {pendingTotal}
                   </Badge>
                 ) : undefined
@@ -149,7 +192,7 @@ export function DriverReportFeed({
                 }
                 rightSection={
                   d.pending > 0 ? (
-                    <Badge size="sm" color="yellow" circle>
+                    <Badge size="sm" color="yellow" circle={d.pending < 10}>
                       {d.pending}
                     </Badge>
                   ) : undefined
@@ -204,7 +247,14 @@ export function DriverReportFeed({
               </Center>
             ) : (
               <Stack gap="md" p="md">
-                {feed.map((report) => (
+                {hiddenCount > 0 && (
+                  <Center>
+                    <Button variant="subtle" size="xs" onClick={showEarlier}>
+                      Показать более ранние ({hiddenCount})
+                    </Button>
+                  </Center>
+                )}
+                {visible.map((report) => (
                   <FeedCard
                     key={report.id}
                     report={report}

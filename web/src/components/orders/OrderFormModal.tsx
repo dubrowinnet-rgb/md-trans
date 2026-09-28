@@ -23,6 +23,7 @@ import {
   UnstyledButton,
 } from '@mantine/core';
 import { DatePickerInput } from '@mantine/dates';
+import { useDebouncedValue } from '@mantine/hooks';
 import { TimeField } from '@/components/common/TimeField';
 import { notifications } from '@mantine/notifications';
 import { errorMessage } from '@/lib/errors';
@@ -130,7 +131,9 @@ export function OrderFormModal({
   const services = useServices().data ?? [];
   const frequentAddresses = useFrequentAddresses().data;
   const vehicles = useVehicles().data ?? [];
-  const clientsQuery = useClientSearch(clientSearch);
+  // Запрос к базе — когда пауза в наборе 0,3 с, а не на каждую букву.
+  const [debouncedClientSearch] = useDebouncedValue(clientSearch, 300);
+  const clientsQuery = useClientSearch(debouncedClientSearch);
   const selectedClientQuery = useClient(clientId);
   const createOrder = useCreateOrder();
   const updateOrder = useUpdateOrder();

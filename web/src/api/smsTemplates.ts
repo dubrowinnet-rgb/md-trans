@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
+import { REFERENCE_STALE_TIME } from '@/lib/supabaseQuery';
 import type { Database } from '@/types/database';
 
 export type SmsTemplate = Database['public']['Tables']['sms_templates']['Row'];
@@ -10,6 +11,7 @@ export type SmsTemplate = Database['public']['Tables']['sms_templates']['Row'];
 export function useSmsTemplates() {
   return useQuery({
     queryKey: ['sms-templates'],
+    staleTime: REFERENCE_STALE_TIME,
     queryFn: async () => {
       const { data, error } = await supabase.from('sms_templates').select('*').order('key', { ascending: true });
       if (error) throw error;

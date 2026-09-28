@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
+import { REFERENCE_STALE_TIME } from '@/lib/supabaseQuery';
 import type { Database } from '@/types/database';
 
 export type ReminderRule = Database['public']['Tables']['reminder_rules']['Row'];
@@ -11,6 +12,7 @@ export type ReminderRule = Database['public']['Tables']['reminder_rules']['Row']
 export function useReminderRules() {
   return useQuery({
     queryKey: ['reminder-rules'],
+    staleTime: REFERENCE_STALE_TIME,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('reminder_rules')

@@ -30,6 +30,10 @@ import { formatPhone } from '@/lib/phone';
 import { useOrderUI } from '@/components/orders/OrderUIProvider';
 import { ClientFormModal } from './ClientFormModal';
 
+// Сколько последних заказов показываем сразу; у постоянного клиента
+// компании их бывают сотни, остальные — кнопкой под таблицей.
+const HISTORY_STEP = 50;
+
 // Карточка клиента: контакты, заметки, сводка и вся история заказов.
 export function ClientModal({ clientId, onClose }: { clientId: string; onClose: () => void }) {
   const { employee } = useSession();
@@ -38,6 +42,7 @@ export function ClientModal({ clientId, onClose }: { clientId: string; onClose: 
   const deleteClient = useDeleteClient();
   const ui = useOrderUI();
   const [editing, setEditing] = useState(false);
+  const [historyShown, setHistoryShown] = useState(HISTORY_STEP);
   const client = clientQuery.data;
   const orders = ordersQuery.data ?? [];
   const showStats = canViewClientStats(employee);
@@ -138,7 +143,7 @@ export function ClientModal({ clientId, onClose }: { clientId: string; onClose: 
                   </Table.Tr>
                 </Table.Thead>
                 <Table.Tbody>
-                  {orders.map((o) => {
+                  {orders.slice(0, historyShown).map((o) => {
                     const stops = [...o.order_stops].sort((a, b) => a.order_index - b.order_index);
                     const badge = ORDER_BUCKET_BADGES[orderBucket(o, now)];
                     return (
@@ -161,6 +166,13 @@ export function ClientModal({ clientId, onClose }: { clientId: string; onClose: 
                   })}
                 </Table.Tbody>
               </Table>
+              {orders.length > historyShown && (
+                <Group justify="center" py="xs">
+                  <Button variant="subtle" size="xs" onClick={() => setHistoryShown((n) => n + HISTORY_STEP)}>
+                    Показать ещё ({orders.length - historyShown})
+                  </Button>
+                </Group>
+              )}
             </ScrollArea.Autosize>
           )}
         </Stack>

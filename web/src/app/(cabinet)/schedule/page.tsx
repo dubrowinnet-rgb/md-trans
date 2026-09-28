@@ -13,7 +13,6 @@ import {
   ScrollArea,
   Stack,
   Text,
-  Tooltip,
 } from '@mantine/core';
 import { MonthPickerInput } from '@mantine/dates';
 import { notifications } from '@mantine/notifications';
@@ -27,7 +26,7 @@ import {
   useSetScheduleDay,
   type ScheduleDay,
 } from '@/api/schedule';
-import { useOrdersForRange } from '@/api/orders';
+import { useCrewLoad } from '@/api/orders';
 import { useSession } from '@/providers/SessionProvider';
 import { canManageOrders } from '@/lib/permissions';
 import { dayjs, fromDateKey, toDateKey } from '@/lib/dates';
@@ -78,11 +77,13 @@ export default function SchedulePage() {
     () => Array.from({ length: month.daysInMonth() }, (_, i) => month.add(i, 'day')),
     [month]
   );
+  // Ключ и подпись дня — один раз на месяц, а не в каждой ячейке сетки.
+  const dayCells = useMemo(() => days.map((d) => ({ key: toDateKey(d.toDate()), label: d.format('D MMMM') })), [days]);
   const fromKey = toDateKey(month.toDate());
   const toKey = toDateKey(month.endOf('month').toDate());
   const scheduleQuery = useScheduleDaysInRange(fromKey, toKey);
   const schedule = scheduleQuery.data ?? new Map<string, ScheduleDay>();
-  const ordersQuery = useOrdersForRange(month.toDate(), month.add(1, 'month').toDate());
+  const ordersQuery = useCrewLoad(month.toDate(), month.add(1, 'month').toDate());
   const setDay = useSetScheduleDay();
   const clearDay = useClearScheduleDay();
 
@@ -236,8 +237,7 @@ export default function SchedulePage() {
                       {e.can_manage_own_schedule ? ' · ведёт сам' : ''}
                     </Text>
                   </td>
-                  {days.map((d) => {
-                    const key = toDateKey(d.toDate());
+                  {dayCells.map(({ key, label }) => {
                     const row = schedule.get(`${e.id}:${key}`);
                     const status = effectiveScheduleStatus(e.schedule_mode, row);
                     const st = STATUS_STYLE[status];
@@ -245,7 +245,7 @@ export default function SchedulePage() {
                     const hours = shortHours(row);
                     const isSource = clipboard?.from.employee.id === e.id && clipboard.from.day === key;
                     const tooltip =
-                      `${d.format('D MMMM')}: ${status === 'on' ? 'рабочий' : 'выходной'}` +
+                      `${label}: ${status === 'on' ? 'рабочий' : 'выходной'}` +
                       (row?.start_time && row?.end_time
                         ? `, ${formatTimeShort(row.start_time)}–${formatTimeShort(row.end_time)}`
                         : '') +
@@ -253,32 +253,34 @@ export default function SchedulePage() {
                       (count ? `, заказов: ${count}` : '');
                     return (
                       <td key={key} style={{ padding: 2 }}>
-                        <Tooltip label={tooltip} openDelay={300}>
-                          <Box
-                            onClick={() => onCell({ employee: e, day: key })}
-                            data-testid={`cell-${e.id}-${key}`}
-                            data-status={status}
-                            style={{
-                              height: 34,
-                              borderRadius: 4,
-                              cursor: canEdit ? (clipboard ? 'copy' : 'pointer') : 'default',
-                              backgroundColor: row ? st.bg : 'white',
-                              border: `1px ${row ? 'solid' : 'dashed'} ${st.border}`,
-                              outline: isSource ? '2px solid var(--mantine-color-violet-6)' : undefined,
-                              display: 'flex',
-                              flexDirection: 'column',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              color: st.color,
-                              lineHeight: 1.1,
-                            }}
-                          >
-                            <span style={{ fontWeight: 700, fontSize: 12 }}>
-                              {status === 'off' ? 'в' : count || ''}
-                            </span>
-                            {hours && <span style={{ fontSize: 9, fontWeight: 600 }}>{hours}</span>}
-                          </Box>
-                        </Tooltip>
+                        {/* Обычная подсказка браузера (title), а не Tooltip:
+                            ячеек сотни-тысячи (100 сотрудников × 30 дней), и
+                            Tooltip в каждой держал страницу больше секунды. */}
+                        <div
+                          title={tooltip}
+                          onClick={() => onCell({ employee: e, day: key })}
+                          data-testid={`cell-${e.id}-${key}`}
+                          data-status={status}
+                          style={{
+                            height: 34,
+                            borderRadius: 4,
+                            cursor: canEdit ? (clipboard ? 'copy' : 'pointer') : 'default',
+                            backgroundColor: row ? st.bg : 'white',
+                            border: `1px ${row ? 'solid' : 'dashed'} ${st.border}`,
+                            outline: isSource ? '2px solid var(--mantine-color-violet-6)' : undefined,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: st.color,
+                            lineHeight: 1.1,
+                          }}
+                        >
+                          <span style={{ fontWeight: 700, fontSize: 12 }}>
+                            {status === 'off' ? 'в' : count || ''}
+                          </span>
+                          {hours && <span style={{ fontSize: 9, fontWeight: 600 }}>{hours}</span>}
+                        </div>
                       </td>
                     );
                   })}

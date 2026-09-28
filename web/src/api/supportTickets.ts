@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
+import { fetchAllPages } from '@/lib/supabaseQuery';
 import type { Database, TicketStatus } from '@/types/database';
 
 export type { TicketStatus };
@@ -24,17 +25,20 @@ export function useMyTickets(employeeId: string | undefined) {
   });
 }
 
-// Очередь обращений для владельца сервиса — по всем компаниям сразу.
+// Очередь обращений для владельца сервиса — по всем компаниям сразу,
+// страницами по 1000 (на тысяче компаний обращений быстро больше).
 export function useAllTickets() {
   return useQuery({
     queryKey: ['support-tickets', 'all'],
     queryFn: async (): Promise<(SupportTicket & { companyName: string })[]> => {
-      const { data, error } = await supabase
-        .from('support_tickets')
-        .select('*, companies(name)')
-        .order('updated_at', { ascending: false });
-      if (error) throw error;
-      const rows = data as unknown as (SupportTicket & { companies: { name: string } | null })[];
+      const rows = await fetchAllPages<SupportTicket & { companies: { name: string } | null }>((from, to) =>
+        supabase
+          .from('support_tickets')
+          .select('*, companies(name)')
+          .order('updated_at', { ascending: false })
+          .order('id', { ascending: true })
+          .range(from, to)
+      );
       return rows.map((r) => ({ ...r, companyName: r.companies?.name ?? '—' }));
     },
   });

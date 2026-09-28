@@ -21,6 +21,17 @@ export type ScheduleDayStatus = 'off' | 'on';
 // за час на любой роли в заказе; split — раздельно вождение/погрузка.
 export type RateMode = 'combined' | 'split';
 // 'confirmed' — «согласован», 'rejected' — «не согласован» (миграция 0019).
+// Ответ stats_overview(p_from, p_to): итоги компании за период и по
+// каждому сотруднику (в бригаде или создатель заказа, один раз на заказ).
+export interface StatsOverviewResult {
+  total_orders: number;
+  active: number;
+  completed: number;
+  cancelled: number;
+  revenue: number;
+  employees: { employee_id: string; orders_count: number; revenue: number }[];
+}
+
 export type DriverReportStatus = 'draft' | 'submitted' | 'confirmed' | 'rejected';
 export type FuelPaymentMethod = 'cash' | 'cashless';
 
@@ -504,6 +515,23 @@ export interface Database {
       reject_driver_report: {
         Args: { p_report_id: string; p_comment: string };
         Returns: undefined;
+      };
+      // Сводки для «Клиентов» и «Статистики», посчитанные в базе (нагрузка
+      // 2026-09-28, миграция треда приложения). Пока их нет в базе, кабинет
+      // считает сам по страницам заказов (isMissingFunction).
+      client_order_stats: {
+        Args: Record<string, never>;
+        Returns: {
+          client_id: string;
+          orders_count: number;
+          completed_count: number;
+          revenue: number;
+          last_order_at: string | null;
+        }[];
+      };
+      stats_overview: {
+        Args: { p_from?: string | null; p_to?: string | null };
+        Returns: StatsOverviewResult;
       };
     };
     Enums: Record<string, never>;

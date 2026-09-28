@@ -1,8 +1,24 @@
 'use client';
 
-import { useState } from 'react';
-import { Accordion, Alert, Badge, Box, Button, Group, Loader, Paper, Select, Stack, Table, Tabs, Text } from '@mantine/core';
-import { IconBuildingStore, IconHeadset, IconPlus } from '@tabler/icons-react';
+import { useMemo, useState } from 'react';
+import {
+  Accordion,
+  Alert,
+  Badge,
+  Box,
+  Button,
+  Group,
+  Loader,
+  Pagination,
+  Paper,
+  Select,
+  Stack,
+  Table,
+  Tabs,
+  Text,
+  TextInput,
+} from '@mantine/core';
+import { IconBuildingStore, IconHeadset, IconPlus, IconSearch } from '@tabler/icons-react';
 import { useCompanies } from '@/api/companies';
 import { useAllTickets, useUpdateTicketStatus, type TicketStatus } from '@/api/supportTickets';
 import { useSession } from '@/providers/SessionProvider';
@@ -15,6 +31,11 @@ import { TicketThread } from '@/components/support/TicketThread';
 
 const TICKET_STATUSES: TicketStatus[] = ['open', 'in_progress', 'resolved'];
 
+// Компаний у сервиса может быть тысяча и больше — таблицу и очередь
+// обращений рисуем страницами.
+const COMPANIES_PAGE = 50;
+const TICKETS_PAGE = 30;
+
 // Кабинет владельца сервиса (Максим Дубровин) — список подключённых
 // компаний (клиентов сервиса) и очередь обращений в поддержку по всем
 // компаниям сразу. Доступ — настоящая роль 'owner' (миграция 0013, см.
@@ -25,6 +46,15 @@ export default function OwnerPage() {
   const ticketsQuery = useAllTickets();
   const updateStatus = useUpdateTicketStatus();
   const [addingCompany, setAddingCompany] = useState(false);
+  const [companySearch, setCompanySearch] = useState('');
+  const [companyPage, setCompanyPage] = useState(1);
+  const [ticketPage, setTicketPage] = useState(1);
+
+  const filteredCompanies = useMemo(() => {
+    const q = companySearch.trim().toLowerCase();
+    const all = companiesQuery.data ?? [];
+    return q ? all.filter((c) => c.name.toLowerCase().includes(q)) : all;
+  }, [companiesQuery.data, companySearch]);
 
   if (!isServiceOwner(employee)) {
     return (
@@ -34,8 +64,14 @@ export default function OwnerPage() {
     );
   }
 
-  const companies = companiesQuery.data ?? [];
   const tickets = ticketsQuery.data ?? [];
+  const openTickets = tickets.filter((t) => t.status === 'open').length;
+  const companyPages = Math.max(1, Math.ceil(filteredCompanies.length / COMPANIES_PAGE));
+  const currentCompanyPage = Math.min(companyPage, companyPages);
+  const companies = filteredCompanies.slice((currentCompanyPage - 1) * COMPANIES_PAGE, currentCompanyPage * COMPANIES_PAGE);
+  const ticketPages = Math.max(1, Math.ceil(tickets.length / TICKETS_PAGE));
+  const currentTicketPage = Math.min(ticketPage, ticketPages);
+  const pageTickets = tickets.slice((currentTicketPage - 1) * TICKETS_PAGE, currentTicketPage * TICKETS_PAGE);
 
   return (
     <Box p="lg">
@@ -47,19 +83,36 @@ export default function OwnerPage() {
           </Tabs.Tab>
           <Tabs.Tab value="tickets" leftSection={<IconHeadset size={16} />}>
             Обращения
-            {tickets.some((t) => t.status === 'open') && (
-              <Badge ml={6} size="xs" color="red" circle>
-                {tickets.filter((t) => t.status === 'open').length}
+            {openTickets > 0 && (
+              <Badge ml={6} size="xs" color="red" circle={openTickets < 10}>
+                {openTickets}
               </Badge>
             )}
           </Tabs.Tab>
         </Tabs.List>
 
         <Tabs.Panel value="companies">
-          <Group justify="flex-end" mb="sm">
-            <Button leftSection={<IconPlus size={16} />} onClick={() => setAddingCompany(true)}>
-              Добавить компанию
-            </Button>
+          <Group justify="space-between" mb="sm">
+            <TextInput
+              placeholder="Поиск по названию"
+              leftSection={<IconSearch size={16} />}
+              value={companySearch}
+              onChange={(e) => {
+                setCompanySearch(e.currentTarget.value);
+                setCompanyPage(1);
+              }}
+              w={320}
+            />
+            <Group gap="md">
+              {companiesQuery.data && (
+                <Text size="sm" c="dimmed">
+                  Компаний: {filteredCompanies.length}
+                </Text>
+              )}
+              <Button leftSection={<IconPlus size={16} />} onClick={() => setAddingCompany(true)}>
+                Добавить компанию
+              </Button>
+            </Group>
           </Group>
           {companiesQuery.isLoading && <Loader />}
           {companiesQuery.isError && <Alert color="red">Не удалось загрузить компании</Alert>}
@@ -94,11 +147,11 @@ export default function OwnerPage() {
                     </Table.Td>
                   </Table.Tr>
                 ))}
-                {companies.length === 0 && (
+                {companies.length === 0 && !companiesQuery.isLoading && (
                   <Table.Tr>
                     <Table.Td colSpan={6}>
                       <Text c="dimmed" ta="center" py="lg">
-                        Компаний пока нет
+                        {companySearch.trim() ? 'Ничего не найдено' : 'Компаний пока нет'}
                       </Text>
                     </Table.Td>
                   </Table.Tr>
@@ -106,6 +159,11 @@ export default function OwnerPage() {
               </Table.Tbody>
             </Table>
           </Paper>
+          {companyPages > 1 && (
+            <Group justify="center" mt="md">
+              <Pagination value={currentCompanyPage} onChange={setCompanyPage} total={companyPages} />
+            </Group>
+          )}
         </Tabs.Panel>
 
         <Tabs.Panel value="tickets">
@@ -118,7 +176,7 @@ export default function OwnerPage() {
               </Text>
             ) : (
               <Accordion>
-                {tickets.map((t) => (
+                {pageTickets.map((t) => (
                   <Accordion.Item key={t.id} value={t.id}>
                     <Accordion.Control>
                       <Group justify="space-between" wrap="nowrap" pr="sm">
@@ -150,6 +208,11 @@ export default function OwnerPage() {
               </Accordion>
             )}
           </Paper>
+          {ticketPages > 1 && (
+            <Group justify="center" mt="md">
+              <Pagination value={currentTicketPage} onChange={setTicketPage} total={ticketPages} />
+            </Group>
+          )}
         </Tabs.Panel>
       </Tabs>
 

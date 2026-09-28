@@ -23,7 +23,7 @@ import { useQuery } from '@tanstack/react-query';
 import { IconFileSpreadsheet, IconFileTypeCsv } from '@tabler/icons-react';
 import { fetchClientsWithStats, type ClientWithStats } from '@/api/clients';
 import { fetchOrdersList, type OrderWithDetails } from '@/api/orders';
-import { useSession } from '@/providers/SessionProvider';
+import { useCompanyId, useSession } from '@/providers/SessionProvider';
 import { canViewClientPhone, canViewClientStats, canViewOrderAmount } from '@/lib/permissions';
 import { ORDER_BUCKETS, ORDER_BUCKET_LABELS } from '@/lib/labels';
 import { orderBucket } from '@/lib/orderCompletion';
@@ -67,6 +67,7 @@ function defaults<T>(cols: ExportColumn<T>[]) {
 // нельзя тому, кому их не видно и в кабинете.
 export default function ExportPage() {
   const { employee } = useSession();
+  const companyId = useCompanyId();
   const allowed: Record<ColumnGuard, boolean> = {
     phone: canViewClientPhone(employee),
     amount: canViewOrderAmount(employee),
@@ -102,13 +103,13 @@ export default function ExportPage() {
   const to = dayjs(range[1] ? fromDateKey(range[1]) : from).add(1, 'day').toDate();
 
   const clientsQuery = useQuery({
-    queryKey: ['clients', 'with-stats'],
-    queryFn: fetchClientsWithStats,
+    queryKey: ['clients', 'with-stats', companyId],
+    queryFn: () => fetchClientsWithStats(companyId),
     enabled: dataset === 'clients',
   });
   const ordersQuery = useQuery({
-    queryKey: ['orders', 'list', from.toISOString(), to.toISOString()],
-    queryFn: () => fetchOrdersList({ from, to }),
+    queryKey: ['orders', 'list', companyId, from.toISOString(), to.toISOString()],
+    queryFn: () => fetchOrdersList({ from, to }, companyId),
     enabled: dataset === 'orders',
   });
   const orderRows = useMemo(() => {

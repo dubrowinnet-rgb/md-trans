@@ -7,6 +7,7 @@ import { Notifications } from '@mantine/notifications';
 import { ModalsProvider } from '@mantine/modals';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SessionProvider } from '@/providers/SessionProvider';
+import { shouldRetryQuery } from '@/lib/supabaseQuery';
 import '@/lib/dates';
 
 // Фиолетовый — как основной цвет мобильного приложения (#5b21b6).
@@ -18,8 +19,14 @@ const theme = createTheme({
 });
 
 export function Providers({ children }: { children: ReactNode }) {
+  // Данные, загруженные меньше минуты назад, при возврате на вкладку не
+  // перечитываются: иначе тысячи открытых кабинетов дёргают базу на каждое
+  // переключение окна. Свои правки сбрасывают кэш сразу (invalidateQueries).
   const [queryClient] = useState(
-    () => new QueryClient({ defaultOptions: { queries: { refetchOnWindowFocus: true, staleTime: 15_000 } } })
+    () =>
+      new QueryClient({
+        defaultOptions: { queries: { refetchOnWindowFocus: true, staleTime: 60_000, retry: shouldRetryQuery } },
+      })
   );
   return (
     <QueryClientProvider client={queryClient}>

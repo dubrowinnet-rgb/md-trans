@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
+import { REFERENCE_STALE_TIME } from '@/lib/supabaseQuery';
 import type { Database } from '@/types/database';
 
 export type Vehicle = Database['public']['Tables']['vehicles']['Row'];
@@ -9,6 +10,7 @@ export type Vehicle = Database['public']['Tables']['vehicles']['Row'];
 export function useVehicles() {
   return useQuery({
     queryKey: ['vehicles'],
+    staleTime: REFERENCE_STALE_TIME,
     queryFn: async () => {
       const { data, error } = await supabase.from('vehicles').select('*').order('name', { ascending: true });
       if (error) throw error;

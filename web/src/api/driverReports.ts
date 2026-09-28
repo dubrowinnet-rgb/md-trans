@@ -1,5 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
+import { fetchAllPages } from '@/lib/supabaseQuery';
+import { useCompanyId } from '@/providers/SessionProvider';
 import { notifyEmployees } from '@/lib/push';
 import { dayjs } from '@/lib/dates';
 import type { DriverReportStatus, FuelPaymentMethod } from '@/types/database';
@@ -87,15 +89,22 @@ function withTotals(row: DriverReportRow): DriverReport {
 // employees(...) — на driver_reports три FK на employees, embed без
 // уточнения неоднозначен; имена подставляет сама страница из уже
 // загруженного useAllAccounts().
+// Явный фильтр по компании обязателен для скорости: правило доступа 0019
+// (водитель ИЛИ проверяющий) база без него проверяет по отчётам всех
+// компаний (замер на 1000 компаниях: 3,7 с → 0,02 с). Отчётов за месяц у
+// крупной компании больше 1000 — забираем страницами.
 export function useDriverReports(period: { from: string; to: string } | null) {
+  const companyId = useCompanyId();
   return useQuery({
-    queryKey: ['driver-reports', period?.from, period?.to],
+    queryKey: ['driver-reports', companyId, period?.from, period?.to],
     queryFn: async (): Promise<{ reports: DriverReport[] }> => {
-      let query = supabase.from('driver_reports').select(REPORT_SELECT).order('report_date', { ascending: false });
-      if (period) query = query.gte('report_date', period.from).lt('report_date', period.to);
-      const { data, error } = await query;
-      if (error) throw error;
-      return { reports: (data as unknown as DriverReportRow[]).map(withTotals) };
+      const rows = await fetchAllPages<DriverReportRow>((from, to) => {
+        let query = supabase.from('driver_reports').select(REPORT_SELECT);
+        if (companyId) query = query.eq('company_id', companyId);
+        if (period) query = query.gte('report_date', period.from).lt('report_date', period.to);
+        return query.order('report_date', { ascending: false }).order('id', { ascending: true }).range(from, to);
+      });
+      return { reports: rows.map(withTotals) };
     },
   });
 }

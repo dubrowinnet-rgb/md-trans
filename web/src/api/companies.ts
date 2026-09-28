@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
+import { fetchAllPages } from '@/lib/supabaseQuery';
 import type { AccountStatus, Database } from '@/types/database';
 
 // Компания = «подключённый администратор» (клиент сервиса) в терминах
@@ -12,29 +13,25 @@ export interface CompanyWithStats extends Company {
   employeeCount: number;
 }
 
-// Видно только владельцу сервиса (RLS "companies select by owner") —
-// вторая часть запроса (все employees.company_id, для подсчёта по
-// компаниям) владельцу тоже открыта отдельной веткой политики "employees
-// select" (is_service_owner()).
+// Видно только владельцу сервиса (RLS "companies select by owner"), число
+// сотрудников считает сама база: employees(count) — владельцу сотрудники
+// всех компаний открыты веткой is_service_owner() политики "employees
+// select". Раньше кабинет скачивал company_id всех сотрудников сервиса, а
+// PostgREST отдавал только первую 1000 — при 4000 сотрудниках счёт был
+// неверным. Компаний тоже может быть больше 1000 — страницами.
 export function useCompanies() {
   return useQuery({
     queryKey: ['companies'],
     queryFn: async (): Promise<CompanyWithStats[]> => {
-      const [companiesRes, employeesRes] = await Promise.all([
-        supabase.from('companies').select('*').order('name', { ascending: true }),
-        supabase.from('employees').select('company_id'),
-      ]);
-      if (companiesRes.error) throw companiesRes.error;
-      if (employeesRes.error) throw employeesRes.error;
-      const counts = new Map<string, number>();
-      for (const row of employeesRes.data as { company_id: string | null }[]) {
-        if (!row.company_id) continue;
-        counts.set(row.company_id, (counts.get(row.company_id) ?? 0) + 1);
-      }
-      return (companiesRes.data as Company[]).map((c) => ({
-        ...c,
-        employeeCount: counts.get(c.id) ?? 0,
-      }));
+      const rows = await fetchAllPages<Company & { employees: { count: number }[] }>((from, to) =>
+        supabase
+          .from('companies')
+          .select('*, employees(count)')
+          .order('name', { ascending: true })
+          .order('id', { ascending: true })
+          .range(from, to)
+      );
+      return rows.map(({ employees, ...c }) => ({ ...c, employeeCount: employees[0]?.count ?? 0 }));
     },
   });
 }
