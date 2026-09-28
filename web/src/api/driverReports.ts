@@ -1,5 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
+import { notifyEmployees } from '@/lib/push';
+import { dayjs } from '@/lib/dates';
 import type { DriverReportStatus, FuelPaymentMethod } from '@/types/database';
 
 export type { DriverReportStatus, FuelPaymentMethod };
@@ -35,13 +37,14 @@ interface DriverReportRow {
   fuel_payment_method: FuelPaymentMethod | null;
   odometer_photo_url: string | null;
   created_at: string;
-  // Доработка «лента отчётов» (Максим, 2026-09-28) — см. DriverReportStatus
-  // в types/database.ts: колонок пока нет, select('*') их просто не вернёт.
-  submitted_at?: string | null;
-  driver_edited_at?: string | null;
-  review_comment?: string | null;
-  reviewed_by?: string | null;
-  reviewed_at?: string | null;
+  // Лента отчётов (миграция 0019): когда отправлен, когда водитель правил
+  // его после отправки, и последнее несогласование (кто, когда, что
+  // исправить) — после повторной отправки оно остаётся как история.
+  submitted_at: string | null;
+  edited_at: string | null;
+  rejected_by: string | null;
+  rejected_at: string | null;
+  rejection_comment: string | null;
   driver_report_orders: DriverReportOrderRow[];
   driver_report_expenses: DriverReportExpenseRow[];
 }
@@ -76,12 +79,14 @@ function withTotals(row: DriverReportRow): DriverReport {
   return { ...row, cashCollected, expensesTotal, fuelCash, expectedHandIn, discrepancy };
 }
 
-// Все отчёты водителей за период — для таблицы администратора и
-// помесячного расчёта (группировка по месяцу считается на клиенте, см.
-// компонент страницы). employee_id/confirmed_by нарочно НЕ разворачиваем
-// через embed employees(...) — на driver_reports будет два FK на employees
-// сразу, embed станет неоднозначным; имена сотрудников подставляет сама
-// страница из уже загруженного useAllAccounts().
+// Все отчёты водителей за период — для ленты, таблицы и помесячного
+// расчёта (группировка по месяцу считается на клиенте, см. компонент
+// страницы). Черновики администратору/диспетчеру база не отдаёт (0019:
+// неотправленный отчёт видит только сам водитель). employee_id,
+// confirmed_by и rejected_by нарочно НЕ разворачиваем через embed
+// employees(...) — на driver_reports три FK на employees, embed без
+// уточнения неоднозначен; имена подставляет сама страница из уже
+// загруженного useAllAccounts().
 export function useDriverReports(period: { from: string; to: string } | null) {
   return useQuery({
     queryKey: ['driver-reports', period?.from, period?.to],
@@ -95,35 +100,27 @@ export function useDriverReports(period: { from: string; to: string } | null) {
   });
 }
 
-// Когда водитель написал отчёт и когда (если было) правил его сам —
-// Максим хочет видеть оба времени в ленте. Пока в базе нет времени
-// отправки, «написан» — время создания отчёта.
+// Когда водитель отправил отчёт и, если было, когда правил его после
+// отправки — Максим хочет видеть оба времени в ленте. Отчётам, отправленным
+// до 0019, миграция проставила submitted_at из created_at.
 export function reportWrittenAt(report: DriverReport): string {
   return report.submitted_at ?? report.created_at;
 }
 
 export function reportEditedAt(report: DriverReport): string | null {
-  return report.driver_edited_at ?? null;
+  return report.edited_at;
 }
 
-// «Не согласовать» появляется, только когда в базе уже есть колонки для
-// комментария (миграция мобильного треда): существующая колонка приходит
-// в ответе как null, отсутствующая — не приходит совсем.
-export function canRejectReport(report: DriverReport): boolean {
-  return 'review_comment' in report;
-}
-
-// Подтверждение отчёта и сданной кассы администратором — после этого он
-// считается зафиксированным в финансовых отчётах (Максим); дальше отчёт
-// нигде не редактируется.
-export function useConfirmDriverReport() {
+// Согласовать отчёт (он же подтверждение сданной кассы) — после этого он
+// окончательный: водитель не правит его даже в пределах 24 часов, и он
+// считается зафиксированным в финансовых отчётах (Максим). С 0019 прямой
+// записи в driver_reports нет — только функция базы, она же проверяет
+// роль и что отчёт ждёт проверки; её ошибки уже по-русски.
+export function useApproveDriverReport() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, confirmedBy }: { id: string; confirmedBy: string }) => {
-      const { error } = await supabase
-        .from('driver_reports')
-        .update({ status: 'confirmed', confirmed_by: confirmedBy, confirmed_at: new Date().toISOString() })
-        .eq('id', id);
+    mutationFn: async (reportId: string) => {
+      const { error } = await supabase.rpc('approve_driver_report', { p_report_id: reportId });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -134,21 +131,20 @@ export function useConfirmDriverReport() {
 
 // «Не согласовать» с комментарием: отчёт возвращается водителю, он
 // исправляет и отправляет заново. Сам отчёт администратор/диспетчер не
-// меняет — только статус и комментарий (Максим, 2026-09-28).
+// меняет (Максим, 2026-09-28). Водителю — push, как в мобильном: без
+// текста комментария (152-ФЗ), комментарий он увидит в приложении.
 export function useRejectDriverReport() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, reviewedBy, comment }: { id: string; reviewedBy: string; comment: string }) => {
-      const { error } = await supabase
-        .from('driver_reports')
-        .update({
-          status: 'rejected',
-          review_comment: comment,
-          reviewed_by: reviewedBy,
-          reviewed_at: new Date().toISOString(),
-        })
-        .eq('id', id);
+    mutationFn: async ({ report, comment }: { report: DriverReport; comment: string }) => {
+      const { error } = await supabase.rpc('reject_driver_report', { p_report_id: report.id, p_comment: comment });
       if (error) throw error;
+      await notifyEmployees(
+        [report.employee_id],
+        'Отчёт не согласован',
+        `Отчёт за ${dayjs(report.report_date).format('DD.MM')} не согласован. Откройте «Мои отчёты» и исправьте.`,
+        { kind: 'driver-report', reportId: report.id }
+      );
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['driver-reports'] });

@@ -42,19 +42,18 @@ interface DriverEntry {
 // соцсети: только отчёты, по порядку от начала месяца до сегодня, одна и та
 // же у водителя и у администратора/диспетчера (доработка 2026-09-28).
 // Слева водители (как список чатов), справа лента выбранного: старые
-// сверху, последний отчёт снизу, прокрутка сразу стоит на нём. Черновики
-// («Заполняется») в ленту не попадают — водитель их ещё не отправил.
+// сверху, последний отчёт снизу, прокрутка сразу стоит на нём. Черновиков
+// здесь нет — неотправленный отчёт база показывает только водителю (0019);
+// фильтр ниже — на случай старой базы без этой миграции.
 export function DriverReportFeed({
   reports,
   accounts,
   namesById,
-  currentEmployeeId,
   loading,
 }: {
   reports: DriverReport[];
   accounts: Account[];
   namesById: Map<string, string>;
-  currentEmployeeId: string;
   loading: boolean;
 }) {
   const [selected, setSelected] = useState<string>(ALL);
@@ -211,7 +210,6 @@ export function DriverReportFeed({
                     report={report}
                     driverName={selected === ALL ? namesById.get(report.employee_id) ?? '—' : null}
                     namesById={namesById}
-                    currentEmployeeId={currentEmployeeId}
                   />
                 ))}
               </Stack>
@@ -227,12 +225,10 @@ function FeedCard({
   report,
   driverName,
   namesById,
-  currentEmployeeId,
 }: {
   report: DriverReport;
   driverName: string | null;
   namesById: Map<string, string>;
-  currentEmployeeId: string;
 }) {
   const day = dayjs(report.report_date);
   return (
@@ -269,7 +265,7 @@ function FeedCard({
         </Grid.Col>
       </Grid>
       <Box mt="md">
-        <DriverReportReview report={report} namesById={namesById} currentEmployeeId={currentEmployeeId} />
+        <DriverReportReview report={report} namesById={namesById} />
       </Box>
     </Paper>
   );

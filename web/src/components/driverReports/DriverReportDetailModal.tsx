@@ -13,12 +13,10 @@ import { DriverReportReview } from '@/components/driverReports/DriverReportRevie
 export function DriverReportDetailModal({
   report,
   namesById,
-  currentEmployeeId,
   onClose,
 }: {
   report: DriverReport;
   namesById: Map<string, string>;
-  currentEmployeeId: string;
   onClose: () => void;
 }) {
   return (
@@ -41,7 +39,7 @@ export function DriverReportDetailModal({
         {report.status !== 'draft' && <DriverReportTimes report={report} />}
         <DriverReportBody report={report} />
         {report.status === 'draft' && <Alert color="gray">Водитель ещё заполняет отчёт — подтверждать пока нечего.</Alert>}
-        <DriverReportReview report={report} namesById={namesById} currentEmployeeId={currentEmployeeId} />
+        <DriverReportReview report={report} namesById={namesById} />
       </Stack>
     </Modal>
   );

@@ -5,42 +5,35 @@ import { Alert, Button, Group, Stack, Text, Textarea } from '@mantine/core';
 import { IconCircleCheck, IconMessageX } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import { errorMessage } from '@/lib/errors';
-import {
-  canRejectReport,
-  useConfirmDriverReport,
-  useRejectDriverReport,
-  type DriverReport,
-} from '@/api/driverReports';
+import { useApproveDriverReport, useRejectDriverReport, type DriverReport } from '@/api/driverReports';
 import { formatReportStamp } from '@/components/driverReports/DriverReportTimes';
 
 // Проверка отчёта администратором/диспетчером. Сам отчёт они не меняют
-// (Максим, 2026-09-28): только подтверждают или «не согласуют» с
+// (Максим, 2026-09-28): только согласуют или «не согласуют» с
 // комментарием — тогда водитель исправляет и отправляет отчёт заново.
-export function DriverReportReview({
-  report,
-  namesById,
-  currentEmployeeId,
-}: {
-  report: DriverReport;
-  namesById: Map<string, string>;
-  currentEmployeeId: string;
-}) {
-  const confirm = useConfirmDriverReport();
+// Последнее несогласование база хранит и после повторной отправки (0019),
+// поэтому оно видно как история и у исправленного, и у согласованного.
+export function DriverReportReview({ report, namesById }: { report: DriverReport; namesById: Map<string, string> }) {
+  const approve = useApproveDriverReport();
   const reject = useRejectDriverReport();
   const [rejecting, setRejecting] = useState(false);
   const [comment, setComment] = useState('');
 
-  const reviewerName = report.reviewed_by ? namesById.get(report.reviewed_by) : undefined;
-  const reviewedLine = [reviewerName, report.reviewed_at ? formatReportStamp(report.reviewed_at) : null]
+  const rejectedLine = [
+    report.rejected_by ? namesById.get(report.rejected_by) : undefined,
+    report.rejected_at ? formatReportStamp(report.rejected_at) : null,
+  ]
     .filter(Boolean)
     .join(', ');
+  const approvedBy = report.confirmed_by ? namesById.get(report.confirmed_by) : undefined;
+  const hadRejection = Boolean(report.rejected_at && report.rejection_comment);
 
-  const doConfirm = async () => {
+  const doApprove = async () => {
     try {
-      await confirm.mutateAsync({ id: report.id, confirmedBy: currentEmployeeId });
-      notifications.show({ message: 'Отчёт и касса подтверждены', color: 'green' });
+      await approve.mutateAsync(report.id);
+      notifications.show({ message: 'Отчёт согласован', color: 'green' });
     } catch (err) {
-      notifications.show({ message: errorMessage(err, 'Не удалось подтвердить отчёт'), color: 'red' });
+      notifications.show({ message: errorMessage(err, 'Не удалось согласовать отчёт'), color: 'red' });
     }
   };
 
@@ -48,30 +41,25 @@ export function DriverReportReview({
     const text = comment.trim();
     if (!text) return;
     try {
-      await reject.mutateAsync({ id: report.id, reviewedBy: currentEmployeeId, comment: text });
+      await reject.mutateAsync({ report, comment: text });
       setRejecting(false);
       setComment('');
-      notifications.show({ message: 'Отчёт не согласован — водитель увидит комментарий и исправит', color: 'orange' });
+      notifications.show({ message: 'Отчёт не согласован — водитель получит уведомление', color: 'orange' });
     } catch (err) {
       notifications.show({ message: errorMessage(err, 'Не удалось отправить комментарий'), color: 'red' });
     }
   };
 
-  const confirmedBy = report.confirmed_by ? namesById.get(report.confirmed_by) : undefined;
-
   return (
     <Stack gap="xs">
       {report.status === 'confirmed' && (
         <Alert color="green" icon={<IconCircleCheck size={18} />} py="xs">
-          Подтверждён{confirmedBy ? ` — ${confirmedBy}` : ''}
+          Согласован{approvedBy ? ` — ${approvedBy}` : ''}
           {report.confirmed_at ? `, ${formatReportStamp(report.confirmed_at)}` : ''}. Зафиксирован в финансовых
           отчётах.
-          {/* История для прозрачности: если до подтверждения отчёт
-              возвращали водителю, это остаётся видно. */}
-          {report.review_comment && (
+          {hadRejection && (
             <Text size="xs" c="dimmed" mt={4}>
-              До этого был не согласован: {report.review_comment}
-              {reviewedLine ? ` (${reviewedLine})` : ''}
+              До этого был не согласован: «{report.rejection_comment}»{rejectedLine ? ` (${rejectedLine})` : ''}
             </Text>
           )}
         </Alert>
@@ -79,21 +67,21 @@ export function DriverReportReview({
 
       {report.status === 'rejected' && (
         <Alert color="red" icon={<IconMessageX size={18} />} title="Не согласован — ждём исправления от водителя" py="xs">
-          <Text size="sm">{report.review_comment}</Text>
-          {reviewedLine && (
+          <Text size="sm">{report.rejection_comment}</Text>
+          {rejectedLine && (
             <Text size="xs" c="dimmed" mt={4}>
-              {reviewedLine}
+              {rejectedLine}
             </Text>
           )}
         </Alert>
       )}
 
-      {report.status === 'submitted' && report.review_comment && (
-        <Alert color="orange" variant="light" py="xs" title="Исправлен после несогласования">
-          <Text size="sm">Комментарий был: {report.review_comment}</Text>
-          {reviewedLine && (
+      {report.status === 'submitted' && hadRejection && (
+        <Alert color="orange" variant="light" py="xs" title="Был не согласован — водитель исправил и отправил заново">
+          <Text size="sm">«{report.rejection_comment}»</Text>
+          {rejectedLine && (
             <Text size="xs" c="dimmed" mt={4}>
-              {reviewedLine}
+              {rejectedLine}
             </Text>
           )}
         </Alert>
@@ -103,13 +91,13 @@ export function DriverReportReview({
         <Stack gap="xs">
           <Textarea
             label="Что нужно исправить"
-            description="Водитель увидит комментарий у себя в ленте, исправит отчёт и отправит заново"
+            description="Водитель получит уведомление, увидит комментарий у себя в отчётах, исправит и отправит заново"
             placeholder="Например: не указан расход на парковку"
             autosize
             minRows={2}
             maxRows={6}
+            maxLength={1000}
             required
-            data-autofocus
             autoFocus
             value={comment}
             onChange={(e) => setComment(e.currentTarget.value)}
@@ -133,13 +121,11 @@ export function DriverReportReview({
 
       {report.status === 'submitted' && !rejecting && (
         <Group justify="flex-end" gap="xs">
-          {canRejectReport(report) && (
-            <Button variant="light" color="red" leftSection={<IconMessageX size={16} />} onClick={() => setRejecting(true)}>
-              Не согласовать
-            </Button>
-          )}
-          <Button leftSection={<IconCircleCheck size={16} />} onClick={doConfirm} loading={confirm.isPending}>
-            Подтвердить отчёт и кассу
+          <Button variant="light" color="red" leftSection={<IconMessageX size={16} />} onClick={() => setRejecting(true)}>
+            Не согласовать
+          </Button>
+          <Button leftSection={<IconCircleCheck size={16} />} onClick={doApprove} loading={approve.isPending}>
+            Согласовать
           </Button>
         </Group>
       )}

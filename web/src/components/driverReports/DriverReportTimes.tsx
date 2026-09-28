@@ -10,15 +10,16 @@ export function formatReportStamp(value: string) {
   return d.format(d.year() === dayjs().year() ? 'D MMMM [в] HH:mm' : 'D MMMM YYYY [в] HH:mm');
 }
 
-// Когда водитель написал отчёт и, отдельной строкой, когда правил его сам
-// (Максим, 2026-09-28: «дополнительная строчка с временем редактирования,
-// если таковое было со стороны водителя»).
+// Когда водитель отправил отчёт и, отдельной строкой, когда правил его сам
+// (Максим, 2026-09-28: «дата и время его написания, а так же дополнительная
+// строчка с временем редактирования, если таковое было со стороны
+// водителя»). «Отправлен» — то же слово, что в ленте мобильного приложения.
 export function DriverReportTimes({ report }: { report: DriverReport }) {
   const editedAt = reportEditedAt(report);
   return (
     <Stack gap={0}>
       <Text size="xs" c="dimmed">
-        Написан {formatReportStamp(reportWrittenAt(report))}
+        Отправлен {formatReportStamp(reportWrittenAt(report))}
       </Text>
       {editedAt && (
         <Text size="xs" c="orange.8">

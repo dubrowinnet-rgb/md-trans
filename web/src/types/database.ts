@@ -20,10 +20,7 @@ export type ScheduleDayStatus = 'off' | 'on';
 // Режим ставки водителя/грузчика (миграция 0014): combined — одна ставка
 // за час на любой роли в заказе; split — раздельно вождение/погрузка.
 export type RateMode = 'combined' | 'split';
-// 'rejected' — «не согласован» с комментарием (доработка Максима
-// 2026-09-28, лента отчётов). Схему делает мобильный тред; до его миграции
-// значение и поля ниже (submitted_at … reviewed_at) — рабочие имена веба,
-// сверить и переименовать, когда миграция появится в ветке.
+// 'confirmed' — «согласован», 'rejected' — «не согласован» (миграция 0019).
 export type DriverReportStatus = 'draft' | 'submitted' | 'confirmed' | 'rejected';
 export type FuelPaymentMethod = 'cash' | 'cashless';
 
@@ -399,14 +396,16 @@ export interface Database {
           fuel_amount: number | null;
           fuel_payment_method: FuelPaymentMethod | null;
           odometer_photo_url: string | null;
+          // Лента отчётов (миграция 0019): время отправки, правка водителем
+          // после отправки (только если содержимое изменилось) и последнее
+          // несогласование — оно остаётся историей и после повторной отправки.
+          submitted_at: string | null;
+          edited_at: string | null;
+          rejected_by: string | null;
+          rejected_at: string | null;
+          rejection_comment: string | null;
           created_at: string;
           updated_at: string;
-          // Необязательные: колонок пока нет в базе (см. DriverReportStatus).
-          submitted_at?: string | null;
-          driver_edited_at?: string | null;
-          review_comment?: string | null;
-          reviewed_by?: string | null;
-          reviewed_at?: string | null;
         };
         Insert: {
           id?: string;
@@ -420,9 +419,6 @@ export interface Database {
           fuel_amount?: number | null;
           fuel_payment_method?: FuelPaymentMethod | null;
           odometer_photo_url?: string | null;
-          review_comment?: string | null;
-          reviewed_by?: string | null;
-          reviewed_at?: string | null;
         };
         Update: Partial<Database['public']['Tables']['driver_reports']['Insert']>;
         Relationships: [];
@@ -484,6 +480,30 @@ export interface Database {
       recent_addresses: {
         Args: { p_limit?: number };
         Returns: { address: string; uses: number }[];
+      };
+      // Отчёты водителей (миграция 0019): прямой записи в driver_reports
+      // больше нет — водитель пишет через save_driver_report (веб его не
+      // вызывает), администратор/диспетчер только согласует или нет.
+      save_driver_report: {
+        Args: {
+          p_report_date: string;
+          p_submit: boolean;
+          p_orders?: unknown;
+          p_expenses?: unknown;
+          p_fuel_amount?: number | null;
+          p_fuel_payment_method?: FuelPaymentMethod | null;
+          p_odometer_photo_url?: string | null;
+          p_cash_handed_in?: number | null;
+        };
+        Returns: string;
+      };
+      approve_driver_report: {
+        Args: { p_report_id: string };
+        Returns: undefined;
+      };
+      reject_driver_report: {
+        Args: { p_report_id: string; p_comment: string };
+        Returns: undefined;
       };
     };
     Enums: Record<string, never>;

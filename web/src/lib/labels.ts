@@ -61,9 +61,9 @@ export const TICKET_STATUS_COLORS: Record<TicketStatus, string> = {
 };
 
 export const DRIVER_REPORT_STATUS_LABELS: Record<DriverReportStatus, string> = {
-  draft: 'Заполняется',
-  submitted: 'Отправлен',
-  confirmed: 'Подтверждён',
+  draft: 'Черновик',
+  submitted: 'На проверке',
+  confirmed: 'Согласован',
   rejected: 'Не согласован',
 };
 

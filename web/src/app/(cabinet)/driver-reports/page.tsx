@@ -5,7 +5,7 @@ import { Alert, Badge, Box, Loader, Paper, SegmentedControl, Table, Tabs, Text }
 import { DatePickerInput } from '@mantine/dates';
 import { useDriverReports, type DriverReport } from '@/api/driverReports';
 import { useAllAccounts } from '@/api/accounts';
-import { useSession } from '@/providers/SessionProvider';
+import { isOfficeRole, useSession } from '@/providers/SessionProvider';
 import { DRIVER_REPORT_STATUS_COLORS, DRIVER_REPORT_STATUS_LABELS } from '@/lib/labels';
 import { dayjs, formatDate, formatMoney } from '@/lib/dates';
 import { PageHeader } from '@/components/common/PageHeader';
@@ -57,11 +57,13 @@ function buildMonthlyRollup(reports: DriverReport[], namesById: Map<string, stri
   );
 }
 
-// Отчёты водителей (касса, расходы, топливо, подтверждение) — админская
-// сторона запроса Максима от 2026-09-25. Мобильный тред владеет схемой,
-// фото одометра и напоминанием 21:00; здесь только чтение, подтверждение
-// и «не согласовать» с комментарием. Основной вид — лента (доработка
-// 2026-09-28), таблица и помесячный итог остались соседними вкладками.
+// Отчёты водителей (касса, расходы, топливо, согласование) — сторона
+// администратора и диспетчера (запросы Максима 2026-09-25 и 2026-09-28).
+// Мобильный тред владеет схемой (0014, 0019), фото одометра и напоминанием
+// 21:00; здесь только чтение, «согласовать» и «не согласовать» с
+// комментарием. Основной вид — лента, таблица и помесячный итог остались
+// соседними вкладками. Диспетчер проверяет отчёты наравне с
+// администратором (0019, can_review_driver_reports()).
 export default function DriverReportsPage() {
   const { employee } = useSession();
   const [period, setPeriod] = useState<Period>('month');
@@ -89,10 +91,10 @@ export default function DriverReportsPage() {
   const reportsQuery = useDriverReports(range);
   const accountsQuery = useAllAccounts();
 
-  if (employee?.role !== 'admin') {
+  if (!isOfficeRole(employee)) {
     return (
       <Box p="lg">
-        <Alert>Отчёты водителей доступны только администратору.</Alert>
+        <Alert>Отчёты водителей доступны администратору и диспетчеру.</Alert>
       </Box>
     );
   }
@@ -154,7 +156,6 @@ export default function DriverReportsPage() {
             reports={reports}
             accounts={accounts}
             namesById={namesById}
-            currentEmployeeId={employee.id}
             loading={reportsQuery.isLoading}
           />
         </Tabs.Panel>
@@ -226,7 +227,7 @@ export default function DriverReportsPage() {
                       {row.reportsCount}
                       {row.unconfirmedCount > 0 && (
                         <Text span size="xs" c="yellow.8" ml={4}>
-                          ({row.unconfirmedCount} не подтв.)
+                          ({row.unconfirmedCount} не согл.)
                         </Text>
                       )}
                     </Table.Td>
@@ -258,7 +259,6 @@ export default function DriverReportsPage() {
         <DriverReportDetailModal
           report={openReport}
           namesById={namesById}
-          currentEmployeeId={employee.id}
           onClose={() => setOpenReportId(null)}
         />
       )}
