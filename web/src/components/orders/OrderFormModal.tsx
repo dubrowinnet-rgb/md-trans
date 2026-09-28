@@ -228,15 +228,25 @@ export function OrderFormModal({
     if (!timeValid) return setError('Окончание должно быть позже начала.');
 
     // Страховка диспетчера: не даём сохранить заказ с исполнителем,
-    // который на выбранное время недоступен (выходной или уже занят
-    // другим заказом) — такой выбор всё равно ничего не даст, человек не
-    // сможет выйти на этот заказ.
-    const crewIds = [...(driverId ? [driverId] : []), ...(needsLoaders ? loaderIds : [])];
-    const unavailable = crewIds
-      .map((id) => ({ person: employees.find((e) => e.id === id), ...availabilityOf(id) }))
-      .filter((x): x is { person: Employee; tier: Availability['tier']; suffix: string } => Boolean(x.person) && x.tier !== 'available');
-    if (unavailable.length > 0) {
-      const names = unavailable.map((x) => `${x.person.name}${x.suffix}`).join('; ');
+    // который на это время не сможет выйти (выходной или вне часов
+    // работы). Грузчика, кроме того, нельзя поставить на два заказа сразу,
+    // а водителя — можно: это осознанный «сборный груз». Так же в
+    // мобильной форме и в триггере базы (миграция 0007: пересечение
+    // разрешено, только если оба раза человек в заказе водителем).
+    const crew = [
+      ...(driverId ? [{ id: driverId, role: 'driver' as const }] : []),
+      ...(needsLoaders ? loaderIds.map((id) => ({ id, role: 'loader' as const })) : []),
+    ];
+    const blocked = new Map<string, string>();
+    for (const { id, role } of crew) {
+      const person = employees.find((e) => e.id === id);
+      const { tier, suffix } = availabilityOf(id);
+      if (person && (tier === 'dayoff' || (tier === 'busy' && role === 'loader'))) {
+        blocked.set(id, `${person.name}${suffix}`);
+      }
+    }
+    if (blocked.size > 0) {
+      const names = [...blocked.values()].join('; ');
       return setError(`Не могу сохранить: ${names} — не смогут выйти на этот заказ. Уберите их из бригады или измените дату/время.`);
     }
 
@@ -447,7 +457,8 @@ export function OrderFormModal({
         <Grid.Col span={5}>
           <Stack gap="sm">
             <Text size="xs" c="dimmed">
-              Точка у имени: зелёная — свободен, жёлтая — занят другим заказом, красная — выходной или вне часов работы.
+              Точка у имени: зелёная — свободен, жёлтая — занят другим заказом, красная — выходной или вне часов
+              работы. С красной точкой выбрать нельзя, с жёлтой — только водителя (сборный груз).
             </Text>
             <Paper withBorder p="sm">
               <Text fw={600} size="sm" mb={6}>
@@ -462,10 +473,10 @@ export function OrderFormModal({
                 {sortByAvailability(drivers, availability).map((d) => {
                   const { tier, suffix } = availabilityOf(d.id);
                   const selected = driverId === d.id;
-                  // Недоступного на это время водителя нельзя назначить (но
-                  // уже назначенного — можно снять); на сохранении такой
-                  // выбор всё равно блокируется ещё раз, см. handleSubmit.
-                  const disabled = tier !== 'available' && !selected;
+                  // Водителя с выходным (или вне часов работы) нельзя
+                  // назначить, но уже назначенного — можно снять. Занятого
+                  // другим заказом — можно: сборный груз, см. handleSubmit.
+                  const disabled = tier === 'dayoff' && !selected;
                   return (
                     <UnstyledButton
                       key={d.id}
