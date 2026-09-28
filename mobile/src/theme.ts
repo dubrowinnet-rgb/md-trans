@@ -51,15 +51,17 @@ export const TICKET_STATUS_LABELS: Record<TicketStatus, string> = {
 };
 
 export const DRIVER_REPORT_STATUS_LABELS: Record<DriverReportStatus, string> = {
-  draft: 'Заполняется',
-  submitted: 'Отправлен',
-  confirmed: 'Подтверждён',
+  draft: 'Черновик',
+  submitted: 'На проверке',
+  confirmed: 'Согласован',
+  rejected: 'Не согласован',
 };
 
 export const DRIVER_REPORT_STATUS_COLORS: Record<DriverReportStatus, string> = {
   draft: '#9ca3af',
   submitted: '#f59e0b',
   confirmed: '#22c55e',
+  rejected: '#ef4444',
 };
 
 export const ACCOUNT_ROLE_ICONS: Record<AccountRole, string> = {

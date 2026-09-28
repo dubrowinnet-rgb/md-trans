@@ -17,7 +17,8 @@ export type TicketStatus = 'open' | 'in_progress' | 'resolved';
 // Режим ставки (миграция 0014): combined — одна hourly_rate на все роли в
 // заказе; split — своя ставка на вождение и на погрузку/разгрузку.
 export type RateMode = 'combined' | 'split';
-export type DriverReportStatus = 'draft' | 'submitted' | 'confirmed';
+// 'confirmed' — «согласован», 'rejected' — «не согласован» (миграция 0019).
+export type DriverReportStatus = 'draft' | 'submitted' | 'confirmed' | 'rejected';
 export type FuelPaymentMethod = 'cash' | 'cashless';
 export type OrderStatus = 'new' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled';
 export type StopType = 'pickup' | 'dropoff';
@@ -382,6 +383,11 @@ export interface Database {
           fuel_amount: number | null;
           fuel_payment_method: FuelPaymentMethod | null;
           odometer_photo_url: string | null;
+          submitted_at: string | null;
+          edited_at: string | null;
+          rejected_by: string | null;
+          rejected_at: string | null;
+          rejection_comment: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -458,6 +464,27 @@ export interface Database {
       recent_addresses: {
         Args: { p_limit?: number };
         Returns: { address: string; uses: number }[];
+      };
+      save_driver_report: {
+        Args: {
+          p_report_date: string;
+          p_submit: boolean;
+          p_orders?: unknown;
+          p_expenses?: unknown;
+          p_fuel_amount?: number | null;
+          p_fuel_payment_method?: FuelPaymentMethod | null;
+          p_odometer_photo_url?: string | null;
+          p_cash_handed_in?: number | null;
+        };
+        Returns: string;
+      };
+      approve_driver_report: {
+        Args: { p_report_id: string };
+        Returns: undefined;
+      };
+      reject_driver_report: {
+        Args: { p_report_id: string; p_comment: string };
+        Returns: undefined;
       };
     };
     Enums: Record<string, never>;

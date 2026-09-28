@@ -146,11 +146,13 @@ connect_cloud() {
 
 # До какой миграции дошла облачная база — по объектам, которые создаёт
 # каждая миграция начиная с 0013. Печатает номер (0, если нет даже 0013).
-# Новые миграции (0019 и дальше) выполняются только на своём сервере, в
-# облаке их нет — поэтому список заканчивается на 0018.
+# Новую миграцию, которую могут выполнить и в облаке, добавляйте сюда
+# (иначе её поля при переносе пропадут, а новые значения могут не пройти
+# проверки старой схемы).
 detect_cloud_level() {
   cloud_psql -tA <<'SQL'
 select case
+  when exists (select 1 from pg_proc where proname = 'save_driver_report') then 19
   when to_regclass('private.app_settings') is not null then 18
   when exists (select 1 from pg_proc where proname = 'restrict_employee_self_role_change'
                and pg_get_functiondef(oid) like '%can_edit_order_schedule_and_price is distinct from%') then 17
