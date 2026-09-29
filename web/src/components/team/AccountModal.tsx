@@ -20,13 +20,16 @@ import {
   Title,
 } from '@mantine/core';
 import { DatePickerInput } from '@mantine/dates';
+import { modals } from '@mantine/modals';
 import { notifications } from '@mantine/notifications';
 import { errorMessage } from '@/lib/errors';
 import { dayjs } from '@/lib/dates';
-import { formatPhone } from '@/lib/phone';
+import { formatPhone, normalizePhone } from '@/lib/phone';
 import {
   ROLE_DEFAULT_PERMISSIONS,
+  useAllAccounts,
   useCreateAccount,
+  useSetAccountActive,
   useUpdateAccount,
   useUpdateAccountProfile,
   type Account,
@@ -119,11 +122,14 @@ export function AccountModal({ account, onClose }: { account: Account | null; on
   // прочитать и решить, что делать с телефоном (см. useUpdateAccountProfile).
   const [phoneWarning, setPhoneWarning] = useState<string | null>(null);
   const vehicles = useVehicles().data ?? [];
+  const otherAccounts = (useAllAccounts().data ?? []).filter((a) => !(account && a.id === account.id));
   const createAccount = useCreateAccount();
   const updateAccount = useUpdateAccount();
   const updateProfile = useUpdateAccountProfile();
   const updateEmployeeRates = useUpdateEmployeeRates();
+  const setAccountActive = useSetAccountActive();
   const saving = createAccount.isPending || updateAccount.isPending || updateProfile.isPending || updateEmployeeRates.isPending;
+  const isSuspended = account?.account_status === 'suspended';
   // Расчёт за текущий месяц по уже сохранённым ставкам (не по
   // несохранённым правкам в форме — во избежание путаницы, что именно
   // посчитано). Виден только у уже существующего сотрудника: у нового
@@ -155,6 +161,27 @@ export function AccountModal({ account, onClose }: { account: Account | null; on
     setPhoneWarning(null);
     if (!name.trim()) return setError('Укажите имя');
     if (!phone.trim()) return setError('Укажите номер телефона — по нему сотрудник будет входить');
+
+    // Дубли: по телефону (обычно опечатка — перепутали с другим
+    // сотрудником) и по связке имя+фамилия (завели того же человека
+    // второй раз). Фамилию сверяем, только если она указана у обоих —
+    // иначе двух Сергеев без фамилии считало бы дублями зря.
+    const normalizedPhone = normalizePhone(phone);
+    const phoneDuplicate = normalizedPhone && otherAccounts.find((a) => normalizePhone(a.phone) === normalizedPhone);
+    if (phoneDuplicate) return setError(`Этот номер телефона уже занят сотрудником «${phoneDuplicate.name}» — укажите другой`);
+    const normalizedName = name.trim().toLowerCase();
+    const normalizedLastName = lastName.trim().toLowerCase();
+    const nameDuplicate =
+      normalizedLastName &&
+      otherAccounts.find(
+        (a) =>
+          (a.last_name ?? '').trim().toLowerCase() === normalizedLastName &&
+          a.name.trim().toLowerCase() === normalizedName
+      );
+    if (nameDuplicate) {
+      return setError(`Сотрудник «${name.trim()} ${lastName.trim()}» уже есть в списке — проверьте, не дубль ли это`);
+    }
+
     const vehicleForRole = role === 'driver' ? vehicleId : null;
     // Ставки применимы только водителю/грузчику — при другой роли шлём
     // null-ы, чтобы не оставлять висящую ставку у диспетчера/админа,
@@ -223,6 +250,36 @@ export function AccountModal({ account, onClose }: { account: Account | null; on
     } catch (err) {
       setError(errorMessage(err, 'Не удалось сохранить'));
     }
+  };
+
+  // Полностью удалить сотрудника нельзя — с ним связаны его прошлые
+  // заказы, отчёты и начисления (см. useSetAccountActive). «Уволить»
+  // деактивирует доступ и убирает из выбора экипажа, но не стирает
+  // историю; «Восстановить» — обратное действие.
+  const toggleActive = () => {
+    const activating = isSuspended;
+    modals.openConfirmModal({
+      title: activating ? 'Восстановить доступ' : 'Уволить сотрудника',
+      children: (
+        <Text size="sm">
+          {activating
+            ? `${account?.name} снова сможет войти в приложение и появится в выборе экипажа.`
+            : `${account?.name} потеряет доступ в приложение и пропадёт из выбора экипажа для новых заказов. Прошлые заказы, отчёты и начисления останутся как есть — полностью удалить сотрудника нельзя, с ним связана история.`}
+        </Text>
+      ),
+      labels: { confirm: activating ? 'Восстановить' : 'Уволить', cancel: 'Отмена' },
+      confirmProps: { color: activating ? 'blue' : 'red' },
+      onConfirm: async () => {
+        if (!account) return;
+        try {
+          await setAccountActive.mutateAsync({ id: account.id, active: activating });
+          notifications.show({ message: activating ? 'Доступ восстановлен' : 'Сотрудник уволен', color: 'green' });
+          onClose();
+        } catch (err) {
+          notifications.show({ message: errorMessage(err, 'Не удалось изменить доступ'), color: 'red' });
+        }
+      },
+    });
   };
 
   return (
@@ -397,15 +454,32 @@ export function AccountModal({ account, onClose }: { account: Account | null; on
             ))}
           </Stack>
         )}
+        {isSuspended && (
+          <Alert color="gray">Сотрудник уволен: доступа в приложение нет, в выборе экипажа не появляется.</Alert>
+        )}
         {phoneWarning && <Alert color="yellow">{phoneWarning}</Alert>}
         {error && <Alert color="red">{error}</Alert>}
-        <Group justify="flex-end">
-          <Button variant="default" onClick={onClose}>
-            Отмена
-          </Button>
-          <Button onClick={save} loading={saving}>
-            {account ? 'Сохранить' : 'Создать аккаунт'}
-          </Button>
+        <Group justify="space-between">
+          {account && !isSelf ? (
+            <Button
+              variant="subtle"
+              color={isSuspended ? 'blue' : 'red'}
+              onClick={toggleActive}
+              loading={setAccountActive.isPending}
+            >
+              {isSuspended ? 'Восстановить доступ' : 'Уволить'}
+            </Button>
+          ) : (
+            <span />
+          )}
+          <Group>
+            <Button variant="default" onClick={onClose}>
+              Отмена
+            </Button>
+            <Button onClick={save} loading={saving}>
+              {account ? 'Сохранить' : 'Создать аккаунт'}
+            </Button>
+          </Group>
         </Group>
       </Stack>
     </Modal>

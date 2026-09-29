@@ -70,11 +70,20 @@ export default function TeamPage() {
               const vehicle = vehicles.find((v) => v.id === a.default_vehicle_id);
               return (
                 <Table.Tr key={a.id} style={{ cursor: 'pointer' }} onClick={() => setEditing(a)}>
-                  <Table.Td fw={500}>{a.name}</Table.Td>
+                  <Table.Td fw={500} c={a.account_status === 'suspended' ? 'dimmed' : undefined}>
+                    {a.name}
+                  </Table.Td>
                   <Table.Td>
-                    <Badge color={ROLE_COLOR[a.role]} variant="light" style={{ textTransform: 'none' }}>
-                      {ACCOUNT_ROLE_LABELS[a.role]}
-                    </Badge>
+                    <Group gap={6}>
+                      <Badge color={ROLE_COLOR[a.role]} variant="light" style={{ textTransform: 'none' }}>
+                        {ACCOUNT_ROLE_LABELS[a.role]}
+                      </Badge>
+                      {a.account_status === 'suspended' && (
+                        <Badge color="gray" variant="light" style={{ textTransform: 'none' }}>
+                          Уволен
+                        </Badge>
+                      )}
+                    </Group>
                   </Table.Td>
                   <Table.Td>{a.phone ? formatPhone(a.phone) : '—'}</Table.Td>
                   <Table.Td ta="center">

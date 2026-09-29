@@ -211,3 +211,34 @@ export function useUpdateAccountProfile() {
     },
   });
 }
+
+// Полностью удалить сотрудника нельзя — на него ссылаются его прошлые
+// заказы, отчёты и начисления (employees.id, without cascade delete), а
+// терять эту историю нельзя. Вместо этого — деактивация через Edge
+// Function (supabase/functions/deactivate-account, мобильный поток):
+// сотрудник теряет доступ в приложение и пропадает из выбора экипажа
+// (useEmployees), но сам, его заказы и отчёты остаются в базе как есть.
+export function useSetAccountActive() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, active }: { id: string; active: boolean }) => {
+      const { data, error } = await supabase.functions.invoke<{ employee: Account; error?: string }>(
+        'deactivate-account',
+        { body: { id, active } }
+      );
+      if (error) {
+        if (error instanceof FunctionsHttpError) {
+          const body = await error.context.json().catch(() => null);
+          throw new Error(body?.error || error.message);
+        }
+        throw new Error(error.message);
+      }
+      if (data && 'error' in data && data.error) throw new Error(data.error);
+      return data!.employee;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+    },
+  });
+}
