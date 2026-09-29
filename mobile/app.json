@@ -1,7 +1,8 @@
 {
   "expo": {
     "name": "Грузоперевозки",
-    "slug": "md-trans",
+    "slug": "mdtrans",
+    "owner": "mdtranss-team",
     "version": "1.0.0",
     "runtimeVersion": {
       "policy": "appVersion"
@@ -59,6 +60,14 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "4769f216-988a-42b6-af24-9e51f6fe0dd8"
+      }
+    },
+    "updates": {
+      "url": "https://u.expo.dev/4769f216-988a-42b6-af24-9e51f6fe0dd8"
     }
   }
 }
