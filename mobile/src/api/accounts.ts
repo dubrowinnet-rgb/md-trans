@@ -14,7 +14,9 @@ export interface AccountPermissions {
 }
 
 // Все аккаунты (админы, диспетчеры, водители, грузчики) — для экрана
-// «Команда», который видит только администратор.
+// «Команда», который видит только администратор. deleted_at (миграция
+// 0021) — удалённый сотрудник здесь больше не показывается, хотя строка
+// в базе остаётся (на неё по-прежнему ссылаются его прошлые заказы).
 export function useAllAccounts() {
   return useQuery({
     queryKey: ['accounts'],
@@ -22,6 +24,7 @@ export function useAllAccounts() {
       const { data, error } = await supabase
         .from('employees')
         .select('*')
+        .is('deleted_at', null)
         .order('role', { ascending: true })
         .order('name', { ascending: true });
       if (error) throw error;
@@ -146,6 +149,35 @@ export function useUpdateAccountProfile() {
       }
       if (data && 'error' in data && data.error) throw new Error(data.error);
       return { employee: data!.employee, phone_warning: data?.phone_warning ?? null };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+    },
+  });
+}
+
+// Удалить сотрудника из «Команды» (Максим, 2026-09-29: «добавить кнопку
+// удалить профиль сотрудника на карточке») — через Edge Function
+// (supabase/functions/delete-account), не прямой UPDATE: удаление ещё и
+// блокирует вход через Supabase Auth (service role), с обычным ключом с
+// телефона это не сделать. Физически строка не удаляется — см. миграцию
+// 0021 и комментарий в самой функции.
+export function useDeleteAccount() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { data, error } = await supabase.functions.invoke<{ error?: string }>('delete-account', {
+        body: { id },
+      });
+      if (error) {
+        if (error instanceof FunctionsHttpError) {
+          const body = await error.context.json().catch(() => null);
+          throw new Error(body?.error || error.message);
+        }
+        throw new Error(error.message);
+      }
+      if (data && 'error' in data && data.error) throw new Error(data.error);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['accounts'] });

@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { Keyboard, ScrollView, StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Button, Chip, Dialog, HelperText, Portal, Text } from 'react-native-paper';
 import { useEmployees } from '../../api/employees';
 import { useBusyEmployeeIds, useUpdateOrderCrew, type OrderWithDetails } from '../../api/orders';
@@ -8,7 +8,6 @@ import { toDateKey, useScheduleDaysOn, type ScheduleDay } from '../../api/schedu
 import { evaluateAvailability, sortByAvailability, TIER_COLOR } from '../../lib/crewAvailability';
 import { serviceNeedsLoaders } from '../../lib/services';
 import { FormSection } from '../form/FormSection';
-import { DismissKeyboardView } from '../form/DismissKeyboardView';
 
 function dotIcon(color: string) {
   return () => <View style={[styles.dot, { backgroundColor: color }]} />;
@@ -91,8 +90,12 @@ export function CrewDialog({ order, onClose }: { order: OrderWithDetails; onClos
       <Dialog visible onDismiss={onClose} style={styles.dialog}>
         <Dialog.Title>Экипаж и машина</Dialog.Title>
         <Dialog.ScrollArea style={styles.area}>
-          <DismissKeyboardView>
-            <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+            <ScrollView
+              style={styles.scroll}
+              contentContainerStyle={styles.content}
+              keyboardShouldPersistTaps="handled"
+              onScrollBeginDrag={Keyboard.dismiss}
+            >
               <FormSection title="Водитель">
                 {(busyQuery.isLoading || scheduleOnQuery.isLoading) && <ActivityIndicator size="small" />}
                 {drivers.length === 0 && <Text variant="bodySmall">Нет ни одного водителя</Text>}
@@ -159,7 +162,6 @@ export function CrewDialog({ order, onClose }: { order: OrderWithDetails; onClos
               )}
               {error && <HelperText type="error">{error}</HelperText>}
             </ScrollView>
-          </DismissKeyboardView>
         </Dialog.ScrollArea>
         <Dialog.Actions>
           <Button onPress={onClose}>Отмена</Button>

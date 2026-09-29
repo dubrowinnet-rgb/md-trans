@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { Keyboard, ScrollView, StyleSheet, View } from 'react-native';
 import {
   Button,
   Chip,
@@ -17,6 +17,7 @@ import { DatePickerModal } from 'react-native-paper-dates';
 import { differenceInYears, format } from 'date-fns';
 import {
   useCreateAccount,
+  useDeleteAccount,
   useUpdateAccount,
   useUpdateAccountProfile,
   type Account,
@@ -26,7 +27,6 @@ import { useUpdateEmployeeRates } from '../../api/payroll';
 import { useVehicles } from '../../api/vehicles';
 import type { AccountRole, RateMode } from '../../types/database';
 import { ACCOUNT_ROLE_LABELS } from '../../theme';
-import { DismissKeyboardView } from '../form/DismissKeyboardView';
 
 const ROLE_OPTIONS: { value: AccountRole; label: string }[] = [
   { value: 'admin', label: ACCOUNT_ROLE_LABELS.admin },
@@ -139,7 +139,9 @@ export function AccountDialog({ account, onClose }: { account: Account | null; o
   const updateAccount = useUpdateAccount();
   const updateProfile = useUpdateAccountProfile();
   const updateRates = useUpdateEmployeeRates();
+  const deleteAccount = useDeleteAccount();
   const saving = createAccount.isPending || updateAccount.isPending || updateProfile.isPending || updateRates.isPending;
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const [name, setName] = useState(account?.name ?? '');
   const [lastName, setLastName] = useState(account?.last_name ?? '');
@@ -265,13 +267,25 @@ export function AccountDialog({ account, onClose }: { account: Account | null; o
     }
   };
 
+  const handleDelete = async () => {
+    if (!account) return;
+    try {
+      await deleteAccount.mutateAsync(account.id);
+      setConfirmDelete(false);
+      onClose();
+    } catch (err) {
+      setConfirmDelete(false);
+      setError(err instanceof Error ? err.message : 'Не удалось удалить');
+    }
+  };
+
   return (
     <Portal>
-      <Dialog visible onDismiss={onClose} style={styles.dialog}>
+      <Dialog visible={!confirmDelete} onDismiss={onClose} style={styles.dialog}>
         <Dialog.Title>{account ? account.name : 'Новый аккаунт'}</Dialog.Title>
         <Dialog.ScrollArea style={styles.area}>
-          <ScrollView keyboardShouldPersistTaps="handled">
-            <DismissKeyboardView style={styles.content}>
+          <ScrollView keyboardShouldPersistTaps="handled" onScrollBeginDrag={Keyboard.dismiss}>
+            <View style={styles.content}>
               <>
                 <TextInput mode="outlined" label="Имя" accessibilityLabel="Имя" value={name} onChangeText={setName} />
                 <TextInput
@@ -485,16 +499,44 @@ export function AccountDialog({ account, onClose }: { account: Account | null; o
                 {phoneWarning && <Text style={styles.phoneWarning}>{phoneWarning}</Text>}
                 {error && <HelperText type="error">{error}</HelperText>}
               </>
-            </DismissKeyboardView>
+            </View>
           </ScrollView>
         </Dialog.ScrollArea>
         <Dialog.Actions>
+          {account && (
+            <Button textColor="#b91c1c" onPress={() => setConfirmDelete(true)}>
+              Удалить
+            </Button>
+          )}
           <Button onPress={onClose}>Отмена</Button>
           <Button mode="contained" onPress={handleSave} loading={saving} disabled={saving}>
             Сохранить
           </Button>
         </Dialog.Actions>
       </Dialog>
+
+      {account && (
+        <Dialog visible={confirmDelete} onDismiss={() => setConfirmDelete(false)}>
+          <Dialog.Title>Удалить сотрудника?</Dialog.Title>
+          <Dialog.Content>
+            <Text variant="bodyMedium">
+              {`${account.name}${account.last_name ? ` ${account.last_name}` : ''} будет скрыт из «Команды» и не сможет войти в приложение. История его заказов сохранится.`}
+            </Text>
+            {deleteAccount.error && <HelperText type="error">{deleteAccount.error.message}</HelperText>}
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setConfirmDelete(false)}>Отмена</Button>
+            <Button
+              textColor="#b91c1c"
+              onPress={handleDelete}
+              loading={deleteAccount.isPending}
+              disabled={deleteAccount.isPending}
+            >
+              Удалить
+            </Button>
+          </Dialog.Actions>
+        </Dialog>
+      )}
     </Portal>
   );
 }

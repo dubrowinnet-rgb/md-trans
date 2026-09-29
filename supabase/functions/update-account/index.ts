@@ -24,6 +24,7 @@
 //   supabase functions deploy update-account
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { findDuplicateEmployee } from '../_shared/accountDuplicates.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -115,12 +116,32 @@ Deno.serve(async (req) => {
 
   const name = has('name') ? String(body.name ?? '').trim() : (target.name as string);
   if (!name) return fail(400, 'Укажите имя', headers);
+  const lastName = has('last_name') ? (body.last_name ? String(body.last_name).trim() : null) : (target.last_name as string | null);
 
   const password = body.password ? String(body.password) : '';
   if (password && password.length < 6) return fail(400, 'Пароль — минимум 6 символов', headers);
 
   const phone = has('phone') ? formatPhone(body.phone ? String(body.phone).trim() : null) : (target.phone as string | null);
   const e164Phone = toE164(phone);
+
+  // Проверяем на дубль, только если это поле реально меняют этим запросом —
+  // иначе тихая фоновая синхронизация телефона при входе (см. комментарий
+  // ниже, SessionProvider.tsx) могла бы упасть из-за ЧУЖОГО, ранее уже
+  // допущенного совпадения имени, никак не связанного с тем, что человек
+  // сейчас делает.
+  if (has('phone') || has('name') || has('last_name')) {
+    // Каждое поле проверяем, только если ЕГО меняют этим запросом (см.
+    // комментарий выше) — то есть телефон и имя+фамилия независимо друг
+    // от друга, а не «раз хоть что-то из трёх поменяли — сверяем всё».
+    const duplicate = await findDuplicateEmployee(admin, {
+      companyId: target.company_id as string,
+      phone: has('phone') ? phone : null,
+      name: has('name') || has('last_name') ? name : '',
+      lastName,
+      excludeId: id,
+    });
+    if (duplicate) return fail(400, duplicate, headers);
+  }
 
   // Вход теперь по телефону (доработки 3, п.4), а не по логину — синхронизируем
   // auth.users.phone при каждом сохранении профиля, где телефон есть. Это же
@@ -156,7 +177,7 @@ Deno.serve(async (req) => {
     .from('employees')
     .update({
       name,
-      last_name: has('last_name') ? (body.last_name ? String(body.last_name).trim() : null) : target.last_name,
+      last_name: lastName,
       phone,
       birth_date: has('birth_date') ? (body.birth_date ? String(body.birth_date) : null) : target.birth_date,
       hire_date: has('hire_date') ? (body.hire_date ? String(body.hire_date) : null) : target.hire_date,

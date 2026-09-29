@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { Linking, ScrollView, StyleSheet, View } from 'react-native';
+import { Keyboard, Linking, ScrollView, StyleSheet, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   ActivityIndicator,
   Button,
@@ -34,7 +35,6 @@ import {
   canViewOrderAmount,
 } from '../../lib/permissions';
 import { DateTimeField } from '../../components/form/DateTimeField';
-import { DismissKeyboardView } from '../../components/form/DismissKeyboardView';
 import { CrewDialog } from '../../components/orders/CrewDialog';
 import { yandexMapsRouteUrl } from '../../lib/yandexMaps';
 import { formatPhone, normalizePhone } from '../../lib/phone';
@@ -60,6 +60,7 @@ function crewRoleLabel(crew: { isDriver: boolean; isLoader: boolean }) {
 // зависит от прав на редактирование.
 export default function OrderScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const insets = useSafeAreaInsets();
   const { employee } = useSession();
   const isCrew = employee?.role === 'driver' || employee?.role === 'loader';
   const canManage = canManageOrders(employee);
@@ -192,8 +193,12 @@ export default function OrderScreen() {
 
   return (
     <View style={styles.screen}>
-    <DismissKeyboardView>
-    <ScrollView contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.scroll}
+      contentContainerStyle={[styles.content, { paddingBottom: 88 + insets.bottom }]}
+      keyboardShouldPersistTaps="handled"
+      onScrollBeginDrag={Keyboard.dismiss}
+    >
       <View style={styles.titleRow}>
         <Text variant="titleLarge" style={styles.flex}>
           {order.clients?.name ?? 'Без клиента'}
@@ -281,6 +286,7 @@ export default function OrderScreen() {
           {showAmount && (
             <TextInput
               mode="outlined"
+              dense
               label="Сумма"
               accessibilityLabel="Сумма заказа"
               placeholder="Например: 14500"
@@ -296,7 +302,7 @@ export default function OrderScreen() {
         </View>
       )}
 
-      <List.Section title="Маршрут">
+      <List.Section title="Маршрут" style={styles.section} titleStyle={styles.sectionTitle}>
         {primaryStops.map((stop) => (
           <List.Item
             key={stop.id}
@@ -306,6 +312,10 @@ export default function OrderScreen() {
             left={(props) => (
               <List.Icon {...props} icon={stop.type === 'pickup' ? 'package-up' : 'package-down'} />
             )}
+            style={styles.compactItem}
+            containerStyle={styles.compactRow}
+            titleStyle={styles.compactTitle}
+            descriptionStyle={styles.compactDescription}
           />
         ))}
         {extraStops.length > 0 && (
@@ -320,6 +330,10 @@ export default function OrderScreen() {
               title={stop.address}
               description={stop.type === 'pickup' ? 'Доп. загрузка' : 'Доп. выгрузка'}
               left={(props) => <List.Icon {...props} icon="map-marker-outline" />}
+              style={styles.compactItem}
+              containerStyle={styles.compactRow}
+              titleStyle={styles.compactTitle}
+              descriptionStyle={styles.compactDescription}
             />
           ))}
         {sortedStops.length > 0 && (
@@ -335,7 +349,7 @@ export default function OrderScreen() {
       </List.Section>
       <Divider />
 
-      <List.Section title="Экипаж">
+      <List.Section title="Экипаж" style={styles.section} titleStyle={styles.sectionTitle}>
         {order.order_crew.length === 0 && <List.Item title="Никто не назначен" />}
         {/* Водитель, совмещающий функции грузчика, даёт две строки order_crew
             (role='driver' и role='loader') с одинаковым employee_id — сводим
@@ -349,6 +363,10 @@ export default function OrderScreen() {
               right={(props) =>
                 crew.status === 'confirmed' ? <List.Icon {...props} icon="check-circle" color="#22c55e" /> : null
               }
+              style={styles.compactItem}
+              containerStyle={styles.compactRow}
+              titleStyle={styles.compactTitle}
+              descriptionStyle={styles.compactDescription}
             />
             {crew.isDriver && order.vehicles && (
               <Text variant="bodySmall" style={styles.vehiclePlate}>
@@ -370,7 +388,7 @@ export default function OrderScreen() {
       </List.Section>
       <Divider />
 
-      <List.Section title="Детали">
+      <List.Section title="Детали" style={styles.section} titleStyle={styles.sectionTitle}>
         {order.order_services.map((item, index) => (
           <List.Item
             key={item.services?.id ?? index}
@@ -379,17 +397,45 @@ export default function OrderScreen() {
             left={() => (
               <View style={[styles.serviceBar, { backgroundColor: item.services?.color ?? '#8E24AA' }]} />
             )}
+            style={styles.compactItem}
+            containerStyle={styles.compactRow}
+            titleStyle={styles.compactTitle}
+            descriptionStyle={styles.compactDescription}
           />
         ))}
-        <List.Item title={order.cargo_description || '—'} titleNumberOfLines={4} description="Груз" />
-        {showAmount && (
+        <List.Item
+          title={order.cargo_description || '—'}
+          titleNumberOfLines={4}
+          description="Груз"
+          style={styles.compactItem}
+          containerStyle={styles.compactRow}
+          titleStyle={styles.compactTitle}
+          descriptionStyle={styles.compactDescription}
+        />
+        {/* Сумму редактирующим (canEditSchedulePriceNow) уже показывает поле
+            выше, в «Изменить время и сумму» — второй раз здесь только для
+            тех, кто это поле не видит (например, грузчик), иначе одно и то
+            же число дублировалось бы на экране. */}
+        {showAmount && !canEditSchedulePriceNow && (
           <List.Item
             title={order.actual_price != null ? `${order.actual_price} ₽` : '—'}
             description="Сумма"
+            style={styles.compactItem}
+            containerStyle={styles.compactRow}
+            titleStyle={styles.compactTitle}
+            descriptionStyle={styles.compactDescription}
           />
         )}
         {order.comment ? (
-          <List.Item title={order.comment} titleNumberOfLines={6} description="Комментарий" />
+          <List.Item
+            title={order.comment}
+            titleNumberOfLines={6}
+            description="Комментарий"
+            style={styles.compactItem}
+            containerStyle={styles.compactRow}
+            titleStyle={styles.compactTitle}
+            descriptionStyle={styles.compactDescription}
+          />
         ) : null}
       </List.Section>
 
@@ -436,10 +482,9 @@ export default function OrderScreen() {
       </Portal>
       {crewDialogOpen && <CrewDialog order={order} onClose={() => setCrewDialogOpen(false)} />}
     </ScrollView>
-    </DismissKeyboardView>
     <FAB
       icon="check"
-      style={styles.doneFab}
+      style={[styles.doneFab, { bottom: 16 + insets.bottom }]}
       accessibilityLabel="Сохранить и закрыть заказ"
       onPress={handleDone}
       loading={updateSchedulePrice.isPending}
@@ -456,8 +501,11 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
   },
+  scroll: {
+    flex: 1,
+  },
   content: {
-    padding: 16,
+    padding: 12,
     paddingBottom: 88,
   },
   titleRow: {
@@ -471,12 +519,11 @@ const styles = StyleSheet.create({
   doneFab: {
     position: 'absolute',
     right: 16,
-    bottom: 16,
   },
   when: {
     textTransform: 'capitalize',
-    marginTop: 4,
-    marginBottom: 12,
+    marginTop: 2,
+    marginBottom: 8,
   },
   cancelledChip: {
     alignSelf: 'flex-start',
@@ -486,33 +533,59 @@ const styles = StyleSheet.create({
     color: '#ef4444',
   },
   action: {
-    marginTop: 8,
+    marginTop: 6,
   },
   accepted: {
-    marginTop: 8,
+    marginTop: 6,
     color: '#15803d',
   },
   editBlock: {
-    gap: 10,
-    marginTop: 12,
+    gap: 6,
+    marginTop: 8,
   },
   muted: {
     opacity: 0.6,
   },
   divider: {
-    marginBottom: 4,
+    marginBottom: 2,
   },
   timeRow: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 8,
   },
   route: {
     marginHorizontal: 16,
-    marginTop: 8,
+    marginTop: 4,
   },
   moreStops: {
     alignSelf: 'flex-start',
     marginLeft: 8,
+  },
+  // Компактные строки списков (Максим, 2026-09-29: «сожми, сделай более
+  // мелким» по образцу референса) — react-native-paper даёт List.Item
+  // щедрые отступы по умолчанию (containerV3.paddingVertical=8 +
+  // rowV3.marginVertical=6 + title 16sp/description 14sp), вдвое больше,
+  // чем нужно для плотного списка «Маршрут»/«Экипаж»/«Детали».
+  section: {
+    marginVertical: 2,
+  },
+  sectionTitle: {
+    fontSize: 12,
+    marginBottom: -6,
+  },
+  compactItem: {
+    paddingVertical: 2,
+  },
+  compactRow: {
+    marginVertical: 0,
+  },
+  compactTitle: {
+    fontSize: 14,
+    lineHeight: 18,
+  },
+  compactDescription: {
+    fontSize: 12,
+    lineHeight: 16,
   },
   serviceBar: {
     width: 4,
@@ -521,8 +594,8 @@ const styles = StyleSheet.create({
   },
   vehiclePlate: {
     marginLeft: 56,
-    marginTop: -8,
-    marginBottom: 4,
+    marginTop: -6,
+    marginBottom: 2,
     opacity: 0.6,
   },
   deleteButton: {

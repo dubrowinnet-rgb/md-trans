@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { FlatList, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ActivityIndicator, Appbar, Divider, FAB, HelperText, List, Text } from 'react-native-paper';
 import { useServices, type Service } from '../../api/services';
 import { ServiceDialog } from '../../components/services/ServiceDialog';
 import { useSession } from '../../providers/SessionProvider';
 
 export default function ServicesSettingsScreen() {
+  const insets = useSafeAreaInsets();
   const { employee } = useSession();
   const servicesQuery = useServices();
   const [editing, setEditing] = useState<Service | 'new' | null>(null);
@@ -54,7 +56,12 @@ export default function ServicesSettingsScreen() {
           )}
         />
       )}
-      <FAB icon="plus" label="Добавить" style={styles.fab} onPress={() => setEditing('new')} />
+      <FAB
+        icon="plus"
+        label="Добавить"
+        style={[styles.fab, { bottom: 16 + insets.bottom }]}
+        onPress={() => setEditing('new')}
+      />
       {editing && <ServiceDialog service={editing === 'new' ? null : editing} onClose={() => setEditing(null)} />}
     </View>
   );
@@ -83,7 +90,6 @@ const styles = StyleSheet.create({
   fab: {
     position: 'absolute',
     right: 16,
-    bottom: 16,
   },
   noAccess: {
     flex: 1,

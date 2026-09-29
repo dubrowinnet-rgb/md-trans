@@ -1,8 +1,7 @@
 import { useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { Keyboard, ScrollView, StyleSheet, View } from 'react-native';
 import { Button, Dialog, HelperText, Portal, Switch, Text, TextInput } from 'react-native-paper';
 import { useCreateVehicle, useDeleteVehicle, useUpdateVehicle, type Vehicle, type VehicleInput } from '../../api/vehicles';
-import { DismissKeyboardView } from '../form/DismissKeyboardView';
 
 // Размер кузова хранится одной строкой («Д 4.2 х Ш 2.1 х В 2.3 м», в метрах
 // — доработки 2, п.4: раньше было в сантиметрах, Максим попросил метры,
@@ -106,8 +105,12 @@ export function VehicleDialog({
       <Dialog visible={!confirmDelete} onDismiss={onClose} style={styles.dialog}>
         <Dialog.Title>{vehicle ? vehicle.name : 'Новая машина'}</Dialog.Title>
         <Dialog.ScrollArea style={styles.area}>
-          <DismissKeyboardView>
-          <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          <ScrollView
+            style={styles.scroll}
+            contentContainerStyle={styles.content}
+            keyboardShouldPersistTaps="handled"
+            onScrollBeginDrag={Keyboard.dismiss}
+          >
             <TextInput mode="outlined" label="Название *" accessibilityLabel="Название" value={name} onChangeText={setName} />
             <TextInput
               mode="outlined"
@@ -182,7 +185,6 @@ export function VehicleDialog({
             />
             {error && <HelperText type="error">{error}</HelperText>}
           </ScrollView>
-          </DismissKeyboardView>
         </Dialog.ScrollArea>
         <Dialog.Actions>
           {vehicle && (

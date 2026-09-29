@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { Keyboard, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import {
   ActivityIndicator,
@@ -26,7 +26,6 @@ import { ServicePicker, formatServiceMeta } from '../../components/form/ServiceP
 import { DateTimeField } from '../../components/form/DateTimeField';
 import { FormSection } from '../../components/form/FormSection';
 import { AddressField } from '../../components/form/AddressField';
-import { DismissKeyboardView } from '../../components/form/DismissKeyboardView';
 import { useSession } from '../../providers/SessionProvider';
 import { canCreateOrders, canViewClientPhone, canViewOrderAmount } from '../../lib/permissions';
 import { formatPhone } from '../../lib/phone';
@@ -315,8 +314,12 @@ export default function NewOrderScreen() {
 
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <DismissKeyboardView>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        style={styles.flex}
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        onScrollBeginDrag={Keyboard.dismiss}
+      >
         {duplicateFrom && (
           <HelperText type="info" visible>
             {sourceOrderQuery.isLoading ? 'Загружаем исходный заказ…' : 'Копия заказа — проверьте дату и данные перед сохранением.'}
@@ -570,7 +573,6 @@ export default function NewOrderScreen() {
           Создать заказ
         </Button>
       </ScrollView>
-      </DismissKeyboardView>
     </KeyboardAvoidingView>
   );
 }

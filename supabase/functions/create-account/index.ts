@@ -22,6 +22,7 @@
 // SUPABASE_SERVICE_ROLE_KEY функция получает от платформы автоматически.
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { findDuplicateEmployee } from '../_shared/accountDuplicates.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -139,6 +140,9 @@ Deno.serve(async (req) => {
   if (password.length < 6) return fail(400, 'Пароль — минимум 6 символов', headers);
   if (!name) return fail(400, 'Укажите имя', headers);
   if (!ROLES.includes(role)) return fail(400, 'Неизвестная роль', headers);
+
+  const duplicate = await findDuplicateEmployee(admin, { companyId, phone, name, lastName });
+  if (duplicate) return fail(400, duplicate, headers);
 
   const birthDate = body.birth_date ? String(body.birth_date) : null;
   const hireDate = body.hire_date ? String(body.hire_date) : null;

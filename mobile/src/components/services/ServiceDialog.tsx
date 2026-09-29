@@ -1,8 +1,7 @@
 import { useState } from 'react';
-import { ScrollView, StyleSheet, View, Pressable } from 'react-native';
+import { Keyboard, ScrollView, StyleSheet, View, Pressable } from 'react-native';
 import { Button, Dialog, HelperText, Portal, TextInput } from 'react-native-paper';
 import { useCreateService, useUpdateService, type Service, type ServiceInput } from '../../api/services';
-import { DismissKeyboardView } from '../form/DismissKeyboardView';
 
 // Та же палитра, что уже используется в стартовом каталоге услуг
 // (миграция 0004_services_catalog) — чтобы цвета новых услуг сочетались
@@ -57,8 +56,12 @@ export function ServiceDialog({ service, onClose }: { service: Service | null; o
       <Dialog visible onDismiss={onClose} style={styles.dialog}>
         <Dialog.Title>{service ? service.name : 'Новая услуга'}</Dialog.Title>
         <Dialog.ScrollArea style={styles.area}>
-          <DismissKeyboardView>
-            <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+            <ScrollView
+              style={styles.scroll}
+              contentContainerStyle={styles.content}
+              keyboardShouldPersistTaps="handled"
+              onScrollBeginDrag={Keyboard.dismiss}
+            >
               <TextInput mode="outlined" label="Название *" accessibilityLabel="Название" value={name} onChangeText={setName} />
               <TextInput
                 mode="outlined"
@@ -95,7 +98,6 @@ export function ServiceDialog({ service, onClose }: { service: Service | null; o
               </View>
               {error && <HelperText type="error">{error}</HelperText>}
             </ScrollView>
-          </DismissKeyboardView>
         </Dialog.ScrollArea>
         <Dialog.Actions>
           <Button onPress={onClose}>Отмена</Button>

@@ -3,7 +3,6 @@ import { FlatList, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { ActivityIndicator, Appbar, Button, Dialog, Divider, HelperText, List, Portal, Text, TextInput } from 'react-native-paper';
 import { useSmsTemplates, useUpdateSmsTemplate, type SmsTemplate } from '../../api/smsTemplates';
-import { DismissKeyboardView } from '../../components/form/DismissKeyboardView';
 import { useSession } from '../../providers/SessionProvider';
 
 // Только new_order отправляется автоматически сейчас (доработки 1, п.0 —
@@ -83,8 +82,7 @@ function SmsTemplateDialog({ template, onClose }: { template: SmsTemplate; onClo
       <Dialog visible onDismiss={onClose} style={styles.dialog}>
         <Dialog.Title>{template.label}</Dialog.Title>
         <Dialog.ScrollArea style={styles.area}>
-          <DismissKeyboardView>
-            <View style={styles.content}>
+          <View style={styles.content}>
               <TextInput
                 mode="outlined"
                 label="Текст сообщения"
@@ -96,8 +94,7 @@ function SmsTemplateDialog({ template, onClose }: { template: SmsTemplate; onClo
               />
               <HelperText type="info">{'[Name] [Day] [Date] [Time] [Cost] [Address]'}</HelperText>
               {error && <HelperText type="error">{error}</HelperText>}
-            </View>
-          </DismissKeyboardView>
+          </View>
         </Dialog.ScrollArea>
         <Dialog.Actions>
           <Button onPress={onClose}>Отмена</Button>

@@ -23,6 +23,9 @@ export function useCurrentEmployee(authUserId: string | undefined) {
 // Только водители и грузчики — для выбора экипажа и фильтра календаря.
 // Администраторов и диспетчеров показывает отдельный экран «Команда»
 // (api/accounts.ts), туда они не годятся, экипажем не назначаются.
+// deleted_at — удалённого сотрудника (миграция 0021) в экипаж больше не
+// назначить, но его прошлые заказы по-прежнему показывают его имя (это
+// читает order_crew.employees напрямую, не через этот хук).
 export function useEmployees() {
   return useQuery({
     queryKey: ['employees'],
@@ -31,6 +34,7 @@ export function useEmployees() {
         .from('employees')
         .select('*')
         .in('role', ['driver', 'loader'])
+        .is('deleted_at', null)
         .order('role', { ascending: true })
         .order('name', { ascending: true });
       if (error) throw error;
