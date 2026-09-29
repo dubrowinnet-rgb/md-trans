@@ -58,6 +58,10 @@ say() {
 ask() {
   local var="$1" prompt="$2" def="${3:-}" reply
   [ -n "${!var:-}" ] && return 0
+  # Без iutf8 Backspace стирает только половину русской буквы (буква — два
+  # байта): на экране «да», а в ответе остаётся лишний байт. SSH с Windows
+  # этот режим терминала не включает.
+  stty iutf8 2>/dev/null </dev/tty || true
   while :; do
     if [ -n "$def" ]; then
       printf '%s [%s]: ' "$prompt" "$def" >/dev/tty
@@ -65,10 +69,36 @@ ask() {
       printf '%s: ' "$prompt" >/dev/tty
     fi
     IFS= read -r reply </dev/tty || die "Не удалось прочитать ответ."
+    # Невидимые символы (\r при вставке и т. п.) и пробелы по краям в ответах
+    # не нужны никогда.
+    reply="${reply//[[:cntrl:]]/}"
+    reply="${reply#"${reply%%[![:space:]]*}"}"
+    reply="${reply%"${reply##*[![:space:]]}"}"
+    if command -v iconv >/dev/null 2>&1 && ! iconv -f UTF-8 -t UTF-8 >/dev/null 2>&1 <<<"$reply"; then
+      say "Русские буквы пришли в другой кодировке — напишите ответ ещё раз."
+      continue
+    fi
     reply="${reply:-$def}"
     [ -n "$reply" ] && break
   done
   printf -v "$var" '%s' "$reply"
+}
+
+# ask_yes ПЕРЕМЕННАЯ "Вопрос" — «да» (код 0) или «нет» (код 1). На
+# непонятный ответ спрашивает ещё раз и подсказывает yes/no латиницей — на
+# случай, если русские буквы с этого компьютера не доходят.
+ask_yes() {
+  local var="$1" prompt="$2" preset="${!1:-}"
+  while :; do
+    ask "$var" "$prompt"
+    case "${!var}" in
+      да|Да|ДА|д|Д|yes|Yes|YES|y|Y) return 0 ;;
+      нет|Нет|НЕТ|н|Н|no|No|NO|n|N) return 1 ;;
+    esac
+    [ -z "$preset" ] || die "$var=$preset — ожидалось да или нет."
+    say "Не понял ответ. Напишите да или нет (или латиницей: yes или no)."
+    printf -v "$var" '%s' ''
+  done
 }
 
 # Заменяет строку KEY=... в файле (или дописывает её в конец). awk, а не
