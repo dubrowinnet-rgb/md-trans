@@ -123,14 +123,20 @@ export interface UpdateAccountProfileInput {
 // через Edge Function (supabase/functions/update-account), по той же
 // причине, что и создание: сменить чужой email/пароль можно только через
 // Supabase Admin API, а он требует service role key.
+//
+// phone_warning — профиль (включая пароль) сохранился, но новый телефон не
+// применился для входа (чаще всего конфликт: такой номер уже занят другим
+// аккаунтом) — вызывающий экран должен это показать, а не считать сохранение
+// полностью успешным. См. supabase/functions/update-account/index.ts.
 export function useUpdateAccountProfile() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (input: UpdateAccountProfileInput) => {
-      const { data, error } = await supabase.functions.invoke<{ employee: Account; error?: string }>(
-        'update-account',
-        { body: input }
-      );
+      const { data, error } = await supabase.functions.invoke<{
+        employee: Account;
+        phone_warning?: string;
+        error?: string;
+      }>('update-account', { body: input });
       if (error) {
         if (error instanceof FunctionsHttpError) {
           const body = await error.context.json().catch(() => null);
@@ -139,7 +145,7 @@ export function useUpdateAccountProfile() {
         throw new Error(error.message);
       }
       if (data && 'error' in data && data.error) throw new Error(data.error);
-      return data!.employee;
+      return { employee: data!.employee, phone_warning: data?.phone_warning ?? null };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['accounts'] });

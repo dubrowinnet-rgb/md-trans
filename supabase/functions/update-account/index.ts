@@ -126,12 +126,26 @@ Deno.serve(async (req) => {
   // auth.users.phone при каждом сохранении профиля, где телефон есть. Это же
   // тихо доводит до нужного состояния и старые аккаунты, заведённые ещё по
   // логину (см. mobile/src/providers/SessionProvider.tsx — вызывает
-  // update-account с текущим телефоном один раз при входе). Не фатально: если
-  // не получилось (например, в Supabase ещё не включён Phone-провайдер, см.
-  // supabase/README.md), остальной профиль всё равно сохраняется — просто
-  // вход по телефону для этого сотрудника пока не заработает.
+  // update-account с текущим телефоном один раз при входе). Ошибку этого шага
+  // НЕ считаем фатальной для всего запроса (например, если в Supabase ещё не
+  // включён Phone-провайдер — остальной профиль и пароль всё равно должны
+  // сохраниться), но и не прячем молча: раньше при конфликте (например,
+  // такой телефон уже стоит у ДРУГОГО сотрудника — 2026-09-29, реальный
+  // случай после переноса из облака с задвоенными номерами) employees.phone
+  // тихо обновлялся на новое значение, а auth.users.phone так и оставался
+  // старым — в форме админа выглядело как «сохранилось», а сотрудник по
+  // новому номеру войти не мог. Теперь такую ошибку возвращаем отдельным
+  // полем phone_warning — профиль всё равно сохраняется, но вызывающая
+  // сторона должна это показать.
+  let phoneWarning: string | null = null;
   if (target.auth_user_id && e164Phone) {
-    await admin.auth.admin.updateUserById(target.auth_user_id, { phone: e164Phone, phone_confirm: true });
+    const { error: phoneSyncError } = await admin.auth.admin.updateUserById(target.auth_user_id, {
+      phone: e164Phone,
+      phone_confirm: true,
+    });
+    if (phoneSyncError) {
+      phoneWarning = `Профиль сохранён, но вход по новому телефону не обновился: ${phoneSyncError.message}. Сотрудник пока входит по прежнему номеру.`;
+    }
   }
   if (password && target.auth_user_id) {
     const { error: passwordError } = await admin.auth.admin.updateUserById(target.auth_user_id, { password });
@@ -164,5 +178,8 @@ Deno.serve(async (req) => {
 
   if (updateError) return fail(400, updateError.message, headers);
 
-  return new Response(JSON.stringify({ employee }), { status: 200, headers });
+  return new Response(JSON.stringify({ employee, ...(phoneWarning ? { phone_warning: phoneWarning } : {}) }), {
+    status: 200,
+    headers,
+  });
 });

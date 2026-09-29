@@ -177,6 +177,11 @@ export function AccountDialog({ account, onClose }: { account: Account | null; o
     account?.loading_hourly_rate != null ? String(account.loading_hourly_rate) : ''
   );
   const [error, setError] = useState<string | null>(null);
+  // Не «ошибка» — профиль и пароль сохранились, но новый телефон не
+  // применился для входа (обычно конфликт: номер уже занят другим
+  // аккаунтом). Диалог в этом случае не закрываем сам — админ должен
+  // прочитать и решить, что делать с телефоном.
+  const [phoneWarning, setPhoneWarning] = useState<string | null>(null);
   const vehiclesQuery = useVehicles();
 
   const age = birthDate ? differenceInYears(new Date(), birthDate) : null;
@@ -196,6 +201,7 @@ export function AccountDialog({ account, onClose }: { account: Account | null; o
 
   const handleSave = async () => {
     setError(null);
+    setPhoneWarning(null);
     if (!name.trim()) {
       setError('Укажите имя');
       return;
@@ -219,12 +225,14 @@ export function AccountDialog({ account, onClose }: { account: Account | null; o
         personal_vehicle_make: personalVehicleMake.trim() || undefined,
         personal_vehicle_plate: personalVehiclePlate.trim() || undefined,
       };
+      let phoneWarningResult: string | null = null;
       if (account) {
-        await updateProfile.mutateAsync({
+        const profileResult = await updateProfile.mutateAsync({
           id: account.id,
           password: password || undefined,
           ...profileFields,
         });
+        phoneWarningResult = profileResult.phone_warning;
         await updateAccount.mutateAsync({ id: account.id, role, permissions, default_vehicle_id: vehicleForRole });
         if (role === 'driver' || role === 'loader') {
           await updateRates.mutateAsync({
@@ -243,6 +251,13 @@ export function AccountDialog({ account, onClose }: { account: Account | null; o
           default_vehicle_id: vehicleForRole,
           ...profileFields,
         });
+      }
+      // Остальное сохранилось — но если применить новый телефон для входа
+      // не удалось (см. useUpdateAccountProfile), не закрываем диалог молча:
+      // админ должен это прочитать, а не решить, что всё прошло гладко.
+      if (phoneWarningResult) {
+        setPhoneWarning(phoneWarningResult);
+        return;
       }
       onClose();
     } catch (err) {
@@ -467,6 +482,7 @@ export function AccountDialog({ account, onClose }: { account: Account | null; o
                     )}
                   </>
                 )}
+                {phoneWarning && <Text style={styles.phoneWarning}>{phoneWarning}</Text>}
                 {error && <HelperText type="error">{error}</HelperText>}
               </>
             </DismissKeyboardView>
@@ -497,6 +513,12 @@ function PermissionRow({ label, value, onChange }: { label: string; value: boole
 const styles = StyleSheet.create({
   dialog: {
     maxHeight: '90%',
+  },
+  // Не ошибка (профиль и пароль сохранились) — тот же тон, что у «в работе»
+  // в остальном приложении (theme.ts), чтобы отличаться и от обычной
+  // подсказки, и от красной ошибки.
+  phoneWarning: {
+    color: '#b45309',
   },
   area: {
     paddingHorizontal: 0,
