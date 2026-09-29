@@ -11,7 +11,8 @@ export function alignToMode(date: Date, mode: DaysMode) {
 }
 
 // Состояние календаря: режим 1/3/7 дней и первый видимый день страницы.
-// Заказы грузим на все отрисованные страницы, чтобы листание не ждало сети.
+// Заказы грузим на все отрисованные страницы, чтобы листание не ждало сети,
+// — по запросу на страницу (pageStarts, см. useCalendarOrders).
 // minAnchor (доработки 2, п.1) — у водителя/грузчика назад листать можно
 // только в пределах текущего календарного месяца; у диспетчера/админа
 // параметр не передаётся, и ограничения нет.
@@ -33,11 +34,8 @@ export function useCalendarNav(options?: { minAnchor?: Date }) {
   // Счётчик запросов «прокрутить к текущему времени» (кнопка «Сегодня»).
   const [nowSignal, setNowSignal] = useState(0);
 
-  const { rangeStart, rangeEnd } = useMemo(
-    () => ({
-      rangeStart: addDays(anchor, -PAGES_AROUND * mode),
-      rangeEnd: addDays(anchor, (PAGES_AROUND + 1) * mode),
-    }),
+  const pageStarts = useMemo(
+    () => Array.from({ length: PAGES_AROUND * 2 + 1 }, (_, i) => addDays(anchor, (i - PAGES_AROUND) * mode)),
     [anchor, mode]
   );
 
@@ -61,5 +59,5 @@ export function useCalendarNav(options?: { minAnchor?: Date }) {
 
   const atMinAnchor = Boolean(minAnchor) && anchor <= clampAnchor(minAnchor as Date, mode);
 
-  return { mode, setMode, anchor, setAnchor, rangeStart, rangeEnd, goPrev, goNext, goToday, nowSignal, atMinAnchor };
+  return { mode, setMode, anchor, setAnchor, pageStarts, goPrev, goNext, goToday, nowSignal, atMinAnchor };
 }

@@ -16,8 +16,9 @@
 	route {
 		# Эти функции вызывает только сама база (pg_cron и триггеры, миграция
 		# 0018) по внутреннему адресу, мимо Caddy. Открытыми они позволили бы
-		# кому угодно рассылать пуши сотрудникам.
-		@internal_functions path /functions/v1/send-crew-reminders* /functions/v1/remind-driver-report* /functions/v1/notify-order-changed* /functions/v1/notify-owner-new-ticket*
+		# кому угодно рассылать пуши сотрудникам. _shared — не функция, а
+		# общий код функций.
+		@internal_functions path /functions/v1/send-crew-reminders* /functions/v1/remind-driver-report* /functions/v1/notify-order-changed* /functions/v1/notify-owner-new-ticket* /functions/v1/_shared*
 		respond @internal_functions 404
 
 		@api path /auth/v1/* /rest/v1/* /storage/v1/* /functions/v1/* /realtime/v1/*

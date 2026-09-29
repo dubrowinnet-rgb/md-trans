@@ -1,7 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { formatPhone } from '../lib/phone';
-import { isOrderCompleted } from '../lib/orderCompletion';
 import type { Database } from '../types/database';
 
 export type Client = Database['public']['Tables']['clients']['Row'];
@@ -52,28 +51,23 @@ export function useCreateClient() {
 }
 
 // Простая статистика по клиенту (раздел «смотреть историю и статистику по
-// клиентам»): число заказов и сумма по тем, где она указана. Публикуется
-// только при can_view_client_stats — см. ClientDialog.
+// клиентам»): число заказов и сумма по выполненным. Публикуется только при
+// can_view_client_stats — см. ClientDialog; то же право проверяет и база.
+// Считает база (client_stats, миграция 0020) по правилу «выполнен» из
+// lib/orderCompletion.ts, а не приложение по скачанным заказам: у
+// постоянного клиента их может быть больше 1000 — столько API отдаёт за раз.
 export function useClientOrderStats(clientId: string | undefined) {
   return useQuery({
     queryKey: ['client-stats', clientId],
     enabled: Boolean(clientId),
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('orders')
-        .select('status, actual_price, scheduled_end')
-        .eq('client_id', clientId as string);
+      const { data, error } = await supabase.rpc('client_stats', { p_client_id: clientId as string });
       if (error) throw error;
-      const rows = data as { status: string; actual_price: number | null; scheduled_end: string }[];
-      // «Завершён» = не отменён и уже прошёл (ревью, задача 2) — см.
-      // lib/orderCompletion.ts. Раньше считали по status='completed',
-      // которого приложение больше не ставит.
-      const now = new Date();
-      const completed = rows.filter((r) => isOrderCompleted(r, now));
+      const row = data?.[0];
       return {
-        totalOrders: rows.length,
-        completedOrders: completed.length,
-        totalAmount: completed.reduce((sum, r) => sum + (r.actual_price ?? 0), 0),
+        totalOrders: Number(row?.orders_count ?? 0),
+        completedOrders: Number(row?.completed_count ?? 0),
+        totalAmount: Number(row?.revenue ?? 0),
       };
     },
   });

@@ -11,6 +11,8 @@ export default function SettingsScreen() {
   const { employee } = useSession();
   const isAdmin = employee?.role === 'admin';
   const isDriver = employee?.role === 'driver';
+  // Отчёты водителей проверяют администратор и диспетчер (миграция 0019).
+  const canReviewReports = employee?.role === 'admin' || employee?.role === 'dispatcher';
   const canEarnPay = employee?.role === 'driver' || employee?.role === 'loader';
 
   return (
@@ -38,11 +40,20 @@ export default function SettingsScreen() {
         )}
         {isDriver && (
           <List.Item
-            title="Мой отчёт"
-            description="Заказы дня, расходы, топливо, касса"
+            title="Мои отчёты"
+            description="Лента отчётов за месяц: заказы, расходы, топливо, касса"
             left={(props) => <List.Icon {...props} icon="clipboard-text-outline" />}
             right={(props) => <List.Icon {...props} icon="chevron-right" />}
-            onPress={() => router.push('/settings/driver-report')}
+            onPress={() => router.push('/settings/driver-feed')}
+          />
+        )}
+        {canReviewReports && (
+          <List.Item
+            title="Отчёты водителей"
+            description="Ленты отчётов: согласовать или вернуть с замечанием"
+            left={(props) => <List.Icon {...props} icon="clipboard-check-outline" />}
+            right={(props) => <List.Icon {...props} icon="chevron-right" />}
+            onPress={() => router.push('/settings/driver-reports')}
           />
         )}
         {isAdmin && (
@@ -67,13 +78,6 @@ export default function SettingsScreen() {
               left={(props) => <List.Icon {...props} icon="bell-outline" />}
               right={(props) => <List.Icon {...props} icon="chevron-right" />}
               onPress={() => router.push('/settings/reminders')}
-            />
-            <List.Item
-              title="Отчёты водителей"
-              description="Касса, расходы, топливо — подтверждение"
-              left={(props) => <List.Icon {...props} icon="clipboard-check-outline" />}
-              right={(props) => <List.Icon {...props} icon="chevron-right" />}
-              onPress={() => router.push('/settings/driver-reports')}
             />
             <List.Item
               title="Техподдержка"

@@ -152,6 +152,7 @@ connect_cloud() {
 detect_cloud_level() {
   cloud_psql -tA <<'SQL'
 select case
+  when exists (select 1 from pg_proc where proname = 'claim_crew_reminders') then 20
   when exists (select 1 from pg_proc where proname = 'save_driver_report') then 19
   when to_regclass('private.app_settings') is not null then 18
   when exists (select 1 from pg_proc where proname = 'restrict_employee_self_role_change'

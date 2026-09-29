@@ -9,6 +9,12 @@
 # 14 дней, фото — 7 дней. От поломки самого сервера они не спасут — для
 # этого включите автоматические резервные копии сервера у хостинга
 # (deploy/selfhost/README.md).
+#
+# Фото копируются снимком из жёстких ссылок: снимок видит все фото, но
+# места почти не занимает — файлы фото никогда не переписываются, снимок
+# хранит только те, что с тех пор удалили. Раньше каждую ночь всё хранилище
+# упаковывалось в архив заново: при тысячах водителей с фото каждый день это
+# сотни гигабайт одинаковых копий и часы работы диска.
 
 set -euo pipefail
 
@@ -30,11 +36,29 @@ main() {
     || { rm -f "$BACKUP_DIR/db_$stamp.dump.part"; die "Не удалось сделать копию базы."; }
   mv "$BACKUP_DIR/db_$stamp.dump.part" "$BACKUP_DIR/db_$stamp.dump"
 
-  tar -czf "$BACKUP_DIR/storage_$stamp.tar.gz" -C "$SUPABASE_DIR/volumes" storage
+  # Если папка копий на другом диске, жёсткие ссылки невозможны — тогда
+  # обычная копия.
+  rm -rf "$BACKUP_DIR/storage_$stamp.part"
+  if ! cp -al "$SUPABASE_DIR/volumes/storage" "$BACKUP_DIR/storage_$stamp.part" 2>/dev/null; then
+    rm -rf "$BACKUP_DIR/storage_$stamp.part"
+    cp -a "$SUPABASE_DIR/volumes/storage" "$BACKUP_DIR/storage_$stamp.part" \
+      || { rm -rf "$BACKUP_DIR/storage_$stamp.part"; die "Не удалось сделать копию фото."; }
+  fi
+  mv "$BACKUP_DIR/storage_$stamp.part" "$BACKUP_DIR/storage_$stamp"
   cp "$SUPABASE_DIR/.env" "$BACKUP_DIR/env_$stamp"
-  chmod 600 "$BACKUP_DIR/db_$stamp.dump" "$BACKUP_DIR/storage_$stamp.tar.gz" "$BACKUP_DIR/env_$stamp"
+  chmod 600 "$BACKUP_DIR/db_$stamp.dump" "$BACKUP_DIR/env_$stamp"
 
   find "$BACKUP_DIR" -maxdepth 1 -type f \( -name 'db_*.dump' -o -name 'env_*' \) -mtime +14 -delete
+  # Снимки фото — по времени в имени (у папки время изменения берётся от
+  # самого хранилища). Архивы фото старого формата удаляются так же.
+  local cutoff dir
+  cutoff=$(date -d '7 days ago' +%Y-%m-%d_%H-%M-%S)
+  for dir in "$BACKUP_DIR"/storage_????-??-??_??-??-??; do
+    [ -d "$dir" ] || continue
+    if [[ "${dir##*/storage_}" < "$cutoff" ]]; then
+      rm -rf "${dir:?}"
+    fi
+  done
   find "$BACKUP_DIR" -maxdepth 1 -type f -name 'storage_*.tar.gz' -mtime +7 -delete
   info "Готово. Все копии занимают $(du -sh "$BACKUP_DIR" | cut -f1)."
 }

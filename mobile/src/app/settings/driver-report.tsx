@@ -1,14 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import { Image, ScrollView, StyleSheet, View } from 'react-native';
-import { router } from 'expo-router';
+import { Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { router, useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import { addDays, format } from 'date-fns';
+import { addDays, format, startOfMonth } from 'date-fns';
 import {
   ActivityIndicator,
   Appbar,
   Button,
   Checkbox,
-  Chip,
   Divider,
   HelperText,
   IconButton,
@@ -17,22 +16,26 @@ import {
   TextInput,
 } from 'react-native-paper';
 import {
+  canAuthorEditReport,
+  driverReportEditDeadline,
   useDriverReport,
-  useHandInCash,
   useReportDayOrders,
   useSaveDriverReport,
   uploadOdometerPhoto,
 } from '../../api/driverReports';
+import { DriverReportCard, formatMoment, rub } from '../../components/driverReports/DriverReportCard';
 import { useSession } from '../../providers/SessionProvider';
-import { DRIVER_REPORT_STATUS_COLORS, DRIVER_REPORT_STATUS_LABELS } from '../../theme';
 import type { FuelPaymentMethod } from '../../types/database';
 import { formatDayLabel } from '../../utils/date';
 
-// «Мой отчёт» (Максим, «отчёты водителей») — только у роли driver. Отчёт
+// Написать или исправить отчёт за день — только у роли driver. Отчёт
 // полуавтоматический: заказы дня подставляются сами (useReportDayOrders),
-// водитель отмечает перевод/QR, добавляет расходы, топливо, фото одометра,
-// затем отдельной кнопкой «сдаёт кассу». После подтверждения
-// администратором форма становится нередактируемой (тем же не даёт RLS).
+// водитель отмечает перевод/QR, добавляет расходы, топливо, фото одометра и
+// сколько сдал в кассу. Отправленный отчёт попадает в общую ленту
+// (driver-feed.tsx); исправить его можно 24 часа после отправки, а
+// несогласованный — пока не отправит заново. Согласованный или старше
+// 24 часов показывается только для просмотра (миграция 0019 проверяет то
+// же самое в базе).
 export default function DriverReportScreen() {
   const { employee } = useSession();
 
@@ -52,12 +55,24 @@ interface ExpenseRow {
   amount: string;
 }
 
+const toKey = (d: Date) => format(d, 'yyyy-MM-dd');
+
+function parseAmount(text: string) {
+  return Number(text.replace(',', '.').replace(/\s/g, '')) || 0;
+}
+
 function DriverReportContent({ employeeId }: { employeeId: string }) {
-  const [date, setDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
+  const params = useLocalSearchParams<{ date?: string }>();
+  const today = new Date();
+  const todayKey = toKey(today);
+  // Новый отчёт — за текущий месяц, а 1-го числа ещё и за вчера (вечерний
+  // отчёт за последний день прошлого месяца).
+  const minDate = toKey(new Date(Math.min(startOfMonth(today).getTime(), addDays(today, -1).getTime())));
+  const [date, setDate] = useState(() => (params.date && /^\d{4}-\d{2}-\d{2}$/.test(params.date) ? params.date : todayKey));
+
   const dayOrdersQuery = useReportDayOrders(employeeId, date);
   const reportQuery = useDriverReport(employeeId, date);
   const saveReport = useSaveDriverReport();
-  const handInCash = useHandInCash();
 
   const [transferByOrder, setTransferByOrder] = useState<Record<string, boolean>>({});
   const [expenses, setExpenses] = useState<ExpenseRow[]>([]);
@@ -67,6 +82,7 @@ function DriverReportContent({ employeeId }: { employeeId: string }) {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [cashText, setCashText] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const hydratedForRef = useRef<string | null>(null);
   useEffect(() => {
@@ -80,18 +96,21 @@ function DriverReportContent({ employeeId }: { employeeId: string }) {
     setFuelMethod(report?.fuel_payment_method ?? 'cash');
     setOdometerUrl(report?.odometer_photo_url ?? null);
     setCashText(report?.cash_handed_in != null ? String(report.cash_handed_in) : '');
+    setError(null);
+    setNotice(null);
     hydratedForRef.current = date;
   }, [date, dayOrdersQuery.isLoading, dayOrdersQuery.data, reportQuery.isLoading, reportQuery.data]);
 
   const report = reportQuery.data;
-  const locked = report?.status === 'confirmed';
+  const isSent = report != null && report.status !== 'draft';
+  const editable = report == null || canAuthorEditReport(report);
   const dayOrders = dayOrdersQuery.data ?? [];
 
   const cashCollected = dayOrders
     .filter((o) => !transferByOrder[o.id] && (o.actual_price ?? 0) > 0)
     .reduce((sum, o) => sum + (o.actual_price ?? 0), 0);
-  const expensesTotal = expenses.reduce((sum, e) => sum + (Number(e.amount.replace(',', '.')) || 0), 0);
-  const fuelAmount = Number(fuelAmountText.replace(',', '.')) || 0;
+  const expensesTotal = expenses.reduce((sum, e) => sum + parseAmount(e.amount), 0);
+  const fuelAmount = parseAmount(fuelAmountText);
   const fuelCash = fuelMethod === 'cash' ? fuelAmount : 0;
   const expectedHandIn = cashCollected - expensesTotal - fuelCash;
 
@@ -115,62 +134,91 @@ function DriverReportContent({ employeeId }: { employeeId: string }) {
     }
   };
 
-  const save = async (status: 'draft' | 'submitted') => {
+  const save = async (submit: boolean) => {
     setError(null);
+    setNotice(null);
     try {
       await saveReport.mutateAsync({
-        employee_id: employeeId,
         report_date: date,
-        status,
+        submit,
         fuel_amount: fuelAmountText.trim() ? fuelAmount : null,
         fuel_payment_method: fuelAmountText.trim() ? fuelMethod : null,
         odometer_photo_url: odometerUrl,
+        cash_handed_in: cashText.trim() ? parseAmount(cashText) : null,
         orders: dayOrders.map((o) => ({ order_id: o.id, paid_by_transfer: Boolean(transferByOrder[o.id]) })),
         expenses: expenses
           .filter((e) => e.description.trim() && e.amount.trim())
-          .map((e) => ({ description: e.description.trim(), amount: Number(e.amount.replace(',', '.')) || 0 })),
+          .map((e) => ({ description: e.description.trim(), amount: parseAmount(e.amount) })),
       });
+      if (submit) {
+        if (router.canGoBack()) router.back();
+        else router.replace('/settings/driver-feed');
+      } else {
+        setNotice('Черновик сохранён. Его видите только вы — отправьте, когда отчёт будет готов.');
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось сохранить отчёт');
     }
   };
 
-  const submitCash = async () => {
-    if (!report) return;
-    setError(null);
-    try {
-      await handInCash.mutateAsync({ reportId: report.id, amount: Number(cashText.replace(',', '.')) || 0 });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Не удалось сдать кассу');
-    }
-  };
-
   const loading = dayOrdersQuery.isLoading || reportQuery.isLoading;
+  const deadline = report ? driverReportEditDeadline(report) : null;
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <Appbar.Header>
         <Appbar.BackAction onPress={() => router.back()} />
-        <Appbar.Content title="Мой отчёт" />
+        <Appbar.Content title={isSent ? 'Исправить отчёт' : 'Отчёт за день'} />
       </Appbar.Header>
 
       <View style={styles.dateRow}>
-        <IconButton icon="chevron-left" accessibilityLabel="Предыдущий день" onPress={() => setDate((d) => format(addDays(new Date(d), -1), 'yyyy-MM-dd'))} />
+        <IconButton
+          icon="chevron-left"
+          accessibilityLabel="Предыдущий день"
+          disabled={date <= minDate}
+          onPress={() => setDate((d) => toKey(addDays(new Date(`${d}T00:00:00`), -1)))}
+        />
         <Text variant="titleMedium" style={styles.dateLabel}>
-          {formatDayLabel(new Date(date))}
+          {formatDayLabel(new Date(`${date}T00:00:00`))}
         </Text>
-        <IconButton icon="chevron-right" accessibilityLabel="Следующий день" onPress={() => setDate((d) => format(addDays(new Date(d), 1), 'yyyy-MM-dd'))} />
+        <IconButton
+          icon="chevron-right"
+          accessibilityLabel="Следующий день"
+          disabled={date >= todayKey}
+          onPress={() => setDate((d) => toKey(addDays(new Date(`${d}T00:00:00`), 1)))}
+        />
       </View>
-      {report && (
-        <Chip style={[styles.statusChip, { borderColor: DRIVER_REPORT_STATUS_COLORS[report.status] }]} textStyle={{ color: DRIVER_REPORT_STATUS_COLORS[report.status] }}>
-          {DRIVER_REPORT_STATUS_LABELS[report.status]}
-        </Chip>
-      )}
 
       {loading ? (
         <ActivityIndicator style={styles.loader} />
-      ) : (
+      ) : report && !editable ? (
         <ScrollView contentContainerStyle={styles.content}>
+          <HelperText type="info">
+            {report.status === 'confirmed'
+              ? 'Отчёт согласован — изменить его нельзя.'
+              : 'Прошло больше 24 часов после отправки — изменить отчёт нельзя.'}
+          </HelperText>
+          <DriverReportCard report={report} />
+        </ScrollView>
+      ) : (
+        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          {report?.status === 'rejected' && (
+            <View style={styles.rejectedBox}>
+              <Text variant="labelMedium" style={styles.rejectedTitle}>
+                {`Не согласован${report.rejected_at ? ` ${formatMoment(report.rejected_at)}` : ''}${report.reviewer ? ` · ${report.reviewer.name}` : ''}`}
+              </Text>
+              <Text variant="bodyMedium">{report.rejection_comment}</Text>
+              <Text variant="bodySmall" style={styles.muted}>
+                Исправьте отчёт и отправьте заново.
+              </Text>
+            </View>
+          )}
+          {report?.status === 'submitted' && deadline && (
+            <HelperText type="info">
+              {`Отчёт отправлен ${report.submitted_at ? formatMoment(report.submitted_at) : ''}. Исправить можно до ${formatMoment(deadline.toISOString())} — время правки увидят администратор и диспетчер.`}
+            </HelperText>
+          )}
+
           <Text variant="labelLarge">Заказы дня</Text>
           {dayOrders.length === 0 && (
             <Text variant="bodySmall" style={styles.muted}>
@@ -181,25 +229,26 @@ function DriverReportContent({ employeeId }: { employeeId: string }) {
             <View key={o.id} style={styles.orderRow}>
               <Checkbox.Android
                 status={transferByOrder[o.id] ? 'checked' : 'unchecked'}
-                disabled={locked}
                 onPress={() => setTransferByOrder((prev) => ({ ...prev, [o.id]: !prev[o.id] }))}
               />
               <View style={styles.flex}>
                 <Text variant="bodyMedium">{o.cargo_description || 'Без описания'}</Text>
                 <Text variant="bodySmall" style={styles.muted}>
-                  {format(new Date(o.scheduled_start), 'HH:mm')} · {o.actual_price ?? 0} ₽
-                  {transferByOrder[o.id] ? ' · перевод/QR' : ' · наличные'}
+                  {`${format(new Date(o.scheduled_start), 'HH:mm')} · ${rub(o.actual_price ?? 0)} · ${transferByOrder[o.id] ? 'перевод/QR' : 'наличные'}`}
                 </Text>
               </View>
             </View>
           ))}
+          {dayOrders.length > 0 && (
+            <Text variant="bodySmall" style={styles.muted}>
+              Отметьте заказы, оплаченные переводом или по QR.
+            </Text>
+          )}
 
           <Divider style={styles.divider} />
           <View style={styles.rowBetween}>
             <Text variant="labelLarge">Расходы</Text>
-            {!locked && (
-              <IconButton icon="plus" accessibilityLabel="Добавить расход" onPress={() => setExpenses((prev) => [...prev, { description: '', amount: '' }])} />
-            )}
+            <IconButton icon="plus" accessibilityLabel="Добавить расход" onPress={() => setExpenses((prev) => [...prev, { description: '', amount: '' }])} />
           </View>
           {expenses.map((exp, idx) => (
             <View key={idx} style={styles.expenseRow}>
@@ -208,7 +257,6 @@ function DriverReportContent({ employeeId }: { employeeId: string }) {
                 dense
                 label="Описание"
                 value={exp.description}
-                editable={!locked}
                 onChangeText={(text) => setExpenses((prev) => prev.map((e, i) => (i === idx ? { ...e, description: text } : e)))}
                 style={styles.flex}
               />
@@ -218,26 +266,16 @@ function DriverReportContent({ employeeId }: { employeeId: string }) {
                 label="Сумма"
                 keyboardType="numeric"
                 value={exp.amount}
-                editable={!locked}
                 onChangeText={(text) => setExpenses((prev) => prev.map((e, i) => (i === idx ? { ...e, amount: text } : e)))}
                 style={styles.expenseAmount}
               />
-              {!locked && (
-                <IconButton icon="close" accessibilityLabel="Удалить расход" onPress={() => setExpenses((prev) => prev.filter((_, i) => i !== idx))} />
-              )}
+              <IconButton icon="close" accessibilityLabel="Удалить расход" onPress={() => setExpenses((prev) => prev.filter((_, i) => i !== idx))} />
             </View>
           ))}
 
           <Divider style={styles.divider} />
           <Text variant="labelLarge">Топливо</Text>
-          <TextInput
-            mode="outlined"
-            label="Сумма, ₽"
-            keyboardType="numeric"
-            value={fuelAmountText}
-            editable={!locked}
-            onChangeText={setFuelAmountText}
-          />
+          <TextInput mode="outlined" label="Сумма, ₽" keyboardType="numeric" value={fuelAmountText} onChangeText={setFuelAmountText} />
           <SegmentedButtons
             value={fuelMethod}
             onValueChange={(value) => setFuelMethod(value as FuelPaymentMethod)}
@@ -250,38 +288,37 @@ function DriverReportContent({ employeeId }: { employeeId: string }) {
           <Divider style={styles.divider} />
           <Text variant="labelLarge">Фото одометра</Text>
           {odometerUrl && <Image source={{ uri: odometerUrl }} style={styles.odometerPhoto} />}
-          <Button mode="outlined" icon="camera" onPress={takePhoto} loading={uploadingPhoto} disabled={locked || uploadingPhoto}>
+          <Button mode="outlined" icon="camera" onPress={takePhoto} loading={uploadingPhoto} disabled={uploadingPhoto}>
             {odometerUrl ? 'Переснять' : 'Сфотографировать'}
           </Button>
 
           <Divider style={styles.divider} />
           <Text variant="labelLarge">Касса</Text>
           <Text variant="bodySmall" style={styles.muted}>
-            Наличные по заказам {Math.round(cashCollected)} ₽ − расходы {Math.round(expensesTotal)} ₽ − топливо наличными {Math.round(fuelCash)} ₽ = к сдаче {Math.round(expectedHandIn)} ₽
+            {`Наличные по заказам ${rub(cashCollected)} − расходы ${rub(expensesTotal)} − топливо наличными ${rub(fuelCash)} = к сдаче ${rub(expectedHandIn)}`}
           </Text>
-          <TextInput mode="outlined" label="Сдано, ₽" keyboardType="numeric" value={cashText} editable={!locked} onChangeText={setCashText} />
-          <Button mode="outlined" onPress={submitCash} loading={handInCash.isPending} disabled={locked || !report || handInCash.isPending}>
-            Сдать кассу
-          </Button>
-          {!report && (
-            <HelperText type="info">Сначала сохраните отчёт — тогда появится возможность сдать кассу.</HelperText>
-          )}
+          <TextInput mode="outlined" label="Сдано в кассу, ₽" keyboardType="numeric" value={cashText} onChangeText={setCashText} />
 
           {error && <HelperText type="error">{error}</HelperText>}
+          {notice && <HelperText type="info">{notice}</HelperText>}
 
-          {!locked && (
+          {!isSent ? (
             <View style={styles.saveRow}>
-              <Button mode="outlined" onPress={() => save('draft')} loading={saveReport.isPending} disabled={saveReport.isPending} style={styles.flex}>
+              <Button mode="outlined" onPress={() => save(false)} loading={saveReport.isPending} disabled={saveReport.isPending} style={styles.flex}>
                 Сохранить черновик
               </Button>
-              <Button mode="contained" onPress={() => save('submitted')} loading={saveReport.isPending} disabled={saveReport.isPending} style={styles.flex}>
+              <Button mode="contained" onPress={() => save(true)} loading={saveReport.isPending} disabled={saveReport.isPending} style={styles.flex}>
                 Отправить
               </Button>
             </View>
+          ) : (
+            <Button mode="contained" style={styles.saveSingle} onPress={() => save(true)} loading={saveReport.isPending} disabled={saveReport.isPending}>
+              {report?.status === 'rejected' ? 'Отправить исправленный отчёт' : 'Сохранить исправление'}
+            </Button>
           )}
         </ScrollView>
       )}
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -306,11 +343,6 @@ const styles = StyleSheet.create({
     textTransform: 'capitalize',
     minWidth: 200,
     textAlign: 'center',
-  },
-  statusChip: {
-    alignSelf: 'center',
-    marginBottom: 8,
-    backgroundColor: 'transparent',
   },
   muted: {
     opacity: 0.6,
@@ -344,9 +376,22 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginBottom: 8,
   },
+  rejectedBox: {
+    backgroundColor: '#fee2e2',
+    borderRadius: 8,
+    padding: 10,
+    gap: 2,
+    marginBottom: 8,
+  },
+  rejectedTitle: {
+    color: '#b91c1c',
+  },
   saveRow: {
     flexDirection: 'row',
     gap: 8,
+    marginTop: 8,
+  },
+  saveSingle: {
     marginTop: 8,
   },
   noAccess: {

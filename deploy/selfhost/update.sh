@@ -42,6 +42,7 @@ main() {
 
   log "Обновляю контейнеры (если изменились настройки)"
   (cd "$SUPABASE_DIR" && sh run.sh start)
+  tune_database
   if [ -n "$functions_changed" ]; then
     info "Edge Functions изменились — перезапускаю"
     compose restart functions >/dev/null
