@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import type { ScheduleDayStatus, ScheduleMode } from '../types/database';
 
@@ -32,19 +32,27 @@ export interface ScheduleDay {
   end_time: string | null;
 }
 
-// Отметки дней одного сотрудника (экран «График» / «Мой график»). День без
-// строки — статус по умолчанию из employees.schedule_mode (см.
-// effectiveScheduleStatus); он же определяет, что предлагать при первой
-// отметке ранее не тронутого дня.
-export function useEmployeeScheduleDays(employeeId: string | undefined) {
+// Отметки дней одного сотрудника за месяц (экран «График» / «Мой
+// график»). День без строки — статус по умолчанию из employees.
+// schedule_mode (см. effectiveScheduleStatus); он же определяет, что
+// предлагать при первой отметке ранее не тронутого дня. Только показанный
+// месяц, а не вся история: за несколько лет отметок набирается больше 1000
+// — столько API отдаёт за раз, и остальное (в том числе текущий месяц)
+// молча отрезалось бы.
+export function useEmployeeScheduleDays(employeeId: string | undefined, month: Date) {
+  const from = toDateKey(new Date(month.getFullYear(), month.getMonth(), 1));
+  const to = toDateKey(new Date(month.getFullYear(), month.getMonth() + 1, 0));
   return useQuery({
-    queryKey: ['schedule-days', employeeId],
+    queryKey: ['schedule-days', employeeId, from],
     enabled: Boolean(employeeId),
+    placeholderData: keepPreviousData,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('employee_schedule_days')
         .select('day, status, start_time, end_time')
-        .eq('employee_id', employeeId as string);
+        .eq('employee_id', employeeId as string)
+        .gte('day', from)
+        .lte('day', to);
       if (error) throw error;
       const map = new Map<string, ScheduleDay>();
       for (const row of data as { day: string; status: ScheduleDayStatus; start_time: string | null; end_time: string | null }[]) {

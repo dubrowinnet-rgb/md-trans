@@ -469,6 +469,7 @@ main() {
   start_stack
   # Контейнер функций мог уже работать со старыми файлами (повторный запуск).
   compose restart functions >/dev/null
+  tune_database
 
   log "Накатываю миграции базы"
   run_migrations

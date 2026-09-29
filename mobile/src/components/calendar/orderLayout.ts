@@ -1,4 +1,4 @@
-import type { OrderWithDetails } from '../../api/orders';
+import type { CalendarOrder } from '../../api/orders';
 
 export const PAST_ORDER_COLOR = '#6B6B6B';
 export const DEFAULT_ORDER_COLOR = '#8E24AA';
@@ -7,7 +7,7 @@ export const DEFAULT_ORDER_COLOR = '#8E24AA';
 // отмеченный «выполнен» (старые заказы — статус больше не выставляется
 // вручную, см. api/orders.ts ACTIVE_ORDER_STATUS) или отменённый заказ —
 // серый (раздел «баги 3», п.8, дополнено доработками 2, п.2).
-export function orderColor(order: OrderWithDetails, now: Date) {
+export function orderColor(order: CalendarOrder, now: Date) {
   if (order.status === 'cancelled' || order.status === 'completed' || new Date(order.scheduled_end) <= now) {
     return PAST_ORDER_COLOR;
   }
@@ -15,20 +15,20 @@ export function orderColor(order: OrderWithDetails, now: Date) {
 }
 
 export interface PlacedOrder {
-  order: OrderWithDetails;
+  order: CalendarOrder;
   lane: number;
   lanes: number;
 }
 
 // Пересекающиеся по времени заказы одного дня ставим рядом, а не друг на друга.
-export function layoutDayOrders(orders: OrderWithDetails[]): PlacedOrder[] {
+export function layoutDayOrders(orders: CalendarOrder[]): PlacedOrder[] {
   const sorted = [...orders].sort(
     (a, b) =>
       new Date(a.scheduled_start).getTime() - new Date(b.scheduled_start).getTime() ||
       new Date(b.scheduled_end).getTime() - new Date(a.scheduled_end).getTime()
   );
   const result: PlacedOrder[] = [];
-  let cluster: { order: OrderWithDetails; lane: number }[] = [];
+  let cluster: { order: CalendarOrder; lane: number }[] = [];
   let laneEnds: number[] = [];
   let clusterEnd = -Infinity;
 

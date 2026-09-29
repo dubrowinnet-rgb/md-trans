@@ -8,7 +8,7 @@ import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from 'react-native';
-import type { OrderWithDetails } from '../../api/orders';
+import type { CalendarOrder } from '../../api/orders';
 import { PAGES_AROUND, type DaysMode } from '../../hooks/useCalendarNav';
 import { useNow } from '../../hooks/useNow';
 import { addDays, differenceInCalendarDays, minutesFromDayStart, PIXELS_PER_MINUTE } from '../../utils/date';
@@ -25,8 +25,8 @@ export function PagedCalendar(props: {
   mode: DaysMode;
   anchor: Date;
   onAnchorChange: (date: Date) => void;
-  orders: OrderWithDetails[];
-  onPressOrder: (order: OrderWithDetails) => void;
+  orders: CalendarOrder[];
+  onPressOrder: (order: CalendarOrder) => void;
   onPressSlot?: (date: Date) => void;
   scrollToNowSignal: number;
 }) {
@@ -66,7 +66,7 @@ function PagedCalendarInner({
   );
 
   const ordersByDay = useMemo(() => {
-    const map = new Map<number, OrderWithDetails[]>();
+    const map = new Map<number, CalendarOrder[]>();
     for (const order of orders) {
       const index = differenceInCalendarDays(new Date(order.scheduled_start), firstDay);
       const list = map.get(index);

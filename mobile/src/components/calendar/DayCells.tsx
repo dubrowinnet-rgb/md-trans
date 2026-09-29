@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, View, type GestureResponderEvent } from 'react-native';
 import { Text } from 'react-native-paper';
-import type { OrderWithDetails } from '../../api/orders';
+import type { CalendarOrder } from '../../api/orders';
 import { OrderBlock } from './OrderBlock';
 import { layoutDayOrders } from './orderLayout';
 import {
@@ -86,11 +86,11 @@ export function DayBody({
   onPressSlot,
 }: {
   date: Date;
-  orders: OrderWithDetails[];
+  orders: CalendarOrder[];
   width: number;
   now: Date;
   compact: boolean;
-  onPressOrder: (order: OrderWithDetails) => void;
+  onPressOrder: (order: CalendarOrder) => void;
   onPressSlot?: (date: Date) => void;
 }) {
   const kind = dayKind(date, now);

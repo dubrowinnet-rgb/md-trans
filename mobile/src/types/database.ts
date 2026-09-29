@@ -28,6 +28,16 @@ export type CrewStatus = 'notified' | 'read' | 'confirmed';
 export type ScheduleMode = 'mark_off' | 'mark_on';
 export type ScheduleDayStatus = 'off' | 'on';
 
+// Ответ company_order_stats (миграция 0020).
+export interface CompanyOrderStats {
+  total: number;
+  active: number;
+  completed: number;
+  cancelled: number;
+  revenue: number;
+  employees: { employee_id: string; orders: number; revenue: number }[];
+}
+
 export interface Database {
   public: {
     Tables: {
@@ -485,6 +495,25 @@ export interface Database {
       reject_driver_report: {
         Args: { p_report_id: string; p_comment: string };
         Returns: undefined;
+      };
+      // Миграция 0020: подсчёты на сервере вместо скачивания всех строк.
+      company_order_stats: {
+        Args: { p_from?: string | null; p_to?: string | null };
+        Returns: CompanyOrderStats;
+      };
+      client_stats: {
+        Args: { p_client_id?: string | null };
+        Returns: {
+          client_id: string;
+          orders_count: number;
+          completed_count: number;
+          revenue: number;
+          last_order_at: string | null;
+        }[];
+      };
+      driver_reports_pending: {
+        Args: Record<string, never>;
+        Returns: { employee_id: string; pending: number }[];
       };
     };
     Enums: Record<string, never>;

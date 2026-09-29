@@ -1,5 +1,8 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useCallback } from 'react';
+import { keepPreviousData, useMutation, useQueries, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
+import { addDays } from 'date-fns';
 import { supabase } from '../lib/supabase';
+import { selectAll } from '../lib/selectAll';
 import { sendPushNotifications } from '../lib/pushNotifications';
 import type { CrewStatus, Database, EmployeeRole, OrderStatus, StopType } from '../types/database';
 
@@ -21,28 +24,74 @@ export interface OrderWithDetails extends OrderRow {
 const ORDER_SELECT =
   '*, clients(id, name, phone, discount_percent), order_stops(*), order_crew(*, employees(id, name, role)), order_services(qty, services(id, name, color)), vehicles(id, name, plate)';
 
-export function useOrdersForRange(rangeStart: Date, rangeEnd: Date) {
-  const startIso = rangeStart.toISOString();
-  const endIso = rangeEnd.toISOString();
+// Заказ в сетке календаря (components/calendar/*) — только то, что там
+// рисуется. Полностью заказ загружается при открытии (useOrder).
+export interface CalendarOrder {
+  id: string;
+  status: OrderStatus;
+  scheduled_start: string;
+  scheduled_end: string;
+  cargo_description: string | null;
+  clients: { name: string } | null;
+  order_stops: Pick<StopRow, 'type' | 'address' | 'is_primary'>[];
+  order_crew: Pick<CrewRow, 'employee_id' | 'role' | 'status'>[];
+  order_services: { services: Pick<ServiceRow, 'name' | 'color'> | null }[];
+}
 
-  return useQuery({
-    queryKey: ['orders', startIso, endIso],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('orders')
-        .select(ORDER_SELECT)
-        .lt('scheduled_start', endIso)
-        .gt('scheduled_end', startIso)
-        .order('scheduled_start', { ascending: true });
-      if (error) throw error;
-      return data as unknown as OrderWithDetails[];
-    },
-    // При листании календаря диапазон меняется — держим прошлые данные, пока
-    // грузятся новые, чтобы сетка не мигала и не сбрасывала прокрутку.
-    placeholderData: keepPreviousData,
+const CALENDAR_SELECT =
+  'id, status, scheduled_start, scheduled_end, cargo_description, clients(name), order_stops(type, address, is_primary), order_crew(employee_id, role, status), order_services(services(name, color))';
+// Второй раз order_crew — только как фильтр «я в бригаде»: полная бригада
+// в карточке остаётся.
+const CALENDAR_SELECT_MINE = `${CALENDAR_SELECT}, mine:order_crew!inner(employee_id)`;
+
+// Заказы календаря — отдельным запросом на каждую страницу (1, 3 или 7
+// дней), а не одним на все пять отрисованных: при листании четыре страницы
+// уже в кэше и догружается одна (раньше каждое перелистывание заново
+// тянуло 15–35 дней заказов). onlyEmployeeId — календарь водителя/грузчика:
+// сервер сразу отдаёт только его заказы, без заказов всей компании.
+export function useCalendarOrders(pageStarts: Date[], days: number, onlyEmployeeId?: string) {
+  const combine = useCallback((results: UseQueryResult<CalendarOrder[]>[]) => {
+    const byId = new Map<string, CalendarOrder>();
+    for (const result of results) {
+      for (const order of result.data ?? []) byId.set(order.id, order);
+    }
+    return {
+      orders: [...byId.values()],
+      isFetching: results.some((r) => r.isFetching),
+      error: results.find((r) => r.error)?.error ?? null,
+    };
+  }, []);
+
+  return useQueries({
+    queries: pageStarts.map((pageStart) => {
+      const startIso = pageStart.toISOString();
+      const endIso = addDays(pageStart, days).toISOString();
+      return {
+        queryKey: ['orders', 'calendar', startIso, endIso, onlyEmployeeId ?? null],
+        queryFn: () =>
+          selectAll<CalendarOrder>((from, to) => {
+            let query = supabase
+              .from('orders')
+              .select(onlyEmployeeId ? CALENDAR_SELECT_MINE : CALENDAR_SELECT)
+              .lt('scheduled_start', endIso)
+              .gt('scheduled_end', startIso);
+            if (onlyEmployeeId) query = query.eq('mine.employee_id', onlyEmployeeId);
+            return query.order('scheduled_start', { ascending: true }).order('id', { ascending: true }).range(from, to);
+          }),
+        // Пока страница грузится, показываем то, что было на этом месте,
+        // чтобы сетка не мигала.
+        placeholderData: keepPreviousData,
+        staleTime: 30_000,
+      };
+    }),
+    combine,
   });
 }
 
+// Кто занят в это время (подсказка в форме заказа и в выборе бригады).
+// Ищем от заказов, пересекающихся по времени, — база находит их по
+// индексу «компания + время». Прежний запрос от order_crew с фильтром по
+// вложенному заказу перебирал всю таблицу бригад: 0,3–1 с на большой базе.
 export function useBusyEmployeeIds(start: Date | null, end: Date | null) {
   const startIso = start?.toISOString() ?? null;
   const endIso = end?.toISOString() ?? null;
@@ -51,14 +100,17 @@ export function useBusyEmployeeIds(start: Date | null, end: Date | null) {
     queryKey: ['busy-employees', startIso, endIso],
     enabled: Boolean(startIso && endIso),
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('order_crew')
-        .select('employee_id, orders!inner(id, scheduled_start, scheduled_end, status)')
-        .neq('orders.status', 'cancelled')
-        .lt('orders.scheduled_start', endIso as string)
-        .gt('orders.scheduled_end', startIso as string);
-      if (error) throw error;
-      return new Set((data as { employee_id: string }[]).map((row) => row.employee_id));
+      const rows = await selectAll<{ order_crew: { employee_id: string }[] }>((from, to) =>
+        supabase
+          .from('orders')
+          .select('id, order_crew(employee_id)')
+          .neq('status', 'cancelled')
+          .lt('scheduled_start', endIso as string)
+          .gt('scheduled_end', startIso as string)
+          .order('id', { ascending: true })
+          .range(from, to)
+      );
+      return new Set(rows.flatMap((order) => order.order_crew.map((c) => c.employee_id)));
     },
   });
 }

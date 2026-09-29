@@ -3,7 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { Appbar, Banner, FAB, ProgressBar } from 'react-native-paper';
 import { useEmployees } from '../../api/employees';
-import { useOrdersForRange, type OrderWithDetails } from '../../api/orders';
+import { useCalendarOrders, type CalendarOrder } from '../../api/orders';
 import { AccountMenu } from '../../components/layout/AccountMenu';
 import { NotificationBell } from '../../components/layout/NotificationBell';
 import { useSession } from '../../providers/SessionProvider';
@@ -23,8 +23,8 @@ export default function DispatcherCalendarScreen() {
   const employeesQuery = useEmployees();
   const employees = employeesQuery.data ?? [];
 
-  const ordersQuery = useOrdersForRange(nav.rangeStart, nav.rangeEnd);
-  const allOrders = ordersQuery.data ?? [];
+  const ordersQuery = useCalendarOrders(nav.pageStarts, nav.mode);
+  const allOrders = ordersQuery.orders;
   const orders =
     activeEmployeeId === ALL_EMPLOYEES
       ? allOrders
@@ -47,7 +47,7 @@ export default function DispatcherCalendarScreen() {
     },
     [activeEmployeeId, canManage]
   );
-  const openOrder = useCallback((order: OrderWithDetails) => router.push(`/order/${order.id}`), []);
+  const openOrder = useCallback((order: CalendarOrder) => router.push(`/order/${order.id}`), []);
 
   return (
     <View style={styles.container}>

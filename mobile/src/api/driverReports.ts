@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { supabase } from '../lib/supabase';
 import { sendPushNotifications } from '../lib/pushNotifications';
+import { shrinkPhoto } from '../lib/shrinkPhoto';
 import type { Database, DriverReportStatus, FuelPaymentMethod } from '../types/database';
 
 export type DriverReportOrderRow = Database['public']['Tables']['driver_report_orders']['Row'];
@@ -149,14 +150,17 @@ export function useReportDrivers() {
   return useQuery({
     queryKey: ['driver-report-drivers'],
     queryFn: async (): Promise<ReportDriver[]> => {
+      // Число «на проверке» считает база (driver_reports_pending, миграция
+      // 0020): список отчётов целиком у большой компании упирался в лимит
+      // API в 1000 строк, и счётчики выходили меньше настоящих.
       const [driversRes, pendingRes] = await Promise.all([
         supabase.from('employees').select('id, name, last_name').eq('role', 'driver').order('name'),
-        supabase.from('driver_reports').select('employee_id').eq('status', 'submitted'),
+        supabase.rpc('driver_reports_pending', {}),
       ]);
       if (driversRes.error) throw driversRes.error;
       if (pendingRes.error) throw pendingRes.error;
       const pendingBy = new Map<string, number>();
-      for (const r of pendingRes.data ?? []) pendingBy.set(r.employee_id, (pendingBy.get(r.employee_id) ?? 0) + 1);
+      for (const r of pendingRes.data ?? []) pendingBy.set(r.employee_id, Number(r.pending));
       return (driversRes.data ?? []).map((d) => ({ ...d, pending: pendingBy.get(d.id) ?? 0 }));
     },
   });
@@ -271,14 +275,14 @@ export function useRejectDriverReport() {
 
 // Заливка фото одометра в публичный бакет (миграция 0014) — обычная
 // функция, а не мутация: вызывается сразу после выбора фото, результат
-// (URL) живёт в состоянии формы до сохранения всего отчёта.
+// (URL) живёт в состоянии формы до сохранения всего отчёта. Перед заливкой
+// снимок уменьшается (lib/shrinkPhoto.ts) и всегда сохраняется в JPEG.
 export async function uploadOdometerPhoto(employeeId: string, uri: string): Promise<string> {
-  const response = await fetch(uri);
+  const response = await fetch(await shrinkPhoto(uri));
   const blob = await response.blob();
-  const ext = uri.split('.').pop()?.toLowerCase().split('?')[0] || 'jpg';
-  const path = `${employeeId}/${Date.now()}.${ext}`;
+  const path = `${employeeId}/${Date.now()}.jpg`;
   const { error } = await supabase.storage.from('odometer-photos').upload(path, blob, {
-    contentType: blob.type || 'image/jpeg',
+    contentType: 'image/jpeg',
   });
   if (error) throw error;
   const { data } = supabase.storage.from('odometer-photos').getPublicUrl(path);

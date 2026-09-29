@@ -2,13 +2,15 @@ import { useCallback } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { Appbar, Banner, ProgressBar, Text } from 'react-native-paper';
-import { useOrdersForRange, type OrderWithDetails } from '../../api/orders';
+import { useCalendarOrders, type CalendarOrder } from '../../api/orders';
 import { useSession } from '../../providers/SessionProvider';
 import { useCalendarNav } from '../../hooks/useCalendarNav';
 import { PagedCalendar } from '../../components/calendar/PagedCalendar';
 import { CalendarToolbar } from '../../components/calendar/CalendarToolbar';
 import { AccountMenu } from '../../components/layout/AccountMenu';
 import { formatHeaderDate, startOfMonth } from '../../utils/date';
+
+const NO_PAGES: Date[] = [];
 
 // Календарь водителя/грузчика: та же сетка, только собственные заказы и без
 // создания. minAnchor — назад можно листать только в пределах текущего
@@ -18,11 +20,11 @@ export default function EmployeeCalendarScreen() {
   const { employee } = useSession();
   const nav = useCalendarNav({ minAnchor: startOfMonth(new Date()) });
 
-  const ordersQuery = useOrdersForRange(nav.rangeStart, nav.rangeEnd);
-  const orders = (ordersQuery.data ?? []).filter((o) =>
-    o.order_crew.some((c) => c.employee_id === employee?.id)
-  );
-  const openOrder = useCallback((order: OrderWithDetails) => router.push(`/order/${order.id}`), []);
+  // Сервер отдаёт только заказы, где он в бригаде (раньше грузились заказы
+  // всей компании и фильтровались уже на телефоне).
+  const ordersQuery = useCalendarOrders(employee ? nav.pageStarts : NO_PAGES, nav.mode, employee?.id);
+  const orders = ordersQuery.orders;
+  const openOrder = useCallback((order: CalendarOrder) => router.push(`/order/${order.id}`), []);
 
   return (
     <View style={styles.container}>
@@ -47,7 +49,7 @@ export default function EmployeeCalendarScreen() {
 
       <CalendarToolbar mode={nav.mode} onPrev={nav.goPrev} onNext={nav.goNext} onSetMode={nav.setMode} disablePrev={nav.atMinAnchor} />
 
-      <Banner visible={ordersQuery.isError} icon="alert-circle-outline">
+      <Banner visible={Boolean(ordersQuery.error)} icon="alert-circle-outline">
         {`Ошибка загрузки заказов: ${ordersQuery.error?.message ?? ''}`}
       </Banner>
       {/* Обёртка с фиксированной высотой: в браузере ProgressBar растягивается на 100%. */}

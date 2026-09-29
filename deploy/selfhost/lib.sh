@@ -181,6 +181,38 @@ end \$\$;
 SQL
 }
 
+# Память базы под размер сервера. Официальная сборка Supabase рассчитана на
+# маленькую машину (кэш базы 128 МБ): на нагрузочном тесте (1000 компаний,
+# год заказов) база то и дело читала данные мимо кэша, и сервер захлёбывался
+# раньше. База делит сервер с остальными частями Supabase и веб-кабинетом,
+# поэтому её кэшу — 1/8 памяти сервера. Настройки хранятся в самой базе
+# (ALTER SYSTEM) и переживают перезапуски. Базу перезапускает, только если
+# размер кэша изменился (первая установка или сервер с другой памятью) —
+# это несколько секунд без ответа API.
+tune_database() {
+  local mem_mb shared_mb
+  mem_mb=$(awk '/^MemTotal:/ { print int($2 / 1024) }' /proc/meminfo)
+  shared_mb=$((mem_mb / 8))
+  [ "$shared_mb" -ge 128 ] || shared_mb=128
+  docker exec -i -e PGOPTIONS='-c client_min_messages=warning' supabase-db \
+    psql -X -q -v ON_ERROR_STOP=1 -U supabase_admin -d postgres >/dev/null <<SQL
+alter system set shared_buffers = '${shared_mb}MB';
+alter system set effective_cache_size = '$((mem_mb / 2))MB';
+alter system set work_mem = '16MB';
+alter system set maintenance_work_mem = '256MB';
+alter system set random_page_cost = 1.1;
+alter system set effective_io_concurrency = 200;
+select pg_reload_conf();
+SQL
+  sleep 2
+  if [ "$(db_psql -tA -c "select pending_restart from pg_settings where name = 'shared_buffers'")" = "t" ]; then
+    info "Перезапускаю базу с новыми настройками памяти"
+    compose restart db >/dev/null
+    (cd "$SUPABASE_DIR" && sh run.sh start) \
+      || die "После перезапуска база не поднялась. Посмотреть состояние: cd $SUPABASE_DIR && sh run.sh status — и пришлите Claude, что там написано."
+  fi
+}
+
 # --- Edge Functions --------------------------------------------------------
 
 # Копирует функции из репозитория в папку, которую читает контейнер

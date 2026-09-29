@@ -76,7 +76,7 @@ export function ScheduleCalendar({
 }) {
   const today = new Date();
   const [cursor, setCursor] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1));
-  const daysQuery = useEmployeeScheduleDays(employeeId);
+  const daysQuery = useEmployeeScheduleDays(employeeId, cursor);
   const days = daysQuery.data ?? new Map<string, ScheduleDay>();
   const setDay = useSetScheduleDay();
   const clearDay = useClearScheduleDay();

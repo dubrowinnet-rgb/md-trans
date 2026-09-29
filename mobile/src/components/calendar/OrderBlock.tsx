@@ -1,9 +1,9 @@
 import { Pressable, StyleSheet, Text } from 'react-native';
-import type { OrderWithDetails } from '../../api/orders';
+import type { CalendarOrder } from '../../api/orders';
 import { formatTime, minutesFromDayStart, PIXELS_PER_MINUTE, GRID_HEIGHT } from '../../utils/date';
 import { orderColor } from './orderLayout';
 
-function crewConfirmed(order: OrderWithDetails) {
+function crewConfirmed(order: CalendarOrder) {
   if (order.order_crew.length === 0) return null;
   const confirmed = order.order_crew.filter((c) => c.status === 'confirmed').length;
   return `${confirmed}/${order.order_crew.length} приняли`;
@@ -22,13 +22,13 @@ export function OrderBlock({
   compact,
   onPress,
 }: {
-  order: OrderWithDetails;
+  order: CalendarOrder;
   lane: number;
   lanes: number;
   columnWidth: number;
   now: Date;
   compact: boolean;
-  onPress: (order: OrderWithDetails) => void;
+  onPress: (order: CalendarOrder) => void;
 }) {
   const start = new Date(order.scheduled_start);
   const end = new Date(order.scheduled_end);
