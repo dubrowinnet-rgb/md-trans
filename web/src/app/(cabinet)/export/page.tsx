@@ -103,8 +103,8 @@ export default function ExportPage() {
   const to = dayjs(range[1] ? fromDateKey(range[1]) : from).add(1, 'day').toDate();
 
   const clientsQuery = useQuery({
-    queryKey: ['clients', 'with-stats', companyId],
-    queryFn: () => fetchClientsWithStats(companyId),
+    queryKey: ['clients', 'with-stats', companyId, allowed.stats],
+    queryFn: () => fetchClientsWithStats(companyId, allowed.stats),
     enabled: dataset === 'clients',
   });
   const ordersQuery = useQuery({
@@ -209,12 +209,19 @@ export default function ExportPage() {
                 <SegmentedControl
                   value={segment}
                   onChange={(v) => setSegment(v as ClientSegment)}
-                  data={[
-                    { value: 'all', label: 'Все' },
-                    { value: 'with-orders', label: 'С заказами' },
-                    { value: 'no-orders', label: 'Без заказов' },
-                    { value: 'discount', label: 'Со скидкой' },
-                  ]}
+                  data={
+                    allowed.stats
+                      ? [
+                          { value: 'all', label: 'Все' },
+                          { value: 'with-orders', label: 'С заказами' },
+                          { value: 'no-orders', label: 'Без заказов' },
+                          { value: 'discount', label: 'Со скидкой' },
+                        ]
+                      : [
+                          { value: 'all', label: 'Все' },
+                          { value: 'discount', label: 'Со скидкой' },
+                        ]
+                  }
                 />
               ) : (
                 <Group align="flex-end">

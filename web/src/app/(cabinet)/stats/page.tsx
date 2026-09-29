@@ -61,7 +61,7 @@ export default function StatsPage() {
     return null;
   }, [period, custom]);
 
-  const statsQuery = useStatsOverview(range);
+  const statsQuery = useStatsOverview(range, employee?.role === 'admin');
   const stats = statsQuery.data;
 
   if (employee?.role !== 'admin') {

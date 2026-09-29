@@ -3,7 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { fetchAllPages, isMissingFunction } from '@/lib/supabaseQuery';
 import { useCompanyId } from '@/providers/SessionProvider';
 import { isOrderCompleted, orderBucket, type OrderBucket } from '@/lib/orderCompletion';
-import type { AccountRole, OrderStatus, StatsOverviewResult } from '@/types/database';
+import type { AccountRole, CompanyOrderStats, OrderStatus } from '@/types/database';
 
 export interface EmployeeStat {
   id: string;
@@ -33,16 +33,19 @@ interface StatsOrderRow {
 // отменённые (lib/orderCompletion.ts) и выручка по завершённым; по
 // сотруднику — те же два среза, посчитанные по его заказам (в бригаде —
 // для водителя/грузчика, среди созданных — для диспетчера/админа через
-// orders.created_by, миграция 0006). Считает база (stats_overview) — раньше
-// кабинет скачивал все заказы периода и видел из них только первую 1000.
+// orders.created_by, миграция 0006). Считает база (company_order_stats,
+// миграция 0020) — раньше кабинет скачивал все заказы периода и видел из
+// них только первую 1000.
 // В кабинете, в отличие от мобильного приложения, можно выбрать период
-// (по дате начала заказа); range = null — за всё время.
-export function useStatsOverview(range: { from: Date; to: Date } | null) {
+// (по дате начала заказа); range = null — за всё время. enabled = false —
+// не спрашивать (статистику база отдаёт только администратору).
+export function useStatsOverview(range: { from: Date; to: Date } | null, enabled = true) {
   const companyId = useCompanyId();
   const fromIso = range?.from.toISOString() ?? null;
   const toIso = range?.to.toISOString() ?? null;
   return useQuery({
     queryKey: ['stats-overview', companyId, fromIso, toIso],
+    enabled,
     // Сводка за длинный период тяжёлая, а смотрят её не поминутно.
     staleTime: 5 * 60 * 1000,
     queryFn: async (): Promise<StatsOverview> => {
@@ -61,13 +64,13 @@ export function useStatsOverview(range: { from: Date; to: Date } | null) {
           id: a.id,
           name: a.name,
           role: a.role,
-          ordersCount: perEmployee.get(a.id)?.orders_count ?? 0,
+          ordersCount: perEmployee.get(a.id)?.orders ?? 0,
           revenue: Number(perEmployee.get(a.id)?.revenue ?? 0),
         }))
         .sort((a, b) => b.ordersCount - a.ordersCount);
 
       return {
-        totalOrders: overview.total_orders,
+        totalOrders: overview.total,
         ordersByBucket: { active: overview.active, completed: overview.completed, cancelled: overview.cancelled },
         totalRevenue: Number(overview.revenue),
         employees,
@@ -76,9 +79,9 @@ export function useStatsOverview(range: { from: Date; to: Date } | null) {
   });
 }
 
-async function fetchOverview(companyId: string | null, fromIso: string | null, toIso: string | null): Promise<StatsOverviewResult> {
-  const { data, error } = await supabase.rpc('stats_overview', { p_from: fromIso, p_to: toIso });
-  if (!error) return data as StatsOverviewResult;
+async function fetchOverview(companyId: string | null, fromIso: string | null, toIso: string | null): Promise<CompanyOrderStats> {
+  const { data, error } = await supabase.rpc('company_order_stats', { p_from: fromIso, p_to: toIso });
+  if (!error) return data as CompanyOrderStats;
   if (!isMissingFunction(error)) throw error;
 
   // В базе ещё нет функции (миграция не запущена) — считаем сами, как
@@ -91,8 +94,8 @@ async function fetchOverview(companyId: string | null, fromIso: string | null, t
   });
 
   const now = new Date();
-  const result: StatsOverviewResult = { total_orders: orders.length, active: 0, completed: 0, cancelled: 0, revenue: 0, employees: [] };
-  const perEmployee = new Map<string, { employee_id: string; orders_count: number; revenue: number }>();
+  const result: CompanyOrderStats = { total: orders.length, active: 0, completed: 0, cancelled: 0, revenue: 0, employees: [] };
+  const perEmployee = new Map<string, { employee_id: string; orders: number; revenue: number }>();
   for (const order of orders) {
     result[orderBucket(order, now)] += 1;
     const isCompleted = isOrderCompleted(order, now);
@@ -103,8 +106,8 @@ async function fetchOverview(companyId: string | null, fromIso: string | null, t
     if (order.created_by) creditedIds.add(order.created_by);
 
     for (const employeeId of creditedIds) {
-      const entry = perEmployee.get(employeeId) ?? { employee_id: employeeId, orders_count: 0, revenue: 0 };
-      entry.orders_count += 1;
+      const entry = perEmployee.get(employeeId) ?? { employee_id: employeeId, orders: 0, revenue: 0 };
+      entry.orders += 1;
       if (isCompleted) entry.revenue += Number(order.actual_price ?? 0);
       perEmployee.set(employeeId, entry);
     }

@@ -32,6 +32,11 @@ export function isMissingFunction(error: unknown): boolean {
   return errorCode(error) === 'PGRST202';
 }
 
+// Функция базы отказала по правам (raise … using errcode = '42501').
+export function isPermissionDenied(error: unknown): boolean {
+  return errorCode(error) === '42501';
+}
+
 // Повторяем только сбой связи (кода нет) и недоступность базы (PGRST000–003).
 // Ошибки прав и данных повтор не исправит, а при перегрузке сервера
 // лишние повторы от тысяч открытых кабинетов только добавят нагрузки.

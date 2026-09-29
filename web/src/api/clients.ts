@@ -1,6 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
-import { fetchAllPages, isMissingFunction } from '@/lib/supabaseQuery';
+import { fetchAllPages, isMissingFunction, isPermissionDenied } from '@/lib/supabaseQuery';
 import { useCompanyId } from '@/providers/SessionProvider';
 import { formatPhone } from '@/lib/phone';
 import { isOrderCompleted } from '@/lib/orderCompletion';
@@ -17,19 +17,21 @@ export interface ClientWithStats extends Client {
   lastOrderAt: string | null;
 }
 
-type ClientOrderStats = Database['public']['Functions']['client_order_stats']['Returns'][number];
+type ClientOrderStats = Database['public']['Functions']['client_stats']['Returns'][number];
 
 // Вся база клиентов разом: в мобильном приложении поиск отдаёт первые 30,
 // а в кабинете нужна полная таблица с сортировкой и выгрузкой. Клиентов
-// забираем страницами по 1000, сводку по заказам считает база.
-export async function fetchClientsWithStats(companyId: string | null): Promise<ClientWithStats[]> {
+// забираем страницами по 1000, сводку по заказам считает база. withStats —
+// видит ли вошедший статистику клиентов (canViewClientStats): без этого
+// права база её не отдаёт, и кабинет её не запрашивает.
+export async function fetchClientsWithStats(companyId: string | null, withStats: boolean): Promise<ClientWithStats[]> {
   const [clients, stats] = await Promise.all([
     fetchAllPages<Client>((from, to) => {
       let query = supabase.from('clients').select('*');
       if (companyId) query = query.eq('company_id', companyId);
       return query.order('name', { ascending: true }).order('id', { ascending: true }).range(from, to);
     }),
-    fetchClientOrderStats(companyId),
+    withStats ? fetchClientOrderStats(companyId) : Promise.resolve([]),
   ]);
   const byClient = new Map(stats.map((s) => [s.client_id, s]));
   return clients.map((c) => {
@@ -46,13 +48,17 @@ export async function fetchClientsWithStats(companyId: string | null): Promise<C
 
 // Раньше кабинет скачивал для сводки все заказы компании, а PostgREST
 // отдавал из них только первую 1000 — у компании постарше цифры были
-// неверными. Теперь одна строка на клиента из client_order_stats().
+// неверными. Теперь одна строка на клиента из client_stats() (миграция
+// 0020): функция возвращает строки, поэтому тоже по страницам.
 async function fetchClientOrderStats(companyId: string | null): Promise<ClientOrderStats[]> {
   try {
     return await fetchAllPages<ClientOrderStats>((from, to) =>
-      supabase.rpc('client_order_stats').order('client_id', { ascending: true }).range(from, to)
+      supabase.rpc('client_stats').order('client_id', { ascending: true }).range(from, to)
     );
   } catch (err) {
+    // Право на статистику только что сняли, а кабинет ещё помнит старое —
+    // показываем клиентов без цифр, а не ошибку.
+    if (isPermissionDenied(err)) return [];
     if (!isMissingFunction(err)) throw err;
   }
   // В базе ещё нет функции (миграция не запущена) — считаем сами, как
@@ -92,11 +98,11 @@ async function fetchClientOrderStats(companyId: string | null): Promise<ClientOr
   return [...byClient.values()];
 }
 
-export function useClientsWithStats() {
+export function useClientsWithStats(withStats: boolean) {
   const companyId = useCompanyId();
   return useQuery({
-    queryKey: ['clients', 'with-stats', companyId],
-    queryFn: () => fetchClientsWithStats(companyId),
+    queryKey: ['clients', 'with-stats', companyId, withStats],
+    queryFn: () => fetchClientsWithStats(companyId, withStats),
   });
 }
 

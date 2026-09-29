@@ -40,7 +40,7 @@ export default function ClientsPage() {
   const showPhone = canViewClientPhone(employee);
   const showStats = canViewClientStats(employee);
   const showAmount = showStats && canViewOrderAmount(employee);
-  const query = useClientsWithStats();
+  const query = useClientsWithStats(showStats);
   const ui = useOrderUI();
   const [search, setSearch] = useState('');
   const [segment, setSegment] = useState<Segment>('all');
@@ -118,13 +118,22 @@ export default function ClientsPage() {
               setSegment(v as Segment);
               setPage(1);
             }}
-            data={[
-              { value: 'all', label: 'Все' },
-              { value: 'with-orders', label: 'С заказами' },
-              { value: 'no-orders', label: 'Без заказов' },
-              { value: 'discount', label: 'Со скидкой' },
-              { value: 'sleeping', label: 'Не заказывали 6+ мес.' },
-            ]}
+            data={
+              // Срезы по заказам — это статистика клиента: без права на неё
+              // база цифр не отдаёт, остаются «Все» и «Со скидкой».
+              showStats
+                ? [
+                    { value: 'all', label: 'Все' },
+                    { value: 'with-orders', label: 'С заказами' },
+                    { value: 'no-orders', label: 'Без заказов' },
+                    { value: 'discount', label: 'Со скидкой' },
+                    { value: 'sleeping', label: 'Не заказывали 6+ мес.' },
+                  ]
+                : [
+                    { value: 'all', label: 'Все' },
+                    { value: 'discount', label: 'Со скидкой' },
+                  ]
+            }
           />
         </Group>
       </Paper>

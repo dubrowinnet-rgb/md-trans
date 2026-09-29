@@ -20,18 +20,19 @@ export type ScheduleDayStatus = 'off' | 'on';
 // Режим ставки водителя/грузчика (миграция 0014): combined — одна ставка
 // за час на любой роли в заказе; split — раздельно вождение/погрузка.
 export type RateMode = 'combined' | 'split';
-// 'confirmed' — «согласован», 'rejected' — «не согласован» (миграция 0019).
-// Ответ stats_overview(p_from, p_to): итоги компании за период и по
-// каждому сотруднику (в бригаде или создатель заказа, один раз на заказ).
-export interface StatsOverviewResult {
-  total_orders: number;
+// Ответ company_order_stats(p_from, p_to) (миграция 0020, как в мобильной
+// копии): итоги компании за период и по каждому сотруднику (в бригаде или
+// создатель заказа, один раз на заказ).
+export interface CompanyOrderStats {
+  total: number;
   active: number;
   completed: number;
   cancelled: number;
   revenue: number;
-  employees: { employee_id: string; orders_count: number; revenue: number }[];
+  employees: { employee_id: string; orders: number; revenue: number }[];
 }
 
+// 'confirmed' — «согласован», 'rejected' — «не согласован» (миграция 0019).
 export type DriverReportStatus = 'draft' | 'submitted' | 'confirmed' | 'rejected';
 export type FuelPaymentMethod = 'cash' | 'cashless';
 
@@ -516,11 +517,15 @@ export interface Database {
         Args: { p_report_id: string; p_comment: string };
         Returns: undefined;
       };
-      // Сводки для «Клиентов» и «Статистики», посчитанные в базе (нагрузка
-      // 2026-09-28, миграция треда приложения). Пока их нет в базе, кабинет
-      // считает сам по страницам заказов (isMissingFunction).
-      client_order_stats: {
-        Args: Record<string, never>;
+      // Миграция 0020: подсчёты на сервере вместо скачивания всех строк.
+      // Пока миграции нет в базе, кабинет считает сам по страницам заказов
+      // (isMissingFunction).
+      company_order_stats: {
+        Args: { p_from?: string | null; p_to?: string | null };
+        Returns: CompanyOrderStats;
+      };
+      client_stats: {
+        Args: { p_client_id?: string | null };
         Returns: {
           client_id: string;
           orders_count: number;
@@ -529,9 +534,9 @@ export interface Database {
           last_order_at: string | null;
         }[];
       };
-      stats_overview: {
-        Args: { p_from?: string | null; p_to?: string | null };
-        Returns: StatsOverviewResult;
+      driver_reports_pending: {
+        Args: Record<string, never>;
+        Returns: { employee_id: string; pending: number }[];
       };
     };
     Enums: Record<string, never>;
