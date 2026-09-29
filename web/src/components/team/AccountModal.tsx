@@ -113,6 +113,11 @@ export function AccountModal({ account, onClose }: { account: Account | null; on
   );
   const [vehicleId, setVehicleId] = useState<string | null>(account?.default_vehicle_id ?? null);
   const [error, setError] = useState<string | null>(null);
+  // Не ошибка — профиль и пароль сохранились, но новый телефон не
+  // применился для входа (обычно конфликт: номер уже занят другим
+  // сотрудником). Модалку в этом случае не закрываем сама — админ должен
+  // прочитать и решить, что делать с телефоном (см. useUpdateAccountProfile).
+  const [phoneWarning, setPhoneWarning] = useState<string | null>(null);
   const vehicles = useVehicles().data ?? [];
   const createAccount = useCreateAccount();
   const updateAccount = useUpdateAccount();
@@ -147,6 +152,7 @@ export function AccountModal({ account, onClose }: { account: Account | null; on
 
   const save = async () => {
     setError(null);
+    setPhoneWarning(null);
     if (!name.trim()) return setError('Укажите имя');
     if (!phone.trim()) return setError('Укажите номер телефона — по нему сотрудник будет входить');
     const vehicleForRole = role === 'driver' ? vehicleId : null;
@@ -182,12 +188,14 @@ export function AccountModal({ account, onClose }: { account: Account | null; on
       await updateEmployeeRates.mutateAsync({ id, rates });
     };
     try {
+      let phoneWarningResult: string | null = null;
       if (account) {
-        await updateProfile.mutateAsync({
+        const profileResult = await updateProfile.mutateAsync({
           id: account.id,
           password: password || undefined,
           ...profileFields,
         });
+        phoneWarningResult = profileResult.phone_warning;
         await updateAccount.mutateAsync({ id: account.id, role, permissions, default_vehicle_id: vehicleForRole });
         // Помимо самих водителей/грузчиков, шлём и когда у аккаунта раньше
         // уже была сохранена ставка — иначе при смене роли в диспетчеры
@@ -205,6 +213,12 @@ export function AccountModal({ account, onClose }: { account: Account | null; on
         if (isCrew) await saveRates(created.id);
       }
       notifications.show({ message: 'Аккаунт сохранён', color: 'green' });
+      // Остальное сохранилось, но если новый телефон не применился для
+      // входа — не закрываем модалку молча: админ должен это прочитать.
+      if (phoneWarningResult) {
+        setPhoneWarning(phoneWarningResult);
+        return;
+      }
       onClose();
     } catch (err) {
       setError(errorMessage(err, 'Не удалось сохранить'));
@@ -383,6 +397,7 @@ export function AccountModal({ account, onClose }: { account: Account | null; on
             ))}
           </Stack>
         )}
+        {phoneWarning && <Alert color="yellow">{phoneWarning}</Alert>}
         {error && <Alert color="red">{error}</Alert>}
         <Group justify="flex-end">
           <Button variant="default" onClick={onClose}>
