@@ -87,6 +87,11 @@ export function useCalendarOrders(pageStarts: Date[], days: number, onlyEmployee
         // чтобы сетка не мигала.
         placeholderData: keepPreviousData,
         staleTime: 30_000,
+        // Автосинхронизация раз в минуту, пока экран открыт (Максим,
+        // 30.09, «Правки 3», п.5) — по умолчанию останавливается, когда
+        // приложение свёрнуто (refetchIntervalInBackground не включён),
+        // так что в фоне лишней нагрузки нет.
+        refetchInterval: 60_000,
       };
     }),
     combine,
