@@ -14,9 +14,9 @@ export interface AccountPermissions {
 }
 
 // Все аккаунты (админы, диспетчеры, водители, грузчики) — для экрана
-// «Команда», который видит только администратор. deleted_at (миграция
-// 0021) — удалённый сотрудник здесь больше не показывается, хотя строка
-// в базе остаётся (на неё по-прежнему ссылаются его прошлые заказы).
+// «Команда», который видит только администратор. Уволенные (account_status
+// = 'suspended') остаются в списке — экран гасит их строку и показывает
+// бейдж «Уволен», а не прячет совсем, см. AccountDialog.tsx.
 export function useAllAccounts() {
   return useQuery({
     queryKey: ['accounts'],
@@ -24,7 +24,6 @@ export function useAllAccounts() {
       const { data, error } = await supabase
         .from('employees')
         .select('*')
-        .is('deleted_at', null)
         .order('role', { ascending: true })
         .order('name', { ascending: true });
       if (error) throw error;
@@ -157,19 +156,22 @@ export function useUpdateAccountProfile() {
   });
 }
 
-// Удалить сотрудника из «Команды» (Максим, 2026-09-29: «добавить кнопку
-// удалить профиль сотрудника на карточке») — через Edge Function
-// (supabase/functions/delete-account), не прямой UPDATE: удаление ещё и
-// блокирует вход через Supabase Auth (service role), с обычным ключом с
-// телефона это не сделать. Физически строка не удаляется — см. миграцию
-// 0021 и комментарий в самой функции.
-export function useDeleteAccount() {
+// Уволить / восстановить доступ сотрудника из «Команды» (Максим,
+// 2026-09-29: «добавить кнопку удалить профиль сотрудника на карточке») —
+// через Edge Function (supabase/functions/deactivate-account), не прямой
+// UPDATE: заодно блокирует/снимает блокировку входа через Supabase Auth
+// (service role), с обычным ключом с телефона это не сделать. Строка не
+// удаляется — на неё по-прежнему ссылаются прошлые заказы сотрудника, см.
+// миграцию 0022 и комментарий в самой функции.
+export function useSetAccountActive() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => {
-      const { data, error } = await supabase.functions.invoke<{ error?: string }>('delete-account', {
-        body: { id },
-      });
+    mutationFn: async ({ id, active }: { id: string; active: boolean }) => {
+      const { data, error } = await supabase.functions.invoke<{
+        employee: Account;
+        ban_warning?: string;
+        error?: string;
+      }>('deactivate-account', { body: { id, active } });
       if (error) {
         if (error instanceof FunctionsHttpError) {
           const body = await error.context.json().catch(() => null);
@@ -178,6 +180,7 @@ export function useDeleteAccount() {
         throw new Error(error.message);
       }
       if (data && 'error' in data && data.error) throw new Error(data.error);
+      return { employee: data!.employee, ban_warning: data?.ban_warning ?? null };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['accounts'] });

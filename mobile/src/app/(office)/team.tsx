@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { FlatList, StyleSheet, View } from 'react-native';
-import { ActivityIndicator, Appbar, Divider, FAB, HelperText, List, Text } from 'react-native-paper';
+import { ActivityIndicator, Appbar, Badge, Divider, FAB, HelperText, List, Text } from 'react-native-paper';
 import { useAllAccounts, type Account } from '../../api/accounts';
 import { AccountDialog } from '../../components/accounts/AccountDialog';
 import { AccountMenu } from '../../components/layout/AccountMenu';
@@ -34,14 +34,20 @@ export default function TeamScreen() {
             accountsQuery.isError ? <HelperText type="error">{accountsQuery.error.message}</HelperText> : null
           }
           ListEmptyComponent={<Text style={styles.empty}>Пока никого нет.</Text>}
-          renderItem={({ item }) => (
-            <List.Item
-              title={[item.name, item.last_name].filter(Boolean).join(' ')}
-              description={`${ACCOUNT_ROLE_LABELS[item.role]}${item.login ? ` · ${item.login}` : ''}${item.phone ? ` · ${formatPhone(item.phone)}` : ''}`}
-              left={(props) => <List.Icon {...props} icon={ACCOUNT_ROLE_ICONS[item.role]} />}
-              onPress={() => setEditing(item)}
-            />
-          )}
+          renderItem={({ item }) => {
+            const suspended = item.account_status === 'suspended';
+            return (
+              <List.Item
+                title={[item.name, item.last_name].filter(Boolean).join(' ')}
+                description={`${ACCOUNT_ROLE_LABELS[item.role]}${item.login ? ` · ${item.login}` : ''}${item.phone ? ` · ${formatPhone(item.phone)}` : ''}`}
+                left={(props) => <List.Icon {...props} icon={ACCOUNT_ROLE_ICONS[item.role]} />}
+                right={suspended ? () => <Badge style={styles.suspendedBadge}>Уволен</Badge> : undefined}
+                titleStyle={suspended ? styles.suspendedText : undefined}
+                descriptionStyle={suspended ? styles.suspendedText : undefined}
+                onPress={() => setEditing(item)}
+              />
+            );
+          }}
         />
       )}
       <FAB icon="account-plus" label="Добавить" style={styles.fab} onPress={() => setEditing('new')} />
@@ -70,5 +76,12 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 16,
     bottom: 16,
+  },
+  suspendedText: {
+    opacity: 0.5,
+  },
+  suspendedBadge: {
+    alignSelf: 'center',
+    backgroundColor: '#9ca3af',
   },
 });

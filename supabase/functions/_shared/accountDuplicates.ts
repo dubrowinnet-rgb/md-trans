@@ -10,9 +10,10 @@
 // Совпадение имени+фамилии Auth вообще не проверяет — целиком на этой
 // функции.
 //
-// Проверяем только среди «живых» (deleted_at is null) сотрудников той же
-// компании — удалённый однофамилец или прежний номер удалённого сотрудника
-// дублем не считаются.
+// Проверяем только среди действующих (account_status <> 'suspended')
+// сотрудников той же компании — уволенный однофамилец или прежний номер
+// уволенного сотрудника дублем не считаются (его телефон можно отдать
+// новому сотруднику).
 
 import type { SupabaseClient } from 'npm:@supabase/supabase-js@2';
 
@@ -25,7 +26,7 @@ export async function findDuplicateEmployee(
     .from('employees')
     .select('id, name, last_name, phone')
     .eq('company_id', companyId)
-    .is('deleted_at', null);
+    .neq('account_status', 'suspended');
   if (excludeId) query = query.neq('id', excludeId);
   const { data } = await query;
   if (!data) return null;

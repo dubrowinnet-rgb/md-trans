@@ -17,7 +17,7 @@ import { DatePickerModal } from 'react-native-paper-dates';
 import { differenceInYears, format } from 'date-fns';
 import {
   useCreateAccount,
-  useDeleteAccount,
+  useSetAccountActive,
   useUpdateAccount,
   useUpdateAccountProfile,
   type Account,
@@ -139,9 +139,10 @@ export function AccountDialog({ account, onClose }: { account: Account | null; o
   const updateAccount = useUpdateAccount();
   const updateProfile = useUpdateAccountProfile();
   const updateRates = useUpdateEmployeeRates();
-  const deleteAccount = useDeleteAccount();
+  const setAccountActive = useSetAccountActive();
   const saving = createAccount.isPending || updateAccount.isPending || updateProfile.isPending || updateRates.isPending;
-  const [confirmDelete, setConfirmDelete] = useState(false);
+  const isSuspended = account?.account_status === 'suspended';
+  const [confirmDeactivate, setConfirmDeactivate] = useState(false);
 
   const [name, setName] = useState(account?.name ?? '');
   const [lastName, setLastName] = useState(account?.last_name ?? '');
@@ -179,11 +180,13 @@ export function AccountDialog({ account, onClose }: { account: Account | null; o
     account?.loading_hourly_rate != null ? String(account.loading_hourly_rate) : ''
   );
   const [error, setError] = useState<string | null>(null);
-  // Не «ошибка» — профиль и пароль сохранились, но новый телефон не
-  // применился для входа (обычно конфликт: номер уже занят другим
-  // аккаунтом). Диалог в этом случае не закрываем сам — админ должен
-  // прочитать и решить, что делать с телефоном.
-  const [phoneWarning, setPhoneWarning] = useState<string | null>(null);
+  // Не «ошибка» — основное действие уже прошло (профиль и пароль
+  // сохранились, либо статус сотрудника сменился), но что-то с входом не
+  // применилось до конца: новый телефон (обычно конфликт — номер уже занят
+  // другим аккаунтом) или бан/разбан в Supabase Auth при увольнении/
+  // восстановлении. Диалог в этом случае не закрываем сам — админ должен
+  // прочитать и решить, что делать.
+  const [warning, setWarning] = useState<string | null>(null);
   const vehiclesQuery = useVehicles();
 
   const age = birthDate ? differenceInYears(new Date(), birthDate) : null;
@@ -203,7 +206,7 @@ export function AccountDialog({ account, onClose }: { account: Account | null; o
 
   const handleSave = async () => {
     setError(null);
-    setPhoneWarning(null);
+    setWarning(null);
     if (!name.trim()) {
       setError('Укажите имя');
       return;
@@ -258,7 +261,7 @@ export function AccountDialog({ account, onClose }: { account: Account | null; o
       // не удалось (см. useUpdateAccountProfile), не закрываем диалог молча:
       // админ должен это прочитать, а не решить, что всё прошло гладко.
       if (phoneWarningResult) {
-        setPhoneWarning(phoneWarningResult);
+        setWarning(phoneWarningResult);
         return;
       }
       onClose();
@@ -267,22 +270,45 @@ export function AccountDialog({ account, onClose }: { account: Account | null; o
     }
   };
 
-  const handleDelete = async () => {
+  const handleDeactivate = async () => {
     if (!account) return;
     try {
-      await deleteAccount.mutateAsync(account.id);
-      setConfirmDelete(false);
+      const result = await setAccountActive.mutateAsync({ id: account.id, active: false });
+      setConfirmDeactivate(false);
+      if (result.ban_warning) {
+        setWarning(result.ban_warning);
+        return;
+      }
       onClose();
     } catch (err) {
-      setConfirmDelete(false);
-      setError(err instanceof Error ? err.message : 'Не удалось удалить');
+      setConfirmDeactivate(false);
+      setError(err instanceof Error ? err.message : 'Не удалось уволить');
+    }
+  };
+
+  // Восстановление доступа не так разрушительно, как увольнение — не
+  // просит подтверждения отдельным диалогом.
+  const handleRestore = async () => {
+    if (!account) return;
+    try {
+      const result = await setAccountActive.mutateAsync({ id: account.id, active: true });
+      if (result.ban_warning) {
+        setWarning(result.ban_warning);
+        return;
+      }
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось восстановить доступ');
     }
   };
 
   return (
     <Portal>
-      <Dialog visible={!confirmDelete} onDismiss={onClose} style={styles.dialog}>
-        <Dialog.Title>{account ? account.name : 'Новый аккаунт'}</Dialog.Title>
+      <Dialog visible={!confirmDeactivate} onDismiss={onClose} style={styles.dialog}>
+        <Dialog.Title>
+          {account ? account.name : 'Новый аккаунт'}
+          {isSuspended ? ' · Уволен' : ''}
+        </Dialog.Title>
         <Dialog.ScrollArea style={styles.area}>
           <ScrollView keyboardShouldPersistTaps="handled" onScrollBeginDrag={Keyboard.dismiss}>
             <View style={styles.content}>
@@ -496,18 +522,23 @@ export function AccountDialog({ account, onClose }: { account: Account | null; o
                     )}
                   </>
                 )}
-                {phoneWarning && <Text style={styles.phoneWarning}>{phoneWarning}</Text>}
+                {warning && <Text style={styles.warning}>{warning}</Text>}
                 {error && <HelperText type="error">{error}</HelperText>}
               </>
             </View>
           </ScrollView>
         </Dialog.ScrollArea>
         <Dialog.Actions>
-          {account && (
-            <Button textColor="#b91c1c" onPress={() => setConfirmDelete(true)}>
-              Удалить
-            </Button>
-          )}
+          {account &&
+            (isSuspended ? (
+              <Button onPress={handleRestore} loading={setAccountActive.isPending} disabled={setAccountActive.isPending}>
+                Восстановить доступ
+              </Button>
+            ) : (
+              <Button textColor="#b91c1c" onPress={() => setConfirmDeactivate(true)}>
+                Уволить
+              </Button>
+            ))}
           <Button onPress={onClose}>Отмена</Button>
           <Button mode="contained" onPress={handleSave} loading={saving} disabled={saving}>
             Сохранить
@@ -516,23 +547,23 @@ export function AccountDialog({ account, onClose }: { account: Account | null; o
       </Dialog>
 
       {account && (
-        <Dialog visible={confirmDelete} onDismiss={() => setConfirmDelete(false)}>
-          <Dialog.Title>Удалить сотрудника?</Dialog.Title>
+        <Dialog visible={confirmDeactivate} onDismiss={() => setConfirmDeactivate(false)}>
+          <Dialog.Title>Уволить сотрудника?</Dialog.Title>
           <Dialog.Content>
             <Text variant="bodyMedium">
-              {`${account.name}${account.last_name ? ` ${account.last_name}` : ''} будет скрыт из «Команды» и не сможет войти в приложение. История его заказов сохранится.`}
+              {`${account.name}${account.last_name ? ` ${account.last_name}` : ''} будет отмечен как уволенный и не сможет войти в приложение. Он останется в «Команде» (можно восстановить доступ), история его заказов сохранится.`}
             </Text>
-            {deleteAccount.error && <HelperText type="error">{deleteAccount.error.message}</HelperText>}
+            {setAccountActive.error && <HelperText type="error">{setAccountActive.error.message}</HelperText>}
           </Dialog.Content>
           <Dialog.Actions>
-            <Button onPress={() => setConfirmDelete(false)}>Отмена</Button>
+            <Button onPress={() => setConfirmDeactivate(false)}>Отмена</Button>
             <Button
               textColor="#b91c1c"
-              onPress={handleDelete}
-              loading={deleteAccount.isPending}
-              disabled={deleteAccount.isPending}
+              onPress={handleDeactivate}
+              loading={setAccountActive.isPending}
+              disabled={setAccountActive.isPending}
             >
-              Удалить
+              Уволить
             </Button>
           </Dialog.Actions>
         </Dialog>
@@ -556,10 +587,10 @@ const styles = StyleSheet.create({
   dialog: {
     maxHeight: '90%',
   },
-  // Не ошибка (профиль и пароль сохранились) — тот же тон, что у «в работе»
-  // в остальном приложении (theme.ts), чтобы отличаться и от обычной
+  // Не ошибка (основное действие прошло) — тот же тон, что у «в работе» в
+  // остальном приложении (theme.ts), чтобы отличаться и от обычной
   // подсказки, и от красной ошибки.
-  phoneWarning: {
+  warning: {
     color: '#b45309',
   },
   area: {
