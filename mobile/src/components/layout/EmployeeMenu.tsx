@@ -1,22 +1,25 @@
 import { useState } from 'react';
-import { Pressable, StyleSheet } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
-import { Divider, IconButton, Menu } from 'react-native-paper';
+import { Badge, Divider, IconButton, Menu } from 'react-native-paper';
 import { supabase } from '../../lib/supabase';
 import type { Employee } from '../../api/employees';
+import { useUnreadNotificationsCount } from '../../api/notifications';
 import { formatTime } from '../../utils/date';
 
 // Левое меню сотрудника (Максим, 30.09, «Правки 3», п.5 — по образцу
 // референса Bumpix, «не нужно перерисовывать всё как там, но сделай
 // удобно»): профиль, график, отчёты (только у водителя — у грузчика их
-// нет, settings/index.tsx скрывает пункт так же), настройки, о приложении,
-// статус синхронизации с принудительным обновлением, выход — одним местом
-// вместо AccountMenu (настройки/выход) и отдельных иконок в Appbar
-// (раньше «Мой график»/«Мои отчёты» дублировались в шапке календаря и тут
-// — теперь только тут, см. (employee)/my-orders.tsx). «Уведомления» и
-// «Служба поддержки» в референсе сюда не попали — под них ещё нет
-// экрана/канала у сотрудника (не админа), добавлять пустую ссылку не
-// стали.
+// нет, settings/index.tsx скрывает пункт так же), уведомления, настройки,
+// о приложении, статус синхронизации с принудительным обновлением, выход —
+// одним местом вместо AccountMenu (настройки/выход) и отдельных иконок в
+// Appbar (раньше «Мой график»/«Мои отчёты» дублировались в шапке
+// календаря и тут — теперь только тут, см. (employee)/my-orders.tsx).
+// Бейдж на значке — непрочитанные уведомления (useUnreadNotificationsCount,
+// миграция 0024), тот же приём, что у колокольчика администратора
+// (NotificationBell). «Служба поддержки» для сотрудника (не админа) в
+// меню пока нет — под неё ещё нет канала связи, Максим подтвердил делать
+// сейчас только сжатие сетки и уведомления, без этого пункта.
 export function EmployeeMenu({
   employee,
   lastSyncedAt,
@@ -30,6 +33,7 @@ export function EmployeeMenu({
 }) {
   const [visible, setVisible] = useState(false);
   const isDriver = employee.role === 'driver';
+  const unread = useUnreadNotificationsCount();
 
   const go = (path: Parameters<typeof router.push>[0]) => {
     setVisible(false);
@@ -42,7 +46,14 @@ export function EmployeeMenu({
       onDismiss={() => setVisible(false)}
       anchor={
         <Pressable onPress={() => setVisible(true)} accessibilityLabel="Меню" style={styles.touch}>
-          <IconButton icon="menu" size={24} style={styles.iconButton} />
+          <View>
+            <IconButton icon="menu" size={24} style={styles.iconButton} />
+            {unread > 0 && (
+              <Badge style={styles.badge} size={16}>
+                {unread}
+              </Badge>
+            )}
+          </View>
         </Pressable>
       }
     >
@@ -55,6 +66,7 @@ export function EmployeeMenu({
           onPress={() => go('/settings/driver-feed')}
         />
       )}
+      <Menu.Item leadingIcon="bell-outline" title="Уведомления" onPress={() => go('/settings/notifications')} />
       <Menu.Item leadingIcon="cog-outline" title="Настройки" onPress={() => go('/settings')} />
       <Menu.Item leadingIcon="information-outline" title="О приложении" onPress={() => go('/settings/about')} />
       <Divider />
@@ -86,5 +98,10 @@ const styles = StyleSheet.create({
   },
   iconButton: {
     margin: 0,
+  },
+  badge: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
   },
 });

@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { Pressable, StyleSheet, Text } from 'react-native';
 import type { CalendarOrder } from '../../api/orders';
-import { formatTime, minutesFromDayStart, PIXELS_PER_MINUTE, GRID_HEIGHT } from '../../utils/date';
+import { formatTime, minutesFromDayStart } from '../../utils/date';
 import { orderColor } from './orderLayout';
 
 function crewConfirmed(order: CalendarOrder) {
@@ -21,6 +21,8 @@ export const OrderBlock = memo(function OrderBlock({
   columnWidth,
   now,
   compact,
+  pixelsPerMinute,
+  gridHeight,
   onPress,
 }: {
   order: CalendarOrder;
@@ -29,13 +31,15 @@ export const OrderBlock = memo(function OrderBlock({
   columnWidth: number;
   now: Date;
   compact: boolean;
+  pixelsPerMinute: number;
+  gridHeight: number;
   onPress: (order: CalendarOrder) => void;
 }) {
   const start = new Date(order.scheduled_start);
   const end = new Date(order.scheduled_end);
-  const top = minutesFromDayStart(start) * PIXELS_PER_MINUTE;
+  const top = minutesFromDayStart(start) * pixelsPerMinute;
   const durationMinutes = (end.getTime() - start.getTime()) / 60000;
-  const height = Math.min(Math.max(durationMinutes * PIXELS_PER_MINUTE, 22), GRID_HEIGHT - top);
+  const height = Math.min(Math.max(durationMinutes * pixelsPerMinute, 22), gridHeight - top);
   const laneWidth = columnWidth / lanes;
   const pickup = order.order_stops.find((s) => s.is_primary && s.type === 'pickup')?.address;
   const dropoff = order.order_stops.find((s) => s.is_primary && s.type === 'dropoff')?.address;

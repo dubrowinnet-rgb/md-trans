@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
@@ -19,16 +20,21 @@ const queryClient = new QueryClient();
 
 export default function RootLayout() {
   return (
-    <SafeAreaProvider>
-      <QueryClientProvider client={queryClient}>
-        <PaperProvider theme={theme}>
-          <SessionProvider>
-            <RootNavigator />
-          </SessionProvider>
-          <StatusBar style="dark" />
-        </PaperProvider>
-      </QueryClientProvider>
-    </SafeAreaProvider>
+    // Нужен жестам сжатия сетки календаря двумя пальцами (Максим, 30.09,
+    // «Правки 3», п.3) — GestureDetector требует GestureHandlerRootView
+    // где-то в дереве выше себя, самое надёжное место — сразу в корне.
+    <GestureHandlerRootView style={styles.root}>
+      <SafeAreaProvider>
+        <QueryClientProvider client={queryClient}>
+          <PaperProvider theme={theme}>
+            <SessionProvider>
+              <RootNavigator />
+            </SessionProvider>
+            <StatusBar style="dark" />
+          </PaperProvider>
+        </QueryClientProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
 
@@ -151,6 +157,9 @@ function NoAccessScreen() {
 }
 
 const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+  },
   safe: {
     flex: 1,
   },

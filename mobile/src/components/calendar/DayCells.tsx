@@ -5,17 +5,7 @@ import type { CalendarOrder } from '../../api/orders';
 import type { WorkingHours } from '../../api/companySettings';
 import { OrderBlock } from './OrderBlock';
 import { layoutDayOrders } from './orderLayout';
-import {
-  addMinutes,
-  formatShortMonth,
-  formatWeekday,
-  GRID_HEIGHT,
-  HOUR_HEIGHT,
-  isSameDay,
-  minutesFromDayStart,
-  PIXELS_PER_MINUTE,
-  startOfDay,
-} from '../../utils/date';
+import { addMinutes, formatShortMonth, formatWeekday, isSameDay, minutesFromDayStart, startOfDay } from '../../utils/date';
 
 export const HEADER_HEIGHT = 52;
 export const AXIS_WIDTH = 44;
@@ -43,12 +33,22 @@ function dayKind(date: Date, now: Date) {
   return date < startOfDay(now) ? 'past' : 'future';
 }
 
-export const HourAxis = memo(function HourAxis({ now }: { now: Date }) {
-  const nowY = minutesFromDayStart(now) * PIXELS_PER_MINUTE;
+export const HourAxis = memo(function HourAxis({
+  now,
+  pixelsPerMinute,
+  hourHeight,
+  gridHeight,
+}: {
+  now: Date;
+  pixelsPerMinute: number;
+  hourHeight: number;
+  gridHeight: number;
+}) {
+  const nowY = minutesFromDayStart(now) * pixelsPerMinute;
   return (
-    <View style={[styles.axis, { height: GRID_HEIGHT }]}>
+    <View style={[styles.axis, { height: gridHeight }]}>
       {HOURS.map((hour) => (
-        <View key={hour} style={[styles.hourRow, { height: HOUR_HEIGHT }]}>
+        <View key={hour} style={[styles.hourRow, { height: hourHeight }]}>
           <Text style={styles.hourLabel}>{String(hour).padStart(2, '0')}:00</Text>
         </View>
       ))}
@@ -95,6 +95,9 @@ export const DayBody = memo(function DayBody({
   now,
   compact,
   workingHours,
+  pixelsPerMinute,
+  hourHeight,
+  gridHeight,
   onPressOrder,
   onPressSlot,
 }: {
@@ -104,13 +107,16 @@ export const DayBody = memo(function DayBody({
   now: Date;
   compact: boolean;
   workingHours: WorkingHours;
+  pixelsPerMinute: number;
+  hourHeight: number;
+  gridHeight: number;
   onPressOrder: (order: CalendarOrder) => void;
   onPressSlot?: (date: Date) => void;
 }) {
   const kind = dayKind(date, now);
-  const nowY = minutesFromDayStart(now) * PIXELS_PER_MINUTE;
-  const workStartY = workingHours.startMinutes * PIXELS_PER_MINUTE;
-  const workEndY = workingHours.endMinutes * PIXELS_PER_MINUTE;
+  const nowY = minutesFromDayStart(now) * pixelsPerMinute;
+  const workStartY = workingHours.startMinutes * pixelsPerMinute;
+  const workEndY = workingHours.endMinutes * pixelsPerMinute;
 
   const handlePress = (event: GestureResponderEvent) => {
     if (!onPressSlot) return;
@@ -118,21 +124,21 @@ export const DayBody = memo(function DayBody({
     const native = event.nativeEvent as typeof event.nativeEvent & { offsetY?: number };
     const y = Number.isFinite(native.locationY) ? native.locationY : native.offsetY;
     if (y == null || !Number.isFinite(y)) return;
-    const minutes = Math.floor(y / PIXELS_PER_MINUTE / SLOT_SNAP_MINUTES) * SLOT_SNAP_MINUTES;
+    const minutes = Math.floor(y / pixelsPerMinute / SLOT_SNAP_MINUTES) * SLOT_SNAP_MINUTES;
     onPressSlot(addMinutes(startOfDay(date), minutes));
   };
 
   return (
-    <Pressable style={[styles.body, { width, height: GRID_HEIGHT }]} onPress={handlePress}>
+    <Pressable style={[styles.body, { width, height: gridHeight }]} onPress={handlePress}>
       {kind === 'past' ? (
         // Весь прошедший день уже серый целиком — рабочие часы этого дня
         // отдельно красить незачем, разница не видна.
-        <View style={[styles.pastShade, { height: GRID_HEIGHT }]} />
+        <View style={[styles.pastShade, { height: gridHeight }]} />
       ) : (
         <>
           {workStartY > 0 && <View style={[styles.pastShade, { top: 0, height: workStartY }]} />}
-          {workEndY < GRID_HEIGHT && (
-            <View style={[styles.pastShade, { top: workEndY, height: GRID_HEIGHT - workEndY }]} />
+          {workEndY < gridHeight && (
+            <View style={[styles.pastShade, { top: workEndY, height: gridHeight - workEndY }]} />
           )}
           {kind === 'today' && nowY > workStartY && (
             <View
@@ -145,7 +151,7 @@ export const DayBody = memo(function DayBody({
         </>
       )}
       {HOURS.map((hour) => (
-        <View key={hour} style={[styles.gridLine, { top: hour * HOUR_HEIGHT }]} />
+        <View key={hour} style={[styles.gridLine, { top: hour * hourHeight }]} />
       ))}
       {layoutDayOrders(orders).map(({ order, lane, lanes }) => (
         <OrderBlock
@@ -156,6 +162,8 @@ export const DayBody = memo(function DayBody({
           columnWidth={width}
           now={now}
           compact={compact}
+          pixelsPerMinute={pixelsPerMinute}
+          gridHeight={gridHeight}
           onPress={onPressOrder}
         />
       ))}

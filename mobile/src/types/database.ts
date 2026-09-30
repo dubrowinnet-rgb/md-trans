@@ -20,6 +20,7 @@ export type RateMode = 'combined' | 'split';
 // 'confirmed' — «согласован», 'rejected' — «не согласован» (миграция 0019).
 export type DriverReportStatus = 'draft' | 'submitted' | 'confirmed' | 'rejected';
 export type FuelPaymentMethod = 'cash' | 'cashless';
+export type NotificationKind = 'order_changed' | 'order_cancelled' | 'report_approved' | 'report_rejected';
 export type OrderStatus = 'new' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled';
 export type StopType = 'pickup' | 'dropoff';
 export type CrewStatus = 'notified' | 'read' | 'confirmed';
@@ -390,6 +391,34 @@ export interface Database {
           working_hours_end?: string;
         };
         Update: Partial<Database['public']['Tables']['company_settings']['Insert']>;
+        Relationships: [];
+      };
+      notifications: {
+        Row: {
+          id: string;
+          company_id: string;
+          employee_id: string;
+          kind: NotificationKind;
+          title: string;
+          body: string;
+          order_id: string | null;
+          driver_report_id: string | null;
+          read_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          employee_id: string;
+          kind: NotificationKind;
+          title: string;
+          body: string;
+          order_id?: string | null;
+          driver_report_id?: string | null;
+          read_at?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['notifications']['Insert']>;
         Relationships: [];
       };
       driver_reports: {
