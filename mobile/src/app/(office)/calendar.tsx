@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { Appbar, Banner, FAB, ProgressBar } from 'react-native-paper';
+import { useWorkingHours } from '../../api/companySettings';
 import { useEmployees } from '../../api/employees';
 import { useCalendarOrders, type CalendarOrder } from '../../api/orders';
 import { AccountMenu } from '../../components/layout/AccountMenu';
@@ -22,6 +23,7 @@ export default function DispatcherCalendarScreen() {
 
   const employeesQuery = useEmployees();
   const employees = employeesQuery.data ?? [];
+  const workingHoursQuery = useWorkingHours();
 
   const ordersQuery = useCalendarOrders(nav.pageStarts, nav.mode);
   const allOrders = ordersQuery.orders;
@@ -86,6 +88,7 @@ export default function DispatcherCalendarScreen() {
         onPressOrder={openOrder}
         onPressSlot={canManage ? openNewOrder : undefined}
         scrollToNowSignal={nav.nowSignal}
+        workingHours={workingHoursQuery.data}
       />
 
       {canManage && (

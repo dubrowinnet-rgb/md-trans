@@ -36,7 +36,7 @@ import {
 } from '../../lib/permissions';
 import { DateTimeField } from '../../components/form/DateTimeField';
 import { CrewDialog } from '../../components/orders/CrewDialog';
-import { yandexMapsRouteUrl } from '../../lib/yandexMaps';
+import { yandexMapsRouteAppUrl, yandexMapsRouteUrl } from '../../lib/yandexMaps';
 import { formatPhone, normalizePhone } from '../../lib/phone';
 import { CREW_STATUS_LABELS } from '../../theme';
 import { formatDayLabel, formatTime } from '../../utils/date';
@@ -48,6 +48,23 @@ function combine(date: Date, time: Date) {
 function crewRoleLabel(crew: { isDriver: boolean; isLoader: boolean }) {
   if (crew.isDriver && crew.isLoader) return 'Водитель и грузчик';
   return crew.isDriver ? 'Водитель' : 'Грузчик';
+}
+
+// Сначала пробуем схему самого приложения Яндекс.Карт (должна надёжнее
+// строить маршрут внутри приложения, см. lib/yandexMaps.ts) — если оно не
+// установлено, Linking.openURL с такой схемой отклоняется (на Android и
+// iOS по-разному, но в обоих случаях промисом с ошибкой, а не тихо) —
+// ловим это и открываем обычную ссылку (сайт или App Links на усмотрение
+// системы). Не через canOpenURL: на Android 11+ он требует отдельного
+// объявления схемы в AndroidManifest (<queries>), иначе тоже вернёт false
+// для установленного приложения — не проверено, полагаться на этот
+// результат рискованно так же, как на два прошлых исправления.
+async function openYandexRoute(addresses: string[]) {
+  try {
+    await Linking.openURL(yandexMapsRouteAppUrl(addresses));
+  } catch {
+    await Linking.openURL(yandexMapsRouteUrl(addresses));
+  }
 }
 
 // Карточка заказа. Права зависят от роли (раздел «права и доступы»):
@@ -341,7 +358,7 @@ export default function OrderScreen() {
             mode="outlined"
             icon="navigation-variant"
             style={styles.route}
-            onPress={() => Linking.openURL(yandexMapsRouteUrl(sortedStops.map((s) => s.address)))}
+            onPress={() => openYandexRoute(sortedStops.map((s) => s.address))}
           >
             Маршрут в Яндекс.Картах
           </Button>

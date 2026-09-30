@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Грузоперевозки",
+    "name": "Мурзик",
     "slug": "mdtrans",
     "owner": "mdtranss-team",
     "version": "1.0.0",
@@ -13,13 +13,13 @@
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "ru.mdtrans.app",
+      "bundleIdentifier": "ru.myrzik.app",
       "config": {
         "usesNonExemptEncryption": false
       }
     },
     "android": {
-      "package": "ru.mdtrans.app",
+      "package": "ru.myrzik.app",
       "adaptiveIcon": {
         "backgroundColor": "#5b21b6",
         "foregroundImage": "./assets/images/android-icon-foreground.png",

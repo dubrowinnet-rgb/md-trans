@@ -1,6 +1,8 @@
+import { memo } from 'react';
 import { Pressable, StyleSheet, View, type GestureResponderEvent } from 'react-native';
 import { Text } from 'react-native-paper';
 import type { CalendarOrder } from '../../api/orders';
+import type { WorkingHours } from '../../api/companySettings';
 import { OrderBlock } from './OrderBlock';
 import { layoutDayOrders } from './orderLayout';
 import {
@@ -41,7 +43,7 @@ function dayKind(date: Date, now: Date) {
   return date < startOfDay(now) ? 'past' : 'future';
 }
 
-export function HourAxis({ now }: { now: Date }) {
+export const HourAxis = memo(function HourAxis({ now }: { now: Date }) {
   const nowY = minutesFromDayStart(now) * PIXELS_PER_MINUTE;
   return (
     <View style={[styles.axis, { height: GRID_HEIGHT }]}>
@@ -53,9 +55,19 @@ export function HourAxis({ now }: { now: Date }) {
       <View style={[styles.axisNowDot, { top: nowY - 3 }]} />
     </View>
   );
-}
+});
 
-export function DayHeader({ date, count, width, now }: { date: Date; count: number; width: number; now: Date }) {
+export const DayHeader = memo(function DayHeader({
+  date,
+  count,
+  width,
+  now,
+}: {
+  date: Date;
+  count: number;
+  width: number;
+  now: Date;
+}) {
   const kind = dayKind(date, now);
   const bg =
     kind === 'today' ? GRID_COLORS.todayHeader : kind === 'past' ? GRID_COLORS.pastHeader : GRID_COLORS.futureHeader;
@@ -74,14 +86,15 @@ export function DayHeader({ date, count, width, now }: { date: Date; count: numb
       <Text style={[styles.headerWeekday, { color }]}>{formatWeekday(date).toUpperCase()}</Text>
     </View>
   );
-}
+});
 
-export function DayBody({
+export const DayBody = memo(function DayBody({
   date,
   orders,
   width,
   now,
   compact,
+  workingHours,
   onPressOrder,
   onPressSlot,
 }: {
@@ -90,11 +103,14 @@ export function DayBody({
   width: number;
   now: Date;
   compact: boolean;
+  workingHours: WorkingHours;
   onPressOrder: (order: CalendarOrder) => void;
   onPressSlot?: (date: Date) => void;
 }) {
   const kind = dayKind(date, now);
   const nowY = minutesFromDayStart(now) * PIXELS_PER_MINUTE;
+  const workStartY = workingHours.startMinutes * PIXELS_PER_MINUTE;
+  const workEndY = workingHours.endMinutes * PIXELS_PER_MINUTE;
 
   const handlePress = (event: GestureResponderEvent) => {
     if (!onPressSlot) return;
@@ -108,8 +124,26 @@ export function DayBody({
 
   return (
     <Pressable style={[styles.body, { width, height: GRID_HEIGHT }]} onPress={handlePress}>
-      {kind === 'past' && <View style={[styles.pastShade, { height: GRID_HEIGHT }]} />}
-      {kind === 'today' && <View style={[styles.pastShade, { height: nowY }]} />}
+      {kind === 'past' ? (
+        // Весь прошедший день уже серый целиком — рабочие часы этого дня
+        // отдельно красить незачем, разница не видна.
+        <View style={[styles.pastShade, { height: GRID_HEIGHT }]} />
+      ) : (
+        <>
+          {workStartY > 0 && <View style={[styles.pastShade, { top: 0, height: workStartY }]} />}
+          {workEndY < GRID_HEIGHT && (
+            <View style={[styles.pastShade, { top: workEndY, height: GRID_HEIGHT - workEndY }]} />
+          )}
+          {kind === 'today' && nowY > workStartY && (
+            <View
+              style={[
+                styles.pastShade,
+                { top: workStartY, height: Math.min(nowY, workEndY) - workStartY },
+              ]}
+            />
+          )}
+        </>
+      )}
       {HOURS.map((hour) => (
         <View key={hour} style={[styles.gridLine, { top: hour * HOUR_HEIGHT }]} />
       ))}
@@ -128,7 +162,7 @@ export function DayBody({
       {kind === 'today' && <View style={[styles.nowLine, { top: nowY }]} />}
     </Pressable>
   );
-}
+});
 
 const styles = StyleSheet.create({
   axis: {

@@ -80,6 +80,13 @@ export default function SettingsScreen() {
               onPress={() => router.push('/settings/reminders')}
             />
             <List.Item
+              title="Рабочее время"
+              description="Красит сетку календаря, задаёт точку её открытия"
+              left={(props) => <List.Icon {...props} icon="clock-outline" />}
+              right={(props) => <List.Icon {...props} icon="chevron-right" />}
+              onPress={() => router.push('/settings/working-hours')}
+            />
+            <List.Item
               title="Техподдержка"
               description="Обращения к владельцу сервиса"
               left={(props) => <List.Icon {...props} icon="headset" />}
@@ -88,6 +95,13 @@ export default function SettingsScreen() {
             />
           </>
         )}
+        <List.Item
+          title="О приложении"
+          description="Версия, поддержка, политика конфиденциальности"
+          left={(props) => <List.Icon {...props} icon="information-outline" />}
+          right={(props) => <List.Icon {...props} icon="chevron-right" />}
+          onPress={() => router.push('/settings/about')}
+        />
       </List.Section>
     </View>
   );

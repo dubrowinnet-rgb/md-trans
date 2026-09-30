@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Pressable, StyleSheet, Text } from 'react-native';
 import type { CalendarOrder } from '../../api/orders';
 import { formatTime, minutesFromDayStart, PIXELS_PER_MINUTE, GRID_HEIGHT } from '../../utils/date';
@@ -13,7 +14,7 @@ function crewConfirmed(order: CalendarOrder) {
 // текстом на цвете услуги, плюс адрес откуда/куда и груз отдельными
 // строками (раздел «баги 3», п.2) — видно, только если блок достаточно
 // высокий (короткие заказы просто обрезаются по высоте, как раньше).
-export function OrderBlock({
+export const OrderBlock = memo(function OrderBlock({
   order,
   lane,
   lanes,
@@ -76,7 +77,7 @@ export function OrderBlock({
       {confirmation && !compact && <Text style={[styles.text, styles.confirmation]}>{confirmation}</Text>}
     </Pressable>
   );
-}
+});
 
 const styles = StyleSheet.create({
   block: {

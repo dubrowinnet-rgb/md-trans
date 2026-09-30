@@ -9,6 +9,7 @@ import {
   type NativeSyntheticEvent,
 } from 'react-native';
 import type { CalendarOrder } from '../../api/orders';
+import { DEFAULT_WORKING_HOURS, type WorkingHours } from '../../api/companySettings';
 import { PAGES_AROUND, type DaysMode } from '../../hooks/useCalendarNav';
 import { useNow } from '../../hooks/useNow';
 import { addDays, differenceInCalendarDays, minutesFromDayStart, PIXELS_PER_MINUTE } from '../../utils/date';
@@ -29,6 +30,7 @@ export function PagedCalendar(props: {
   onPressOrder: (order: CalendarOrder) => void;
   onPressSlot?: (date: Date) => void;
   scrollToNowSignal: number;
+  workingHours?: WorkingHours;
 }) {
   const [width, setWidth] = useState(0);
   const onLayout = (e: LayoutChangeEvent) => setWidth(e.nativeEvent.layout.width);
@@ -48,6 +50,7 @@ function PagedCalendarInner({
   onPressOrder,
   onPressSlot,
   scrollToNowSignal,
+  workingHours = DEFAULT_WORKING_HOURS,
   width,
 }: Parameters<typeof PagedCalendar>[0] & { width: number }) {
   const now = useNow();
@@ -89,32 +92,37 @@ function PagedCalendarInner({
   }, [middle]);
   useLayoutEffect(recenter, [anchor, recenter]);
 
-  // При входе и по кнопке «Сегодня»: на 1 дне экран всегда начинается с
-  // линии текущего времени (выполненные заказы просто остаются выше, вне
-  // экрана — это ожидаемо). На 3/7 днях — с более ранней из двух точек:
-  // либо линия времени, либо самый ранний ещё предстоящий заказ текущей
-  // страницы, чтобы оба были видны без прокрутки.
-  // orders.length в зависимостях — при первом заходе список заказов ещё
-  // пуст (запрос не успел ответить), эффект должен пересчитать цель, когда
-  // заказы подгрузятся, а не только при смене scrollToNowSignal.
+  // На 1-дневном отображении экран всегда начинается с линии текущего
+  // времени (выполненные заказы остаются выше, вне экрана — это ожидаемо),
+  // как и раньше. На 3/7 днях — с начала рабочего дня (настройки компании),
+  // а если на странице есть заказ раньше этого времени — с него (Максим,
+  // 30.09, «Правки 3», п.1 и п.9): «линия сейчас» тут больше не участвует,
+  // всегда одна и та же точка отсчёта вне зависимости от текущего времени.
+  // anchor/mode в зависимостях — пересчитываем при каждом перелистывании
+  // страницы (вперёд и назад), не только при первом входе: вертикальная
+  // прокрутка одна на весь горизонтальный ScrollView (см. ниже), поэтому
+  // должна переезжать на рабочее время новой страницы.
+  // orders.length, а не orders — при первом заходе список ещё пуст (запрос
+  // не успел ответить), эффект должен пересчитать цель, когда заказы
+  // подгрузятся, но не гоняться за каждым новым объектом с тем же составом.
   useEffect(() => {
-    const now = new Date();
-    let y = minutesFromDayStart(now) * PIXELS_PER_MINUTE;
-    if (mode !== 1) {
+    let targetMinutes: number;
+    if (mode === 1) {
+      targetMinutes = minutesFromDayStart(new Date());
+    } else {
+      targetMinutes = workingHours.startMinutes;
       const pageEnd = addDays(anchor, mode);
-      let earliest: number | null = null;
       for (const order of orders) {
         const orderStart = new Date(order.scheduled_start);
-        if (orderStart <= now || orderStart < anchor || orderStart >= pageEnd) continue;
-        const orderY = minutesFromDayStart(orderStart) * PIXELS_PER_MINUTE;
-        if (earliest === null || orderY < earliest) earliest = orderY;
+        if (orderStart < anchor || orderStart >= pageEnd) continue;
+        const orderMinutes = minutesFromDayStart(orderStart);
+        if (orderMinutes < targetMinutes) targetMinutes = orderMinutes;
       }
-      if (earliest !== null) y = Math.min(y, earliest);
     }
-    const target = Math.max(0, y - 24);
+    const target = Math.max(0, targetMinutes * PIXELS_PER_MINUTE - 24);
     const id = setTimeout(() => verticalRef.current?.scrollTo({ y: target, animated: scrollToNowSignal > 0 }), 50);
     return () => clearTimeout(id);
-  }, [scrollToNowSignal, orders.length]);
+  }, [scrollToNowSignal, orders.length, anchor, mode, workingHours.startMinutes]);
 
   const settle = useCallback(
     (offset: number) => {
@@ -190,6 +198,11 @@ function PagedCalendarInner({
             ref={bodyRef}
             horizontal
             pagingEnabled
+            // По умолчанию ('normal') перелистывание тормозит заметно
+            // медленнее, чем у Bumpix (Максим, 30.09, «Правки 3», п.9,
+            // сравнение с видео) — 'fast' ближе к тому, как там отпускаешь
+            // палец и страница уже долистнула.
+            decelerationRate="fast"
             showsHorizontalScrollIndicator={false}
             contentOffset={{ x: middle, y: 0 }}
             onLayout={recenter}
@@ -209,6 +222,7 @@ function PagedCalendarInner({
                     width={columnWidth}
                     now={now}
                     compact={compact}
+                    workingHours={workingHours}
                     onPressOrder={onPressOrder}
                     onPressSlot={onPressSlot}
                   />

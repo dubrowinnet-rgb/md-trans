@@ -55,10 +55,15 @@ export function useCalendarOrders(pageStarts: Date[], days: number, onlyEmployee
     for (const result of results) {
       for (const order of result.data ?? []) byId.set(order.id, order);
     }
+    // Самое свежее из времён успешного обновления страниц — «когда в
+    // последний раз пришли свежие данные», для индикатора синхронизации в
+    // EmployeeMenu. 0, если ни одна страница ещё не загрузилась ни разу.
+    const dataUpdatedAt = results.reduce((max, r) => Math.max(max, r.dataUpdatedAt), 0);
     return {
       orders: [...byId.values()],
       isFetching: results.some((r) => r.isFetching),
       error: results.find((r) => r.error)?.error ?? null,
+      dataUpdatedAt,
     };
   }, []);
 

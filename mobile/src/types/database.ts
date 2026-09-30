@@ -380,6 +380,18 @@ export interface Database {
         Update: Partial<Database['public']['Tables']['reminder_rules']['Insert']>;
         Relationships: [];
       };
+      company_settings: {
+        Row: {
+          working_hours_start: string;
+          working_hours_end: string;
+        };
+        Insert: {
+          working_hours_start?: string;
+          working_hours_end?: string;
+        };
+        Update: Partial<Database['public']['Tables']['company_settings']['Insert']>;
+        Relationships: [];
+      };
       driver_reports: {
         Row: {
           id: string;
