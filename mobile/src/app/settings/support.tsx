@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { FlatList, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ActivityIndicator, Appbar, Button, Dialog, Divider, HelperText, List, Portal, Text, TextInput } from 'react-native-paper';
 import { useCreateTicket, useMyTickets, useSendTicketMessage, useTicketMessages } from '../../api/supportTickets';
 import { useSession } from '../../providers/SessionProvider';
@@ -28,6 +29,7 @@ export default function SupportSettingsScreen() {
 }
 
 function SupportContent({ employee }: { employee: Employee }) {
+  const insets = useSafeAreaInsets();
   const companyId = employee.company_id as string;
   const ticketsQuery = useMyTickets(companyId);
   const [creating, setCreating] = useState(false);
@@ -59,7 +61,14 @@ function SupportContent({ employee }: { employee: Employee }) {
           )}
         />
       )}
-      <Button mode="outlined" icon="plus" style={styles.addButton} onPress={() => setCreating(true)}>
+      {/* Правки 6, п.10: без отступа на жестовую/кнопочную панель Android
+          кнопка пряталась под экранными кнопками телефона. */}
+      <Button
+        mode="outlined"
+        icon="plus"
+        style={[styles.addButton, { marginBottom: 16 + insets.bottom }]}
+        onPress={() => setCreating(true)}
+      >
         Новое обращение
       </Button>
 

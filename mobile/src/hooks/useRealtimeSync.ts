@@ -50,6 +50,19 @@ export function useRealtimeSync() {
         { event: '*', schema: 'public', table: 'notifications', filter: `employee_id=eq.${employeeId}` },
         () => queryClient.invalidateQueries({ queryKey: ['notifications'] })
       )
+      // Правки 6, п.12: обращение/ответ в «Службе поддержки» сотрудника не
+      // обновлялось, пока экран открыт у другой стороны, — только опрос при
+      // следующем заходе на экран (staleTime по умолчанию это чинит, но не
+      // сразу). employee_support_messages — без filter по company_id, как и
+      // order_crew выше: у строки его нет, доставку ограничивает RLS.
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'employee_support_tickets', filter: `company_id=eq.${companyId}` },
+        () => queryClient.invalidateQueries({ queryKey: ['employee-support-tickets'] })
+      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'employee_support_messages' }, () =>
+        queryClient.invalidateQueries({ queryKey: ['employee-support-messages'] })
+      )
       .subscribe();
 
     return () => {
