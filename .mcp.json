@@ -1,8 +1,11 @@
 {
   "mcpServers": {
     "codebase-memory-mcp": {
-      "command": "${CLAUDE_PROJECT_DIR}/.claude/bin/codebase-memory-mcp-launcher.sh",
-      "args": []
+      "command": "bash",
+      "args": [
+        "-c",
+        "for d in \"$CLAUDE_PROJECT_DIR\" \"$PWD\" \"$(git rev-parse --show-toplevel 2>/dev/null)\"; do if [ -n \"$d\" ] && [ -x \"$d/.claude/bin/codebase-memory-mcp-launcher.sh\" ]; then exec \"$d/.claude/bin/codebase-memory-mcp-launcher.sh\"; fi; done; exec \"$HOME/.local/share/codebase-memory-mcp/codebase-memory-mcp\""
+      ]
     }
   }
 }
