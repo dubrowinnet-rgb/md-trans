@@ -10,6 +10,7 @@ import {
   startOfDay,
   startOfMonth,
   startOfWeek,
+  subMonths,
 } from 'date-fns';
 import { ru } from 'date-fns/locale';
 
@@ -52,4 +53,5 @@ export {
   startOfDay,
   startOfMonth,
   startOfWeek,
+  subMonths,
 };

@@ -11,17 +11,19 @@ import { PagedCalendar } from '../../components/calendar/PagedCalendar';
 import { CalendarToolbar } from '../../components/calendar/CalendarToolbar';
 import { EmployeeMenu } from '../../components/layout/EmployeeMenu';
 import { ACCOUNT_ROLE_LABELS } from '../../theme';
-import { formatHeaderDate, startOfMonth } from '../../utils/date';
+import { formatHeaderDate, startOfMonth, subMonths } from '../../utils/date';
 
 const NO_PAGES: Date[] = [];
 
 // Календарь водителя/грузчика: та же сетка, только собственные заказы и без
-// создания. minAnchor — назад можно листать только в пределах текущего
-// календарного месяца (доработки 2, п.1); у диспетчера/админа (calendar.tsx)
-// такого ограничения нет.
+// создания. minAnchor — назад можно листать только в пределах текущего и
+// предыдущего календарного месяца (доработки 2, п.1; расширено до
+// предыдущего месяца — Правки 6, п.23, та же граница, что у отчётов
+// водителя, см. миграцию 0029); у диспетчера/админа (calendar.tsx) такого
+// ограничения нет.
 export default function EmployeeCalendarScreen() {
   const { employee } = useSession();
-  const nav = useCalendarNav({ minAnchor: startOfMonth(new Date()) });
+  const nav = useCalendarNav({ minAnchor: startOfMonth(subMonths(new Date(), 1)) });
   const queryClient = useQueryClient();
   const [forcedSyncing, setForcedSyncing] = useState(false);
 
@@ -73,14 +75,18 @@ export default function EmployeeCalendarScreen() {
         {`Ошибка загрузки заказов: ${ordersQuery.error?.message ?? ''}`}
       </Banner>
       {/* Обёртка с фиксированной высотой: в браузере ProgressBar растягивается на 100%. */}
+      {/* isLoading, а не isFetching (Правки 6, п.9) — иначе линия мигала бы
+          каждую минуту на тихом автообновлении, когда данные уже есть;
+          isFetching для спиннера в EmployeeMenu (выше) оставлен как был. */}
       <View style={styles.progress}>
-        <ProgressBar indeterminate visible={ordersQuery.isFetching} />
+        <ProgressBar indeterminate visible={ordersQuery.isLoading} />
       </View>
 
       <PagedCalendar
         mode={nav.mode}
         anchor={nav.anchor}
         onAnchorChange={nav.setAnchor}
+        minAnchor={nav.minAnchor}
         orders={orders}
         onPressOrder={openOrder}
         scrollToNowSignal={nav.nowSignal}

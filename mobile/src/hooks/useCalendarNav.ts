@@ -59,5 +59,5 @@ export function useCalendarNav(options?: { minAnchor?: Date }) {
 
   const atMinAnchor = Boolean(minAnchor) && anchor <= clampAnchor(minAnchor as Date, mode);
 
-  return { mode, setMode, anchor, setAnchor, pageStarts, goPrev, goNext, goToday, nowSignal, atMinAnchor };
+  return { mode, setMode, anchor, setAnchor, pageStarts, goPrev, goNext, goToday, nowSignal, atMinAnchor, minAnchor };
 }

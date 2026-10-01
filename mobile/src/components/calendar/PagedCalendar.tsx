@@ -13,7 +13,7 @@ import { GestureDetector, usePinchGesture } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import type { CalendarOrder } from '../../api/orders';
 import { DEFAULT_WORKING_HOURS, type WorkingHours } from '../../api/companySettings';
-import { PAGES_AROUND, type DaysMode } from '../../hooks/useCalendarNav';
+import { alignToMode, PAGES_AROUND, type DaysMode } from '../../hooks/useCalendarNav';
 import { useNow } from '../../hooks/useNow';
 import { addDays, differenceInCalendarDays, minutesFromDayStart, PIXELS_PER_MINUTE } from '../../utils/date';
 import { AXIS_WIDTH, DayBody, DayHeader, HEADER_HEIGHT, HourAxis } from './DayCells';
@@ -36,6 +36,7 @@ export function PagedCalendar(props: {
   mode: DaysMode;
   anchor: Date;
   onAnchorChange: (date: Date) => void;
+  minAnchor?: Date;
   orders: CalendarOrder[];
   onPressOrder: (order: CalendarOrder) => void;
   onPressSlot?: (date: Date) => void;
@@ -56,6 +57,7 @@ function PagedCalendarInner({
   mode,
   anchor,
   onAnchorChange,
+  minAnchor,
   orders,
   onPressOrder,
   onPressSlot,
@@ -225,6 +227,16 @@ function PagedCalendarInner({
       const page = Math.round(offset / pageWidth);
       const shift = page - PAGES_AROUND;
       if (shift !== 0) {
+        // Правки 6, п.23: листание назад за границу (например, второй месяц
+        // назад у водителя/грузчика, см. minAnchor) — дата не меняется
+        // (clampAnchor в useCalendarNav всё равно её бы не пустил дальше),
+        // поэтому просто плавно пружиним обратно на середину, а не снимаем
+        // мгновенно без анимации: иначе на границе читалось как дёрганье/
+        // перезагрузка сетки, а не как упор в край.
+        if (shift < 0 && minAnchor && addDays(anchor, shift * mode) < alignToMode(minAnchor, mode)) {
+          bodyRef.current?.scrollTo({ x: middle, animated: true });
+          return;
+        }
         // Сброс на середину — тем же тиком, что и смена даты ниже, а не на
         // отдельном рендере через recenter()/useLayoutEffect: иначе между
         // «даты уже пересчитаны» и «прокрутка ещё не снята на середину»
@@ -240,7 +252,7 @@ function PagedCalendarInner({
         bodyRef.current?.scrollTo({ x: middle, animated: true });
       }
     },
-    [pageWidth, middle, anchor, mode, onAnchorChange]
+    [pageWidth, middle, anchor, mode, onAnchorChange, minAnchor]
   );
 
   // В браузере нет momentum-событий: страницу фиксируем после паузы в прокрутке.

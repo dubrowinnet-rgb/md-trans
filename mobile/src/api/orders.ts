@@ -61,6 +61,11 @@ export function useCalendarOrders(pageStarts: Date[], days: number, onlyEmployee
     return {
       orders: [...byId.values()],
       isFetching: results.some((r) => r.isFetching),
+      // Правки 6, п.9: только первая загрузка страницы (данных ещё не
+      // было) — не то же самое, что isFetching, который включает и тихий
+      // автообновление раз в минуту. На нём верхняя линия загрузки не
+      // должна мигать — для неё и нужно отдельное поле.
+      isLoading: results.some((r) => r.isLoading),
       error: results.find((r) => r.error)?.error ?? null,
       dataUpdatedAt,
     };

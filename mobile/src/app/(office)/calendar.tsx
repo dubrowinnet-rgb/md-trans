@@ -78,8 +78,10 @@ export default function DispatcherCalendarScreen() {
         Нет ни одного сотрудника. Добавьте водителя или грузчика, чтобы назначать их на заказы.
       </Banner>
       {/* Обёртка с фиксированной высотой: в браузере ProgressBar растягивается на 100%. */}
+      {/* isLoading, а не isFetching (Правки 6, п.9) — иначе линия мигала бы
+          каждую минуту на тихом автообновлении, когда данные уже есть. */}
       <View style={styles.progress}>
-        <ProgressBar indeterminate visible={ordersQuery.isFetching} />
+        <ProgressBar indeterminate visible={ordersQuery.isLoading} />
       </View>
 
       <PagedCalendar
