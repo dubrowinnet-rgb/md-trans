@@ -3,13 +3,21 @@ import { addDays, format } from 'date-fns';
 import { supabase } from '../lib/supabase';
 import { sendPushNotifications } from '../lib/pushNotifications';
 import { shrinkPhoto } from '../lib/shrinkPhoto';
+import { unionPay } from './payroll';
 import type { Database, DriverReportStatus, FuelPaymentMethod } from '../types/database';
 
 export type DriverReportOrderRow = Database['public']['Tables']['driver_report_orders']['Row'];
 export type DriverReportExpenseRow = Database['public']['Tables']['driver_report_expenses']['Row'];
 
 export interface DriverReportOrderLine extends Pick<DriverReportOrderRow, 'id' | 'order_id' | 'paid_by_transfer'> {
-  orders: { id: string; scheduled_start: string; cargo_description: string | null; actual_price: number | null; status: string } | null;
+  orders: {
+    id: string;
+    scheduled_start: string;
+    scheduled_end: string;
+    cargo_description: string | null;
+    actual_price: number | null;
+    status: string;
+  } | null;
 }
 
 export type DriverReportExpenseLine = Pick<DriverReportExpenseRow, 'id' | 'description' | 'amount'>;
@@ -53,12 +61,16 @@ export interface DriverReport {
   fuelCash: number;
   expectedHandIn: number;
   discrepancy: number | null;
+  // Отработано за день (Правки 6) — сумма часов заказов отчёта, пересечения
+  // по времени не задваиваются (тот же unionPay, что и в payroll.ts, —
+  // Максим явно попросил совпадение с «Моя зарплата»).
+  hoursWorked: number;
 }
 
 // Три связи с employees (автор, согласовавший, не согласовавший) — PostgREST
 // требует указать, по какой из них подтягивать имя.
 const REPORT_SELECT =
-  '*, driver_report_orders(id, order_id, paid_by_transfer, orders(id, scheduled_start, cargo_description, actual_price, status)), driver_report_expenses(id, description, amount), reviewer:employees!rejected_by(id, name, last_name), approver:employees!confirmed_by(id, name, last_name)';
+  '*, driver_report_orders(id, order_id, paid_by_transfer, orders(id, scheduled_start, scheduled_end, cargo_description, actual_price, status)), driver_report_expenses(id, description, amount), reviewer:employees!rejected_by(id, name, last_name), approver:employees!confirmed_by(id, name, last_name)';
 
 function withTotals<T extends DriverReport>(raw: T): T {
   // В наличные идут неотменённые заказы, оплаченные не переводом (ревью,
@@ -70,6 +82,11 @@ function withTotals<T extends DriverReport>(raw: T): T {
   const expensesTotal = raw.driver_report_expenses.reduce((sum, e) => sum + e.amount, 0);
   const fuelCash = raw.fuel_payment_method === 'cash' ? (raw.fuel_amount ?? 0) : 0;
   const expectedHandIn = cashCollected - expensesTotal - fuelCash;
+  const hoursWorked = unionPay(
+    raw.driver_report_orders
+      .filter((o) => o.orders && o.orders.status !== 'cancelled')
+      .map((o) => ({ start: new Date(o.orders!.scheduled_start).getTime(), end: new Date(o.orders!.scheduled_end).getTime(), rate: 0 }))
+  ).hours;
   return {
     ...raw,
     cashCollected,
@@ -77,6 +94,7 @@ function withTotals<T extends DriverReport>(raw: T): T {
     fuelCash,
     expectedHandIn,
     discrepancy: raw.cash_handed_in != null ? raw.cash_handed_in - expectedHandIn : null,
+    hoursWorked,
   };
 }
 
@@ -169,6 +187,42 @@ export function useDriverReportFeed(employeeId: string | undefined, month?: { st
         }
         return { ...r, runningBalance: r.status === 'draft' ? null : running };
       });
+    },
+  });
+}
+
+// Итог «отработано за месяц» (Правки 6) — Максим попросил, чтобы эта сумма
+// совпадала с тем, что покажет «Моя зарплата» (settings/pay-estimate.tsx,
+// useEmployeePayEstimate). Поэтому считаем НЕ суммой дневных hoursWorked
+// (это завязало бы итог на то, сдал ли водитель отчёт за каждый день), а
+// тем же способом, что и зарплата: напрямую по order_crew за период,
+// только часы без ставки — одной функцией unionPay, чтобы не разойтись.
+export function useMonthlyWorkedHours(employeeId: string | undefined, periodStart: Date, periodEnd: Date) {
+  const startIso = periodStart.toISOString();
+  const endIso = periodEnd.toISOString();
+  return useQuery({
+    queryKey: ['driver-report-monthly-hours', employeeId, startIso, endIso],
+    enabled: Boolean(employeeId),
+    queryFn: async (): Promise<number> => {
+      const nowIso = new Date().toISOString();
+      const { data, error } = await supabase
+        .from('order_crew')
+        .select('order_id, orders!inner(id, scheduled_start, scheduled_end, status)')
+        .eq('employee_id', employeeId as string)
+        .eq('role', 'driver')
+        .neq('orders.status', 'cancelled')
+        .lte('orders.scheduled_end', nowIso)
+        .gte('orders.scheduled_start', startIso)
+        .lt('orders.scheduled_start', endIso);
+      if (error) throw error;
+
+      const byOrder = new Map<string, { start: string; end: string }>();
+      for (const row of (data ?? []) as unknown as { order_id: string; orders: { scheduled_start: string; scheduled_end: string } | null }[]) {
+        if (row.orders) byOrder.set(row.order_id, { start: row.orders.scheduled_start, end: row.orders.scheduled_end });
+      }
+      return unionPay(
+        [...byOrder.values()].map((o) => ({ start: new Date(o.start).getTime(), end: new Date(o.end).getTime(), rate: 0 }))
+      ).hours;
     },
   });
 }

@@ -9,6 +9,7 @@ import {
   driverReportEditDeadline,
   useApproveDriverReport,
   useDriverReportFeed,
+  useMonthlyWorkedHours,
   useRejectDriverReport,
   useReopenDriverReport,
   type DriverReportWithBalance,
@@ -101,6 +102,8 @@ function AuthorFeed({ employeeId }: { employeeId: string }) {
   const sent = reports.filter((r) => r.status !== 'draft');
   const drafts = reports.filter((r) => r.status === 'draft');
   const now = new Date();
+  const monthStart = startOfMonth(now);
+  const hoursQuery = useMonthlyWorkedHours(employeeId, monthStart, addMonths(monthStart, 1));
 
   const openForm = (date?: string) => router.push(date ? `/settings/driver-report?date=${date}` : '/settings/driver-report');
 
@@ -118,6 +121,11 @@ function AuthorFeed({ employeeId }: { employeeId: string }) {
           <Text variant="bodySmall" style={styles.caption}>
             Отчёты за текущий и предыдущий месяц. Эту же ленту видят администратор и диспетчер. Исправить отчёт можно в течение 24 часов после отправки.
           </Text>
+          {hoursQuery.data != null && (
+            <Text variant="bodySmall" style={styles.summary}>
+              {`Отработано за ${formatHeaderDate(now)}: ${hoursQuery.data.toFixed(1)} ч`}
+            </Text>
+          )}
           {feedQuery.isError && <HelperText type="error">{feedQuery.error.message}</HelperText>}
           {sent.length === 0 && !feedQuery.isError && (
             <Text style={styles.empty}>Отчётов пока нет.</Text>
@@ -187,6 +195,7 @@ function ReviewerFeed({ employeeId, name }: { employeeId: string; name: string }
   const isCurrentMonth = month.getTime() >= startOfMonth(new Date()).getTime();
   const pending = reports.filter((r) => r.status === 'submitted').length;
   const handedIn = reports.reduce((sum, r) => sum + (r.cash_handed_in ?? 0), 0);
+  const hoursQuery = useMonthlyWorkedHours(employeeId, month, addMonths(month, 1));
 
   // Поле замечания открывается внутри карточки, и клавиатура iPhone может его
   // закрыть: держим низ этой карточки в видимой части ленты — и когда
@@ -221,7 +230,7 @@ function ReviewerFeed({ employeeId, name }: { employeeId: string; name: string }
         />
       </View>
       <Text variant="bodySmall" style={styles.summary}>
-        {`На проверке: ${pending} · сдано за месяц: ${rub(handedIn)}`}
+        {`На проверке: ${pending} · сдано за месяц: ${rub(handedIn)}${hoursQuery.data != null ? ` · отработано: ${hoursQuery.data.toFixed(1)} ч` : ''}`}
       </Text>
 
       {feedQuery.isLoading ? (

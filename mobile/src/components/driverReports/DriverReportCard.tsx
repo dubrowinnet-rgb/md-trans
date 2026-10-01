@@ -135,6 +135,9 @@ export function DriverReportCard({
           {`Топливо: ${rub(report.fuel_amount)} (${report.fuel_payment_method === 'cashless' ? 'безнал' : 'наличные'})`}
         </Text>
       )}
+      <Text variant="bodySmall" style={styles.section}>
+        {`Отработал: ${report.hoursWorked.toFixed(1)} ч`}
+      </Text>
 
       {report.odometer_photo_url && (
         <>

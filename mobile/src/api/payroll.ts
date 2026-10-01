@@ -69,7 +69,12 @@ function rateForOrder(rates: EmployeeRates, roles: Set<EmployeeRole>): number {
 // Считаем разверткой границ интервалов, а не суммой строк: между каждыми
 // двумя соседними границами берём час(ы) сегмента один раз, по максимальной
 // ставке среди заказов, которые в этот сегмент идут.
-function unionPay(orders: { start: number; end: number; rate: number }[]): { hours: number; amount: number } {
+// Экспортирована для driverReports.ts (Правки 6, «Отработал X часов» —
+// Максим явно попросил, чтобы сумма часов в отчётах водителя совпадала с
+// тем, что покажет «Моя зарплата») — та же развёртка интервалов, чтобы
+// обе цифры считались ровно одной функцией, а не двумя похожими копиями,
+// которые могут разойтись.
+export function unionPay(orders: { start: number; end: number; rate: number }[]): { hours: number; amount: number } {
   if (orders.length === 0) return { hours: 0, amount: 0 };
   const bounds = [...new Set(orders.flatMap((o) => [o.start, o.end]))].sort((a, b) => a - b);
   let hours = 0;
