@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { FlatList, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ActivityIndicator, Appbar, Divider, FAB, HelperText, List, Searchbar, Text } from 'react-native-paper';
 import { useClients, type Client } from '../../api/clients';
 import { ClientDialog } from '../../components/clients/ClientDialog';
@@ -12,6 +13,7 @@ import { formatPhone } from '../../lib/phone';
 
 // База клиентов (раздел 5 ТЗ): поиск, карточка с телефоном и персональной скидкой.
 export default function ClientsScreen() {
+  const insets = useSafeAreaInsets();
   const [search, setSearch] = useState('');
   const clientsQuery = useClients(search);
   const [editing, setEditing] = useState<Client | null>(null);
@@ -62,7 +64,12 @@ export default function ClientsScreen() {
           )}
         />
       )}
-      <FAB icon="account-plus" label="Добавить" style={styles.fab} onPress={newClient.start} />
+      <FAB
+        icon="account-plus"
+        label="Добавить"
+        style={[styles.fab, { bottom: 16 + insets.bottom }]}
+        onPress={newClient.start}
+      />
       {editing && (
         <ClientDialog
           client={editing}
@@ -97,6 +104,5 @@ const styles = StyleSheet.create({
   fab: {
     position: 'absolute',
     right: 16,
-    bottom: 16,
   },
 });

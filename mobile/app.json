@@ -3,7 +3,7 @@
     "name": "Мурзик",
     "slug": "mdtrans",
     "owner": "mdtranss-team",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "runtimeVersion": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -54,7 +54,8 @@
           "photosPermission": false,
           "microphonePermission": false
         }
-      ]
+      ],
+      "./plugins/withAndroidQueries"
     ],
     "experiments": {
       "typedRoutes": true

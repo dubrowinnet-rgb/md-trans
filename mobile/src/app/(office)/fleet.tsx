@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { FlatList, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ActivityIndicator, Appbar, Divider, FAB, HelperText, List, Text } from 'react-native-paper';
 import { useVehicles, type Vehicle } from '../../api/vehicles';
 import { VehicleDialog } from '../../components/vehicles/VehicleDialog';
@@ -22,6 +23,7 @@ function describeVehicle(vehicle: Vehicle) {
 // диспетчер. Машина назначается водителю по умолчанию в «Команде» и
 // подставляется в заказ, где её можно сменить.
 export default function FleetScreen() {
+  const insets = useSafeAreaInsets();
   const vehiclesQuery = useVehicles();
   const [editing, setEditing] = useState<Vehicle | null>(null);
   const [adding, setAdding] = useState(false);
@@ -55,7 +57,12 @@ export default function FleetScreen() {
           )}
         />
       )}
-      <FAB icon="plus" label="Добавить" style={styles.fab} onPress={() => setAdding(true)} />
+      <FAB
+        icon="plus"
+        label="Добавить"
+        style={[styles.fab, { bottom: 16 + insets.bottom }]}
+        onPress={() => setAdding(true)}
+      />
       {editing && (
         <VehicleDialog vehicle={editing} onClose={() => setEditing(null)} onDeleted={() => setEditing(null)} />
       )}
@@ -81,6 +88,5 @@ const styles = StyleSheet.create({
   fab: {
     position: 'absolute',
     right: 16,
-    bottom: 16,
   },
 });

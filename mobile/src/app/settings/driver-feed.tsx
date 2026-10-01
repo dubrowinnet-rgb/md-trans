@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { addMonths, format, startOfMonth } from 'date-fns';
 import { ActivityIndicator, Appbar, Button, HelperText, IconButton, Surface, Text, TextInput } from 'react-native-paper';
 import {
@@ -93,6 +94,7 @@ function FeedScroll({
 }
 
 function AuthorFeed({ employeeId }: { employeeId: string }) {
+  const insets = useSafeAreaInsets();
   const feedQuery = useDriverReportFeed(employeeId);
   const reports = feedQuery.data ?? [];
   const sent = reports.filter((r) => r.status !== 'draft');
@@ -135,7 +137,7 @@ function AuthorFeed({ employeeId }: { employeeId: string }) {
         </FeedScroll>
       )}
 
-      <View style={styles.bottomBar}>
+      <View style={[styles.bottomBar, { paddingBottom: 20 + insets.bottom }]}>
         <Button mode="contained" icon="pencil-plus-outline" onPress={() => openForm()}>
           Написать отчёт
         </Button>

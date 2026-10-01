@@ -1,11 +1,23 @@
-import { useState } from 'react';
-import { FlatList, StyleSheet, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { SectionList, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { ActivityIndicator, Appbar, Button, Dialog, Divider, HelperText, List, Portal, Text, TextInput } from 'react-native-paper';
-import { useCreateTicket, useMyTickets, useSendTicketMessage, useTicketMessages } from '../../api/employeeSupport';
+import {
+  useCreateTicket,
+  useMyTickets,
+  useSendTicketMessage,
+  useTicketMessages,
+  type EmployeeSupportTicket,
+} from '../../api/employeeSupport';
 import { useSession } from '../../providers/SessionProvider';
 import { TICKET_STATUS_LABELS } from '../../theme';
 import type { Employee } from '../../api/employees';
+
+// Актуальные/история (Максим, 01.10, «Правки 5», п.8) — та же идея, что в
+// employee-support-inbox.tsx (там 3 раздела по статусу один в один), но
+// сотруднику важно только «ждёт ответа» или «уже решено», без промежуточного
+// статуса отдельной строкой.
+const ACTIVE_STATUSES: EmployeeSupportTicket['status'][] = ['open', 'in_progress'];
 
 // «Служба поддержки» сотрудника (Максим, 01.10, вторая половина отложенного
 // пункта «Правки 3» п.5 — первая, лента уведомлений, уже в settings/
@@ -24,6 +36,18 @@ function SupportContent({ employee }: { employee: Employee }) {
   const [creating, setCreating] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
+  const sections = useMemo(() => {
+    const active: EmployeeSupportTicket[] = [];
+    const history: EmployeeSupportTicket[] = [];
+    for (const t of ticketsQuery.data ?? []) {
+      (ACTIVE_STATUSES.includes(t.status) ? active : history).push(t);
+    }
+    return [
+      ...(active.length > 0 ? [{ title: 'Актуальные', data: active }] : []),
+      ...(history.length > 0 ? [{ title: 'История обращений', data: history }] : []),
+    ];
+  }, [ticketsQuery.data]);
+
   return (
     <View style={styles.container}>
       <Appbar.Header>
@@ -33,11 +57,16 @@ function SupportContent({ employee }: { employee: Employee }) {
       {ticketsQuery.isLoading ? (
         <ActivityIndicator style={styles.loader} />
       ) : (
-        <FlatList
-          data={ticketsQuery.data ?? []}
+        <SectionList
+          sections={sections}
           keyExtractor={(t) => t.id}
           ItemSeparatorComponent={Divider}
           ListEmptyComponent={<Text style={styles.empty}>Обращений пока нет.</Text>}
+          renderSectionHeader={({ section }) => (
+            <Text variant="labelLarge" style={styles.sectionHeader}>
+              {section.title}
+            </Text>
+          )}
           renderItem={({ item }) => (
             <List.Accordion
               title={item.subject}
@@ -175,6 +204,11 @@ const styles = StyleSheet.create({
   empty: {
     textAlign: 'center',
     marginTop: 32,
+  },
+  sectionHeader: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    opacity: 0.6,
   },
   addButton: {
     margin: 16,

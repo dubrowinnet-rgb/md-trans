@@ -4,8 +4,15 @@ import { router } from 'expo-router';
 import { Badge, Divider, IconButton, Menu } from 'react-native-paper';
 import { supabase } from '../../lib/supabase';
 import type { Employee } from '../../api/employees';
-import { useUnreadNotificationsCount } from '../../api/notifications';
+import { useUnreadNotificationCounts } from '../../api/notifications';
 import { formatTime } from '../../utils/date';
+
+// Menu.Item (react-native-paper) не умеет отдельный трейлинг-бейдж с числом
+// (только leadingIcon/trailingIcon — иконка, не контент) — дописываем
+// число прямо в заголовок, как Максим и написал пример: «мои отчеты 1».
+function withCount(title: string, count: number) {
+  return count > 0 ? `${title} (${count})` : title;
+}
 
 // Левое меню сотрудника (Максим, 30.09, «Правки 3», п.5 — по образцу
 // референса Bumpix, «не нужно перерисовывать всё как там, но сделай
@@ -15,11 +22,12 @@ import { formatTime } from '../../utils/date';
 // одним местом вместо AccountMenu (настройки/выход) и отдельных иконок в
 // Appbar (раньше «Мой график»/«Мои отчёты» дублировались в шапке
 // календаря и тут — теперь только тут, см. (employee)/my-orders.tsx).
-// Бейдж на значке — непрочитанные уведомления (useUnreadNotificationsCount,
-// миграция 0024), тот же приём, что у колокольчика администратора
-// (NotificationBell). «Служба поддержки» (Максим, 01.10, миграция 0025) —
-// обращения к админу/диспетчеру своей компании, не к владельцу сервиса
-// (см. employee-support.tsx).
+// Бейджи (Максим, 01.10, «Правки 5», п.9) — у каждого раздела с непрочитанным
+// своя цифра (useUnreadNotificationCounts раскладывает один и тот же запрос
+// ленты, миграция 0024, по kind), а на самом значке меню — их сумма; тот же
+// суммарный бейдж держит и иконка приложения (useBadgeSync). «Служба
+// поддержки» (Максим, 01.10, миграция 0025) — обращения к админу/диспетчеру
+// своей компании, не к владельцу сервиса (см. employee-support.tsx).
 export function EmployeeMenu({
   employee,
   lastSyncedAt,
@@ -33,7 +41,7 @@ export function EmployeeMenu({
 }) {
   const [visible, setVisible] = useState(false);
   const isDriver = employee.role === 'driver';
-  const unread = useUnreadNotificationsCount();
+  const unread = useUnreadNotificationCounts();
 
   const go = (path: Parameters<typeof router.push>[0]) => {
     setVisible(false);
@@ -48,9 +56,9 @@ export function EmployeeMenu({
         <Pressable onPress={() => setVisible(true)} accessibilityLabel="Меню" style={styles.touch}>
           <View>
             <IconButton icon="menu" size={24} style={styles.iconButton} />
-            {unread > 0 && (
+            {unread.total > 0 && (
               <Badge style={styles.badge} size={16}>
-                {unread}
+                {unread.total}
               </Badge>
             )}
           </View>
@@ -62,12 +70,20 @@ export function EmployeeMenu({
       {isDriver && (
         <Menu.Item
           leadingIcon="clipboard-text-outline"
-          title="Мои отчёты"
+          title={withCount('Мои отчёты', unread.reports)}
           onPress={() => go('/settings/driver-feed')}
         />
       )}
-      <Menu.Item leadingIcon="bell-outline" title="Уведомления" onPress={() => go('/settings/notifications')} />
-      <Menu.Item leadingIcon="headset" title="Служба поддержки" onPress={() => go('/settings/employee-support')} />
+      <Menu.Item
+        leadingIcon="bell-outline"
+        title={withCount('Уведомления', unread.orders)}
+        onPress={() => go('/settings/notifications')}
+      />
+      <Menu.Item
+        leadingIcon="headset"
+        title={withCount('Служба поддержки', unread.support)}
+        onPress={() => go('/settings/employee-support')}
+      />
       <Menu.Item leadingIcon="cog-outline" title="Настройки" onPress={() => go('/settings')} />
       <Menu.Item leadingIcon="information-outline" title="О приложении" onPress={() => go('/settings/about')} />
       <Divider />

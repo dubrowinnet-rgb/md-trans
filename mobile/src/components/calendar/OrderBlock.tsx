@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text } from 'react-native';
 import type { CalendarOrder } from '../../api/orders';
 import { formatTime, minutesFromDayStart } from '../../utils/date';
 import { orderColor } from './orderLayout';
+import { ZoomStableText } from './ZoomStableText';
 
 function crewConfirmed(order: CalendarOrder) {
   if (order.order_crew.length === 0) return null;
@@ -63,22 +64,28 @@ export const OrderBlock = memo(function OrderBlock({
       ]}
     >
       {cancelled && (
-        <Text style={[styles.text, compact && styles.compact, styles.cancelledLabel]}>заказ отменен</Text>
+        <ZoomStableText style={[styles.text, compact && styles.compact, styles.cancelledLabel]}>
+          заказ отменен
+        </ZoomStableText>
       )}
-      <Text style={[styles.text, compact && styles.compact, cancelled && styles.strikethrough]}>
+      <ZoomStableText style={[styles.text, compact && styles.compact, cancelled && styles.strikethrough]}>
         {formatTime(start)} - {formatTime(end)},{' '}
         <Text style={styles.bold}>{order.clients?.name ?? 'Без клиента'}</Text>
         {service ? `, ${service}` : ''}
-      </Text>
+      </ZoomStableText>
       {route.length > 0 && (
-        <Text style={[styles.text, compact && styles.compact, styles.detail, cancelled && styles.strikethrough]}>
+        <ZoomStableText
+          style={[styles.text, compact && styles.compact, styles.detail, cancelled && styles.strikethrough]}
+        >
           {route}
-        </Text>
+        </ZoomStableText>
       )}
       {order.cargo_description && !compact && (
-        <Text style={[styles.text, styles.detail, cancelled && styles.strikethrough]}>{`Груз: ${order.cargo_description}`}</Text>
+        <ZoomStableText style={[styles.text, styles.detail, cancelled && styles.strikethrough]}>{`Груз: ${order.cargo_description}`}</ZoomStableText>
       )}
-      {confirmation && !compact && <Text style={[styles.text, styles.confirmation]}>{confirmation}</Text>}
+      {confirmation && !compact && (
+        <ZoomStableText style={[styles.text, styles.confirmation]}>{confirmation}</ZoomStableText>
+      )}
     </Pressable>
   );
 });

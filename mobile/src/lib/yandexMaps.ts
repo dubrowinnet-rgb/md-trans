@@ -31,3 +31,13 @@ export function yandexMapsRouteAppUrl(addresses: string[]) {
   const points = addresses.map((a) => encodeURIComponent(a)).join('~');
   return `yandexmaps://maps.yandex.ru/?rtext=${points}&rtt=auto`;
 }
+
+// Максим просил именно Яндекс.Навигатор (01.10, «Правки 5», п.2) — это
+// другое приложение с другой схемой, не Яндекс.Карты (3 прошлые попытки
+// трогали только схему/ссылку Карт). У Навигатора нет варианта с текстовым
+// адресом — только координаты (см. lib/yandexGeocode.ts), поэтому первая
+// и последняя точки сначала геокодируются в order/[id].tsx и передаются
+// сюда уже как lat/lon.
+export function yandexNaviRouteAppUrl(from: { lat: number; lon: number }, to: { lat: number; lon: number }) {
+  return `yandexnavi://build_route_on_map?lat_from=${from.lat}&lon_from=${from.lon}&lat_to=${to.lat}&lon_to=${to.lon}`;
+}

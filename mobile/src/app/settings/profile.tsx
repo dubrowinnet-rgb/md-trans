@@ -7,12 +7,15 @@ import { useUpdateOwnProfile } from '../../api/accounts';
 import { useSession } from '../../providers/SessionProvider';
 import { ACCOUNT_ROLE_LABELS } from '../../theme';
 
-// «Мой профиль» (доработки 1, п.2) — сотрудник сам меняет телефон/пароль,
-// доступно любой роли. Логина больше нет (доработки 3, п.4) — вход по
-// телефону и паролю, см. app/login.tsx. «Оплата профиля» — уже
-// существующее employees.paid_until (миграция 0001), просто раньше не
-// было экрана, который его показывает; «Продлить» — заглушка, как и
-// просил Максим.
+// «Мой профиль» (доработки 1, п.2) — сотрудник сам меняет телефон/пароль.
+// Водитель/грузчик — исключение (Максим, 01.10, «Правки 5», п.4): номер и
+// пароль им задаёт диспетчер, поля только показываются текстом, без формы
+// (сервер всё равно отклонит попытку их сменить — см. update-account/index.ts
+// — но тогда сотрудник увидел бы ошибку уже после нажатия «Сохранить», это
+// понятнее сразу). Логина больше нет (доработки 3, п.4) — вход по телефону и
+// паролю, см. app/login.tsx. «Оплата профиля» — уже существующее
+// employees.paid_until (миграция 0001), просто раньше не было экрана, который
+// его показывает; «Продлить» — заглушка, как и просил Максим.
 export default function ProfileSettingsScreen() {
   const { employee } = useSession();
   const updateProfile = useUpdateOwnProfile();
@@ -22,6 +25,8 @@ export default function ProfileSettingsScreen() {
   const [snackbar, setSnackbar] = useState<string | null>(null);
 
   if (!employee) return null;
+
+  const canEditLogin = employee.role !== 'driver' && employee.role !== 'loader';
 
   const handleSave = async () => {
     setError(null);
@@ -46,29 +51,40 @@ export default function ProfileSettingsScreen() {
           {ACCOUNT_ROLE_LABELS[employee.role]}
         </Text>
 
-        <TextInput
-          mode="outlined"
-          label="Телефон"
-          accessibilityLabel="Телефон"
-          value={phone}
-          onChangeText={setPhone}
-          keyboardType="phone-pad"
-        />
-        <HelperText type="info">По этому номеру вы входите в приложение</HelperText>
-        <TextInput
-          mode="outlined"
-          label="Новый пароль"
-          accessibilityLabel="Новый пароль"
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-          autoCapitalize="none"
-        />
-        <HelperText type="info">Оставьте пустым, чтобы не менять пароль</HelperText>
-        {error && <HelperText type="error">{error}</HelperText>}
-        <Button mode="contained" onPress={handleSave} loading={updateProfile.isPending} disabled={updateProfile.isPending}>
-          Сохранить
-        </Button>
+        {canEditLogin ? (
+          <>
+            <TextInput
+              mode="outlined"
+              label="Телефон"
+              accessibilityLabel="Телефон"
+              value={phone}
+              onChangeText={setPhone}
+              keyboardType="phone-pad"
+            />
+            <HelperText type="info">По этому номеру вы входите в приложение</HelperText>
+            <TextInput
+              mode="outlined"
+              label="Новый пароль"
+              accessibilityLabel="Новый пароль"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              autoCapitalize="none"
+            />
+            <HelperText type="info">Оставьте пустым, чтобы не менять пароль</HelperText>
+            {error && <HelperText type="error">{error}</HelperText>}
+            <Button mode="contained" onPress={handleSave} loading={updateProfile.isPending} disabled={updateProfile.isPending}>
+              Сохранить
+            </Button>
+          </>
+        ) : (
+          <>
+            <TextInput mode="outlined" label="Телефон" value={employee.phone ?? '—'} editable={false} />
+            <HelperText type="info">
+              Номер и пароль для входа задаёт диспетчер — обратитесь к нему, чтобы их изменить
+            </HelperText>
+          </>
+        )}
 
         <Divider style={styles.divider} />
         <Text variant="labelLarge">Оплата профиля</Text>

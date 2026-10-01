@@ -45,11 +45,30 @@ export function useNotifications() {
   });
 }
 
-// Бейдж на значке меню — просто количество непрочитанных из того же
-// запроса (react-query отдаёт один и тот же кеш всем подписчикам).
+// Бейдж на значке меню и приложения — просто количество непрочитанных из
+// того же запроса (react-query отдаёт один и тот же кеш всем подписчикам).
 export function useUnreadNotificationsCount() {
   const { data } = useNotifications();
   return data?.filter((n) => !n.read_at).length ?? 0;
+}
+
+const REPORT_KINDS: NotificationKind[] = ['report_approved', 'report_rejected'];
+const SUPPORT_KINDS: NotificationKind[] = ['support_reply'];
+
+// Цифры по разделам бокового меню (Максим, 01.10, «Правки 5», п.9: «мои
+// отчеты 1, служба поддержки 1, уведомления 3 ... на гамбургере и иконке
+// приложения эти цифры суммируются»). «Уведомления» — всё остальное
+// (назначение/изменение/отмена заказа): раздела под них отдельного в меню
+// нет, это и есть сам экран «Уведомления». total — та же сумма, что и
+// useUnreadNotificationsCount (один и тот же непрочитанный набор, просто
+// разложенный по разделам), не пересекаются, поэтому сумма по строкам и есть
+// общий бейдж.
+export function useUnreadNotificationCounts() {
+  const { data } = useNotifications();
+  const unread = data?.filter((n) => !n.read_at) ?? [];
+  const reports = unread.filter((n) => REPORT_KINDS.includes(n.kind)).length;
+  const support = unread.filter((n) => SUPPORT_KINDS.includes(n.kind)).length;
+  return { orders: unread.length - reports - support, reports, support, total: unread.length };
 }
 
 // Отмечает всю ленту прочитанной разом — экран ленты вызывает при открытии,
@@ -63,6 +82,31 @@ export function useMarkAllNotificationsRead() {
         .from('notifications')
         .update({ read_at: new Date().toISOString() })
         .is('read_at', null);
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['notifications'] }),
+  });
+}
+
+// Точечная отметка прочитанным по тому, что открыли из всплывающего push
+// (Максим, 01.10, «Правки 5», п.9: «если пользователь нажал и перешёл по
+// всплывающей шторке уведомления, оно в непрочитанные не заносится») — в
+// отличие от useMarkAllNotificationsRead (вся лента разом при открытии
+// экрана), здесь гасится только то уведомление, что действительно открыли,
+// по его order_id/driver_report_id: у самого push нет id конкретной строки
+// notifications (один push уходит сразу всем исполнителям, см.
+// notify-order-changed/index.ts), а order_id/driver_report_id уже есть в
+// data и этого достаточно — RLS сам ограничивает обновление своими же
+// записями. См. hooks/useNotificationTapNavigation.ts.
+export function useMarkNotificationsReadFor() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (target: { orderId?: string; driverReportId?: string }) => {
+      let query = supabase.from('notifications').update({ read_at: new Date().toISOString() }).is('read_at', null);
+      if (target.orderId) query = query.eq('order_id', target.orderId);
+      else if (target.driverReportId) query = query.eq('driver_report_id', target.driverReportId);
+      else return;
+      const { error } = await query;
       if (error) throw error;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['notifications'] }),

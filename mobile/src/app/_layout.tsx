@@ -13,6 +13,7 @@ import { supabase } from '../lib/supabase';
 import { registerForPushNotifications } from '../lib/pushNotifications';
 import { useRealtimeSync } from '../hooks/useRealtimeSync';
 import { useBadgeSync } from '../hooks/useBadgeSync';
+import { useNotificationTapNavigation } from '../hooks/useNotificationTapNavigation';
 import { theme } from '../theme';
 
 SplashScreen.preventAutoHideAsync();
@@ -49,6 +50,7 @@ function RootNavigator() {
   const { session, employee, isLoading } = useSession();
   useRealtimeSync();
   useBadgeSync();
+  useNotificationTapNavigation();
 
   useEffect(() => {
     if (!isLoading) SplashScreen.hideAsync();

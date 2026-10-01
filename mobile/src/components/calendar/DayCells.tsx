@@ -5,6 +5,7 @@ import type { CalendarOrder } from '../../api/orders';
 import type { WorkingHours } from '../../api/companySettings';
 import { OrderBlock } from './OrderBlock';
 import { layoutDayOrders } from './orderLayout';
+import { ZoomStableText } from './ZoomStableText';
 import { addMinutes, formatShortMonth, formatWeekday, isSameDay, minutesFromDayStart, startOfDay } from '../../utils/date';
 
 export const HEADER_HEIGHT = 52;
@@ -49,7 +50,7 @@ export const HourAxis = memo(function HourAxis({
     <View style={[styles.axis, { height: gridHeight }]}>
       {HOURS.map((hour) => (
         <View key={hour} style={[styles.hourRow, { height: hourHeight }]}>
-          <Text style={styles.hourLabel}>{String(hour).padStart(2, '0')}:00</Text>
+          <ZoomStableText style={styles.hourLabel}>{String(hour).padStart(2, '0')}:00</ZoomStableText>
         </View>
       ))}
       <View style={[styles.axisNowDot, { top: nowY - 3 }]} />

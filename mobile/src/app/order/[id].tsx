@@ -36,7 +36,8 @@ import {
 } from '../../lib/permissions';
 import { DateTimeField } from '../../components/form/DateTimeField';
 import { CrewDialog } from '../../components/orders/CrewDialog';
-import { yandexMapsRouteAppUrl, yandexMapsRouteUrl } from '../../lib/yandexMaps';
+import { yandexMapsRouteAppUrl, yandexMapsRouteUrl, yandexNaviRouteAppUrl } from '../../lib/yandexMaps';
+import { geocodeAddress } from '../../lib/yandexGeocode';
 import { formatPhone, normalizePhone } from '../../lib/phone';
 import { CREW_STATUS_LABELS } from '../../theme';
 import { formatDayLabel, formatTime } from '../../utils/date';
@@ -50,16 +51,33 @@ function crewRoleLabel(crew: { isDriver: boolean; isLoader: boolean }) {
   return crew.isDriver ? 'Водитель' : 'Грузчик';
 }
 
-// Сначала пробуем схему самого приложения Яндекс.Карт (должна надёжнее
-// строить маршрут внутри приложения, см. lib/yandexMaps.ts) — если оно не
-// установлено, Linking.openURL с такой схемой отклоняется (на Android и
-// iOS по-разному, но в обоих случаях промисом с ошибкой, а не тихо) —
-// ловим это и открываем обычную ссылку (сайт или App Links на усмотрение
-// системы). Не через canOpenURL: на Android 11+ он требует отдельного
-// объявления схемы в AndroidManifest (<queries>), иначе тоже вернёт false
-// для установленного приложения — не проверено, полагаться на этот
-// результат рискованно так же, как на два прошлых исправления.
+// Максим явно просил Яндекс.Навигатор, а не Карты (01.10, «Правки 5», п.2,
+// 4-я попытка) — пробуем его первым, если удалось геокодировать обе точки
+// (у Навигатора нет текстового адреса, только lat/lon, см.
+// lib/yandexGeocode.ts). Дальше — схема самого приложения Яндекс.Карт
+// (текстовый адрес, см. lib/yandexMaps.ts), и только потом обычная
+// https-ссылка. Linking.openURL с незарегистрированной схемой отклоняется
+// промисом с ошибкой (не тихо) — ловим и идём к следующему варианту.
+// Не через canOpenURL: на Android 11+ он требует объявления видимости
+// пакета в AndroidManifest (<queries>) — это добавлено отдельным локальным
+// плагином (plugins/withAndroidQueries.js), вероятная настоящая причина,
+// почему все 3 прошлые попытки не работали на реальном устройстве (меняет
+// нативный манифест — нужна пересборка приложения, не OTA). Сама проверка
+// здесь всё равно через try/catch, а не canOpenURL — так надёжнее независимо
+// от того, сработает ли <queries> как ожидается.
 async function openYandexRoute(addresses: string[]) {
+  if (addresses.length >= 2) {
+    const [fromAddr, toAddr] = [addresses[0], addresses[addresses.length - 1]];
+    const [from, to] = await Promise.all([geocodeAddress(fromAddr), geocodeAddress(toAddr)]);
+    if (from && to) {
+      try {
+        await Linking.openURL(yandexNaviRouteAppUrl(from, to));
+        return;
+      } catch {
+        // Навигатор не установлен или схема не разрешилась — пробуем Карты ниже.
+      }
+    }
+  }
   try {
     await Linking.openURL(yandexMapsRouteAppUrl(addresses));
   } catch {

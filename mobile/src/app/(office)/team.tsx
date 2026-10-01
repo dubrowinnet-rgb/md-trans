@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { FlatList, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ActivityIndicator, Appbar, Badge, Divider, FAB, HelperText, List, Text } from 'react-native-paper';
 import { useAllAccounts, type Account } from '../../api/accounts';
 import { AccountDialog } from '../../components/accounts/AccountDialog';
@@ -12,6 +13,7 @@ import { ACCOUNT_ROLE_ICONS, ACCOUNT_ROLE_LABELS } from '../../theme';
 // водители, грузчики), с логином/паролем и правами доступа для каждого
 // (раздел «разделить входы»). Видна только роли admin — см. (office)/_layout.tsx.
 export default function TeamScreen() {
+  const insets = useSafeAreaInsets();
   const accountsQuery = useAllAccounts();
   const [editing, setEditing] = useState<Account | 'new' | null>(null);
 
@@ -50,7 +52,12 @@ export default function TeamScreen() {
           }}
         />
       )}
-      <FAB icon="account-plus" label="Добавить" style={styles.fab} onPress={() => setEditing('new')} />
+      <FAB
+        icon="account-plus"
+        label="Добавить"
+        style={[styles.fab, { bottom: 16 + insets.bottom }]}
+        onPress={() => setEditing('new')}
+      />
       {editing && (
         <AccountDialog account={editing === 'new' ? null : editing} onClose={() => setEditing(null)} />
       )}
@@ -75,7 +82,6 @@ const styles = StyleSheet.create({
   fab: {
     position: 'absolute',
     right: 16,
-    bottom: 16,
   },
   suspendedText: {
     opacity: 0.5,

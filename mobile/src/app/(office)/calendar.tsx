@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Appbar, Banner, FAB, ProgressBar } from 'react-native-paper';
 import { useWorkingHours } from '../../api/companySettings';
 import { useEmployees } from '../../api/employees';
@@ -16,6 +17,7 @@ import { ALL_EMPLOYEES, EmployeeFilter } from '../../components/calendar/Employe
 import { formatHeaderDate } from '../../utils/date';
 
 export default function DispatcherCalendarScreen() {
+  const insets = useSafeAreaInsets();
   const nav = useCalendarNav();
   const { employee } = useSession();
   const canManage = canCreateOrders(employee);
@@ -92,7 +94,12 @@ export default function DispatcherCalendarScreen() {
       />
 
       {canManage && (
-        <FAB icon="plus" style={styles.fab} onPress={() => openNewOrder()} accessibilityLabel="Новый заказ" />
+        <FAB
+          icon="plus"
+          style={[styles.fab, { bottom: 16 + insets.bottom }]}
+          onPress={() => openNewOrder()}
+          accessibilityLabel="Новый заказ"
+        />
       )}
     </View>
   );
@@ -111,6 +118,5 @@ const styles = StyleSheet.create({
   fab: {
     position: 'absolute',
     right: 16,
-    bottom: 16,
   },
 });

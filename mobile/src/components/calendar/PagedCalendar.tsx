@@ -8,6 +8,7 @@ import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GestureDetector, usePinchGesture } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import type { CalendarOrder } from '../../api/orders';
@@ -16,6 +17,7 @@ import { PAGES_AROUND, type DaysMode } from '../../hooks/useCalendarNav';
 import { useNow } from '../../hooks/useNow';
 import { addDays, differenceInCalendarDays, minutesFromDayStart, PIXELS_PER_MINUTE } from '../../utils/date';
 import { AXIS_WIDTH, DayBody, DayHeader, HEADER_HEIGHT, HourAxis } from './DayCells';
+import { ZoomRatioProvider } from './ZoomStableText';
 
 // После каждого перелистывания страницы пересобираются вокруг новой даты,
 // поэтому листать можно бесконечно в обе стороны.
@@ -62,6 +64,7 @@ function PagedCalendarInner({
   width,
 }: Parameters<typeof PagedCalendar>[0] & { width: number }) {
   const now = useNow();
+  const insets = useSafeAreaInsets();
   const pageWidth = width - AXIS_WIDTH;
   const columnWidth = pageWidth / mode;
   const compact = mode === 7;
@@ -206,7 +209,13 @@ function PagedCalendarInner({
         if (orderMinutes < targetMinutes) targetMinutes = orderMinutes;
       }
     }
-    const target = Math.max(0, targetMinutes * pixelsPerMinuteRef.current - 24);
+    // Раньше вычитали фиксированные 24px «воздуха» сверху — при обычном
+    // масштабе (1.2 px/мин) это ~20 минут, на глаз читалось как «сетка
+    // начинается не с начала рабочего времени, а на полчаса выше» (Максим,
+    // 01.10, «Правки 5», п.6), особенно заметно при пролистывании (этот
+    // эффект пересчитывается при каждой смене anchor/mode). Начинаем ровно
+    // с цели, без отступа.
+    const target = Math.max(0, targetMinutes * pixelsPerMinuteRef.current);
     const id = setTimeout(() => verticalRef.current?.scrollTo({ y: target, animated: scrollToNowSignal > 0 }), 50);
     return () => clearTimeout(id);
   }, [scrollToNowSignal, orders.length, anchor, mode, workingHours.startMinutes]);
@@ -216,6 +225,16 @@ function PagedCalendarInner({
       const page = Math.round(offset / pageWidth);
       const shift = page - PAGES_AROUND;
       if (shift !== 0) {
+        // Сброс на середину — тем же тиком, что и смена даты ниже, а не на
+        // отдельном рендере через recenter()/useLayoutEffect: иначе между
+        // «даты уже пересчитаны» и «прокрутка ещё не снята на середину»
+        // успевал прорисоваться кадр с соседней (неверной на эту позицию)
+        // датой — на реальном устройстве это читалось как мерцание/скачок
+        // при пролистывании (Максим, 01.10, «Правки 5», п.5). Оба вызова в
+        // одном тике JS с большей вероятностью попадают в один нативный
+        // кадр. Не проверено на устройстве.
+        bodyRef.current?.scrollTo({ x: middle, animated: false });
+        headerRef.current?.scrollTo({ x: middle, animated: false });
         onAnchorChange(addDays(anchor, shift * mode));
       } else if (Math.abs(offset - middle) > 1) {
         bodyRef.current?.scrollTo({ x: middle, animated: true });
@@ -283,6 +302,11 @@ function PagedCalendarInner({
       <ScrollView
         ref={verticalRef}
         style={styles.container}
+        // Без этого последняя строка (23:00) упиралась в экранные кнопки
+        // телефона и до неё нельзя было докрутить и нажать (Максим, 01.10,
+        // «Правки 5», п.6) — снизу теперь столько же пустого места, сколько
+        // системная зона жестов/кнопок занимает физически.
+        contentContainerStyle={{ paddingBottom: insets.bottom }}
         bounces
         alwaysBounceVertical
         overScrollMode="always"
@@ -292,46 +316,48 @@ function PagedCalendarInner({
       >
         <GestureDetector gesture={pinchGesture}>
           <Animated.View style={[styles.bodyRow, animatedBodyStyle]}>
-            <HourAxis now={now} pixelsPerMinute={pixelsPerMinute} hourHeight={hourHeight} gridHeight={gridHeight} />
-            <ScrollView
-              ref={bodyRef}
-              horizontal
-              pagingEnabled
-              // По умолчанию ('normal') перелистывание тормозит заметно
-              // медленнее, чем у Bumpix (Максим, 30.09, «Правки 3», п.9,
-              // сравнение с видео) — 'fast' ближе к тому, как там отпускаешь
-              // палец и страница уже долистнула.
-              decelerationRate="fast"
-              showsHorizontalScrollIndicator={false}
-              contentOffset={{ x: middle, y: 0 }}
-              onLayout={recenter}
-              style={{ width: pageWidth }}
-              onScroll={onScroll}
-              scrollEventThrottle={16}
-              onMomentumScrollEnd={onMomentumScrollEnd}
-              onScrollEndDrag={onScrollEndDrag}
-            >
-              {pages.map((days, page) => (
-                <View key={page} style={[styles.page, { width: pageWidth }]}>
-                  {days.map((i) => (
-                    <DayBody
-                      key={i}
-                      date={addDays(firstDay, i)}
-                      orders={ordersByDay.get(i) ?? []}
-                      width={columnWidth}
-                      now={now}
-                      compact={compact}
-                      workingHours={workingHours}
-                      pixelsPerMinute={pixelsPerMinute}
-                      hourHeight={hourHeight}
-                      gridHeight={gridHeight}
-                      onPressOrder={onPressOrder}
-                      onPressSlot={onPressSlot}
-                    />
-                  ))}
-                </View>
-              ))}
-            </ScrollView>
+            <ZoomRatioProvider value={{ liveScale, committedScale }}>
+              <HourAxis now={now} pixelsPerMinute={pixelsPerMinute} hourHeight={hourHeight} gridHeight={gridHeight} />
+              <ScrollView
+                ref={bodyRef}
+                horizontal
+                pagingEnabled
+                // По умолчанию ('normal') перелистывание тормозит заметно
+                // медленнее, чем у Bumpix (Максим, 30.09, «Правки 3», п.9,
+                // сравнение с видео) — 'fast' ближе к тому, как там отпускаешь
+                // палец и страница уже долистнула.
+                decelerationRate="fast"
+                showsHorizontalScrollIndicator={false}
+                contentOffset={{ x: middle, y: 0 }}
+                onLayout={recenter}
+                style={{ width: pageWidth }}
+                onScroll={onScroll}
+                scrollEventThrottle={16}
+                onMomentumScrollEnd={onMomentumScrollEnd}
+                onScrollEndDrag={onScrollEndDrag}
+              >
+                {pages.map((days, page) => (
+                  <View key={page} style={[styles.page, { width: pageWidth }]}>
+                    {days.map((i) => (
+                      <DayBody
+                        key={i}
+                        date={addDays(firstDay, i)}
+                        orders={ordersByDay.get(i) ?? []}
+                        width={columnWidth}
+                        now={now}
+                        compact={compact}
+                        workingHours={workingHours}
+                        pixelsPerMinute={pixelsPerMinute}
+                        hourHeight={hourHeight}
+                        gridHeight={gridHeight}
+                        onPressOrder={onPressOrder}
+                        onPressSlot={onPressSlot}
+                      />
+                    ))}
+                  </View>
+                ))}
+              </ScrollView>
+            </ZoomRatioProvider>
           </Animated.View>
         </GestureDetector>
       </ScrollView>
