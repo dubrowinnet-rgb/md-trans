@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
+import { useSession } from '../providers/SessionProvider';
 import type { NotificationKind } from '../types/database';
 
 export interface AppNotification {
@@ -22,6 +23,7 @@ const NOTIFICATIONS_LIMIT = 100;
 // отдаёт только свои записи; вставить уведомление с телефона нельзя —
 // только функции в базе (триггер и approve/reject_driver_report).
 export function useNotifications() {
+  const { session } = useSession();
   return useQuery({
     queryKey: ['notifications'],
     queryFn: async (): Promise<AppNotification[]> => {
@@ -33,6 +35,10 @@ export function useNotifications() {
       if (error) throw error;
       return data ?? [];
     },
+    // До входа запрос не нужен (RLS всё равно ничего не отдаст без сессии) —
+    // это же позволяет безопасно держать useUnreadNotificationsCount
+    // смонтированным в корне приложения (см. useBadgeSync) ещё до логина.
+    enabled: !!session,
     // Та же частота, что у автосинхронизации заказов (mobile/src/api/orders.ts) —
     // бейдж в меню обновляется сам, пока экран открыт.
     refetchInterval: 60_000,

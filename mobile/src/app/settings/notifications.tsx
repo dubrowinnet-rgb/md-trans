@@ -7,6 +7,7 @@ import { formatMoment } from '../../components/driverReports/DriverReportCard';
 import type { NotificationKind } from '../../types/database';
 
 const KIND_ICON: Record<NotificationKind, string> = {
+  order_assigned: 'calendar-plus-outline',
   order_changed: 'calendar-edit-outline',
   order_cancelled: 'calendar-remove-outline',
   report_approved: 'check-circle-outline',

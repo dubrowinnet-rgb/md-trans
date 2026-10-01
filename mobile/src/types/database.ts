@@ -25,7 +25,8 @@ export type NotificationKind =
   | 'order_cancelled'
   | 'report_approved'
   | 'report_rejected'
-  | 'support_reply';
+  | 'support_reply'
+  | 'order_assigned';
 export type OrderStatus = 'new' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled';
 export type StopType = 'pickup' | 'dropoff';
 export type CrewStatus = 'notified' | 'read' | 'confirmed';

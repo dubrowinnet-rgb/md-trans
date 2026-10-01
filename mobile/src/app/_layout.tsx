@@ -12,6 +12,7 @@ import { SessionProvider, useSession } from '../providers/SessionProvider';
 import { supabase } from '../lib/supabase';
 import { registerForPushNotifications } from '../lib/pushNotifications';
 import { useRealtimeSync } from '../hooks/useRealtimeSync';
+import { useBadgeSync } from '../hooks/useBadgeSync';
 import { theme } from '../theme';
 
 SplashScreen.preventAutoHideAsync();
@@ -47,6 +48,7 @@ export default function RootLayout() {
 function RootNavigator() {
   const { session, employee, isLoading } = useSession();
   useRealtimeSync();
+  useBadgeSync();
 
   useEffect(() => {
     if (!isLoading) SplashScreen.hideAsync();

@@ -7,7 +7,10 @@ Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
     shouldPlaySound: true,
-    shouldSetBadge: false,
+    // Цифру на значке приложения теперь держит useBadgeSync (хук в
+    // src/hooks/useBadgeSync.ts) по количеству непрочитанных в ленте —
+    // единый источник правды вместо значения из конкретного push.
+    shouldSetBadge: true,
     shouldShowBanner: true,
     shouldShowList: true,
   }),
