@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Keyboard, ScrollView, StyleSheet, View, Pressable } from 'react-native';
 import { Button, Dialog, HelperText, Portal, TextInput } from 'react-native-paper';
 import { useCreateService, useUpdateService, type Service, type ServiceInput } from '../../api/services';
+import { hoursTextToMinutes, minutesToHoursText } from '../../lib/services';
 
 // Та же палитра, что уже используется в стартовом каталоге услуг
 // (миграция 0004_services_catalog) — чтобы цвета новых услуг сочетались
@@ -20,9 +21,7 @@ export function ServiceDialog({ service, onClose }: { service: Service | null; o
   const saving = createService.isPending || updateService.isPending;
 
   const [name, setName] = useState(service?.name ?? '');
-  const [durationText, setDurationText] = useState(
-    service?.base_duration_minutes != null ? String(service.base_duration_minutes) : ''
-  );
+  const [durationText, setDurationText] = useState(minutesToHoursText(service?.base_duration_minutes ?? null));
   const [priceText, setPriceText] = useState(service?.base_price != null ? String(service.base_price) : '');
   const [color, setColor] = useState(service?.color ?? COLOR_SWATCHES[0]);
   const [error, setError] = useState<string | null>(null);
@@ -35,7 +34,7 @@ export function ServiceDialog({ service, onClose }: { service: Service | null; o
     }
     const input: ServiceInput = {
       name: name.trim(),
-      base_duration_minutes: durationText.trim() ? Number(durationText.trim()) : null,
+      base_duration_minutes: hoursTextToMinutes(durationText),
       base_price: priceText.trim() ? Number(priceText.trim().replace(',', '.')) : null,
       color,
     };
@@ -65,8 +64,8 @@ export function ServiceDialog({ service, onClose }: { service: Service | null; o
               <TextInput mode="outlined" label="Название *" accessibilityLabel="Название" value={name} onChangeText={setName} />
               <TextInput
                 mode="outlined"
-                label="Время по умолчанию, мин"
-                accessibilityLabel="Время по умолчанию, мин"
+                label="Время по умолчанию, ч"
+                accessibilityLabel="Время по умолчанию, ч"
                 value={durationText}
                 onChangeText={setDurationText}
                 keyboardType="numeric"

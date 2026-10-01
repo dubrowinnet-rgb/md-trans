@@ -81,6 +81,7 @@ export interface Database {
           loading_hourly_rate: number | null;
           rate_mode: RateMode;
           created_at: string;
+          hidden_at: string | null;
         };
         Insert: {
           id?: string;
@@ -111,6 +112,7 @@ export interface Database {
           driving_hourly_rate?: number | null;
           loading_hourly_rate?: number | null;
           rate_mode?: RateMode;
+          hidden_at?: string | null;
         };
         Update: Partial<Database['public']['Tables']['employees']['Insert']>;
         Relationships: [];

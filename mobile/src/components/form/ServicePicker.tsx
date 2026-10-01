@@ -2,13 +2,11 @@ import { useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { Button, Checkbox, Dialog, HelperText, Portal, Text, TouchableRipple } from 'react-native-paper';
 import type { Service } from '../../api/services';
+import { formatDurationHours } from '../../lib/services';
 
 export function formatServiceMeta(service: Service) {
   const parts: string[] = [];
-  if (service.base_duration_minutes) {
-    const h = service.base_duration_minutes / 60;
-    parts.push(Number.isInteger(h) ? `${h} ч.` : `${service.base_duration_minutes} мин.`);
-  }
+  if (service.base_duration_minutes) parts.push(formatDurationHours(service.base_duration_minutes));
   parts.push(`${Number(service.base_price ?? 0)} ₽`);
   return parts.join(' · ');
 }

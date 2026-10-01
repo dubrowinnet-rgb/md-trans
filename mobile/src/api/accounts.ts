@@ -16,7 +16,9 @@ export interface AccountPermissions {
 // Все аккаунты (админы, диспетчеры, водители, грузчики) — для экрана
 // «Команда», который видит только администратор. Уволенные (account_status
 // = 'suspended') остаются в списке — экран гасит их строку и показывает
-// бейдж «Уволен», а не прячет совсем, см. AccountDialog.tsx.
+// бейдж «Уволен», а не прячет совсем, см. AccountDialog.tsx. Скрытые
+// (hidden_at, «Правки 4», п.4 — кнопка «Удалить из списка» на уже
+// уволенном) из этого среза исключены насовсем.
 export function useAllAccounts() {
   return useQuery({
     queryKey: ['accounts'],
@@ -24,6 +26,7 @@ export function useAllAccounts() {
       const { data, error } = await supabase
         .from('employees')
         .select('*')
+        .is('hidden_at', null)
         .order('role', { ascending: true })
         .order('name', { ascending: true });
       if (error) throw error;
@@ -181,6 +184,25 @@ export function useSetAccountActive() {
       }
       if (data && 'error' in data && data.error) throw new Error(data.error);
       return { employee: data!.employee, ban_warning: data?.ban_warning ?? null };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+    },
+  });
+}
+
+// «Удалить из списка» (Максим, «Правки 4», п.4) — отдельно от увольнения:
+// кнопка доступна только у уже уволенного сотрудника (employees_hidden_
+// only_if_suspended, миграция 0026), скрывает его из «Команды» насовсем.
+// Обычный UPDATE, не Edge Function — это не трогает вход через GoTrue (тот
+// уже заблокирован увольнением), только видимость в списке.
+export function useHideAccount() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('employees').update({ hidden_at: new Date().toISOString() }).eq('id', id);
+      if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['accounts'] });

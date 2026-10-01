@@ -11,6 +11,7 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { SessionProvider, useSession } from '../providers/SessionProvider';
 import { supabase } from '../lib/supabase';
 import { registerForPushNotifications } from '../lib/pushNotifications';
+import { useRealtimeSync } from '../hooks/useRealtimeSync';
 import { theme } from '../theme';
 
 SplashScreen.preventAutoHideAsync();
@@ -45,6 +46,7 @@ export default function RootLayout() {
 // завести аккаунт.
 function RootNavigator() {
   const { session, employee, isLoading } = useSession();
+  useRealtimeSync();
 
   useEffect(() => {
     if (!isLoading) SplashScreen.hideAsync();

@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ActivityIndicator, Appbar, Divider, FAB, HelperText, List, Text } from 'react-native-paper';
 import { useServices, type Service } from '../../api/services';
 import { ServiceDialog } from '../../components/services/ServiceDialog';
+import { formatDurationHours } from '../../lib/services';
 import { useSession } from '../../providers/SessionProvider';
 
 export default function ServicesSettingsScreen() {
@@ -45,7 +46,7 @@ export default function ServicesSettingsScreen() {
             <List.Item
               title={item.name}
               description={[
-                item.base_duration_minutes ? `${item.base_duration_minutes} мин` : null,
+                item.base_duration_minutes ? formatDurationHours(item.base_duration_minutes) : null,
                 item.base_price != null ? `${item.base_price} ₽` : null,
               ]
                 .filter(Boolean)

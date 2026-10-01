@@ -17,6 +17,7 @@ import { DatePickerModal } from 'react-native-paper-dates';
 import { differenceInYears, format } from 'date-fns';
 import {
   useCreateAccount,
+  useHideAccount,
   useSetAccountActive,
   useUpdateAccount,
   useUpdateAccountProfile,
@@ -140,9 +141,11 @@ export function AccountDialog({ account, onClose }: { account: Account | null; o
   const updateProfile = useUpdateAccountProfile();
   const updateRates = useUpdateEmployeeRates();
   const setAccountActive = useSetAccountActive();
+  const hideAccount = useHideAccount();
   const saving = createAccount.isPending || updateAccount.isPending || updateProfile.isPending || updateRates.isPending;
   const isSuspended = account?.account_status === 'suspended';
   const [confirmDeactivate, setConfirmDeactivate] = useState(false);
+  const [confirmHide, setConfirmHide] = useState(false);
 
   const [name, setName] = useState(account?.name ?? '');
   const [lastName, setLastName] = useState(account?.last_name ?? '');
@@ -286,6 +289,18 @@ export function AccountDialog({ account, onClose }: { account: Account | null; o
     }
   };
 
+  const handleHide = async () => {
+    if (!account) return;
+    try {
+      await hideAccount.mutateAsync(account.id);
+      setConfirmHide(false);
+      onClose();
+    } catch (err) {
+      setConfirmHide(false);
+      setError(err instanceof Error ? err.message : 'Не удалось удалить из списка');
+    }
+  };
+
   // Восстановление доступа не так разрушительно, как увольнение — не
   // просит подтверждения отдельным диалогом.
   const handleRestore = async () => {
@@ -304,7 +319,7 @@ export function AccountDialog({ account, onClose }: { account: Account | null; o
 
   return (
     <Portal>
-      <Dialog visible={!confirmDeactivate} onDismiss={onClose} style={styles.dialog}>
+      <Dialog visible={!confirmDeactivate && !confirmHide} onDismiss={onClose} style={styles.dialog}>
         <Dialog.Title>
           {account ? account.name : 'Новый аккаунт'}
           {isSuspended ? ' · Уволен' : ''}
@@ -522,6 +537,18 @@ export function AccountDialog({ account, onClose }: { account: Account | null; o
                     )}
                   </>
                 )}
+                {isSuspended && (
+                  <>
+                    <Divider style={styles.divider} />
+                    <Button textColor="#b91c1c" icon="trash-can-outline" onPress={() => setConfirmHide(true)}>
+                      Удалить из списка
+                    </Button>
+                    <HelperText type="info">
+                      Сотрудник пропадёт из «Команды». История его заказов и отчётов сохранится, но вернуть его
+                      в список потом будет нельзя.
+                    </HelperText>
+                  </>
+                )}
                 {warning && <Text style={styles.warning}>{warning}</Text>}
                 {error && <HelperText type="error">{error}</HelperText>}
               </>
@@ -564,6 +591,29 @@ export function AccountDialog({ account, onClose }: { account: Account | null; o
               disabled={setAccountActive.isPending}
             >
               Уволить
+            </Button>
+          </Dialog.Actions>
+        </Dialog>
+      )}
+
+      {account && (
+        <Dialog visible={confirmHide} onDismiss={() => setConfirmHide(false)}>
+          <Dialog.Title>Удалить из списка?</Dialog.Title>
+          <Dialog.Content>
+            <Text variant="bodyMedium">
+              {`${account.name}${account.last_name ? ` ${account.last_name}` : ''} пропадёт из «Команды». Его прошлые заказы, отчёты и зарплата останутся без изменений, но вернуть его в список потом будет нельзя.`}
+            </Text>
+            {hideAccount.error && <HelperText type="error">{hideAccount.error.message}</HelperText>}
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setConfirmHide(false)}>Отмена</Button>
+            <Button
+              textColor="#b91c1c"
+              onPress={handleHide}
+              loading={hideAccount.isPending}
+              disabled={hideAccount.isPending}
+            >
+              Удалить
             </Button>
           </Dialog.Actions>
         </Dialog>
