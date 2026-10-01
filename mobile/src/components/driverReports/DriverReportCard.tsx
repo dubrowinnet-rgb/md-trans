@@ -26,7 +26,21 @@ function personName(person: { name: string; last_name: string | null } | null) {
 // отправки, отдельной строкой время правки водителем (если была), статус
 // проверки с замечанием и сам отчёт. Одна и та же карточка у водителя и у
 // администратора/диспетчера — отличаются только кнопки (actions).
-export function DriverReportCard({ report, actions }: { report: DriverReport; actions?: ReactNode }) {
+//
+// runningBalance (Правки 6, п.19) — сколько у водителя сейчас "на руках"
+// нарастающим итогом (сдал меньше ожидаемого — остаток растёт, сдал
+// больше — уменьшается или уходит в минус), а не расхождение одного дня.
+// Считает вызывающий (список отчётов целиком, см. api/driverReports.ts
+// useDriverReportFeed) — карточка сама знает только свой отчёт.
+export function DriverReportCard({
+  report,
+  actions,
+  runningBalance,
+}: {
+  report: DriverReport;
+  actions?: ReactNode;
+  runningBalance?: number;
+}) {
   const statusColor = DRIVER_REPORT_STATUS_COLORS[report.status];
   const reviewer = personName(report.reviewer);
   const approver = personName(report.approver);
@@ -139,9 +153,9 @@ export function DriverReportCard({ report, actions }: { report: DriverReport; ac
       </Text>
       <Text variant="bodyMedium">{`К сдаче: ${rub(report.expectedHandIn)}`}</Text>
       <Text variant="bodyMedium">{`Сдано: ${report.cash_handed_in != null ? rub(report.cash_handed_in) : 'не указано'}`}</Text>
-      {report.discrepancy != null && Math.abs(report.discrepancy) > 0.01 && (
-        <Text variant="bodyMedium" style={styles.discrepancy}>
-          {`Расхождение: ${report.discrepancy > 0 ? '+' : '−'}${rub(Math.abs(report.discrepancy))}`}
+      {runningBalance != null && (
+        <Text variant="bodyMedium" style={styles.runningBalance}>
+          {`Остаток у водителя: ${runningBalance < 0 ? '−' : ''}${rub(Math.abs(runningBalance))}`}
         </Text>
       )}
 
@@ -211,8 +225,8 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginTop: 4,
   },
-  discrepancy: {
-    color: '#ef4444',
+  runningBalance: {
+    color: '#15803d',
   },
   actions: {
     flexDirection: 'row',

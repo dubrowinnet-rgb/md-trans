@@ -10,7 +10,8 @@ import {
   useApproveDriverReport,
   useDriverReportFeed,
   useRejectDriverReport,
-  type DriverReport,
+  useReopenDriverReport,
+  type DriverReportWithBalance,
 } from '../../api/driverReports';
 import { DriverReportCard, formatMoment, formatReportDay, rub } from '../../components/driverReports/DriverReportCard';
 import { useSession } from '../../providers/SessionProvider';
@@ -115,14 +116,19 @@ function AuthorFeed({ employeeId }: { employeeId: string }) {
       ) : (
         <FeedScroll>
           <Text variant="bodySmall" style={styles.caption}>
-            Отчёты за текущий месяц. Эту же ленту видят администратор и диспетчер. Исправить отчёт можно в течение 24 часов после отправки.
+            Отчёты за текущий и предыдущий месяц. Эту же ленту видят администратор и диспетчер. Исправить отчёт можно в течение 24 часов после отправки.
           </Text>
           {feedQuery.isError && <HelperText type="error">{feedQuery.error.message}</HelperText>}
           {sent.length === 0 && !feedQuery.isError && (
-            <Text style={styles.empty}>В этом месяце отчётов пока нет.</Text>
+            <Text style={styles.empty}>Отчётов пока нет.</Text>
           )}
           {sent.map((report) => (
-            <DriverReportCard key={report.id} report={report} actions={<AuthorActions report={report} now={now} onEdit={() => openForm(report.report_date)} />} />
+            <DriverReportCard
+              key={report.id}
+              report={report}
+              runningBalance={report.runningBalance ?? undefined}
+              actions={<AuthorActions report={report} now={now} onEdit={() => openForm(report.report_date)} />}
+            />
           ))}
           {drafts.map((draft) => (
             <Surface key={draft.id} style={styles.draft} elevation={0}>
@@ -146,7 +152,7 @@ function AuthorFeed({ employeeId }: { employeeId: string }) {
   );
 }
 
-function AuthorActions({ report, now, onEdit }: { report: DriverReport; now: Date; onEdit: () => void }) {
+function AuthorActions({ report, now, onEdit }: { report: DriverReportWithBalance; now: Date; onEdit: () => void }) {
   if (report.status === 'rejected') {
     return (
       <Button mode="contained" icon="pencil-outline" onPress={onEdit}>
@@ -241,6 +247,7 @@ function ReviewerFeed({ employeeId, name }: { employeeId: string; name: string }
             >
               <DriverReportCard
                 report={report}
+                runningBalance={report.runningBalance ?? undefined}
                 actions={
                   report.status === 'submitted' ? (
                     <ReviewActions
@@ -249,6 +256,8 @@ function ReviewerFeed({ employeeId, name }: { employeeId: string; name: string }
                         rejectingId.current = active ? report.id : null;
                       }}
                     />
+                  ) : report.status === 'confirmed' ? (
+                    <ReopenAction reportId={report.id} />
                   ) : undefined
                 }
               />
@@ -262,7 +271,37 @@ function ReviewerFeed({ employeeId, name }: { employeeId: string; name: string }
 
 // Проверяющий отчёт не правит: только согласовать или не согласовать с
 // комментарием — тогда водитель исправляет и отправляет заново.
-function ReviewActions({ report, onRejectingChange }: { report: DriverReport; onRejectingChange: (active: boolean) => void }) {
+// Разрешить исправить согласованный отчёт (Правки 6, п.25) — водитель
+// ошибся, отчёт уже согласован; одна кнопка, без подтверждения — реже
+// нужна, чем «Согласовать/Не согласовать», лишний диалог тут не нужен.
+function ReopenAction({ reportId }: { reportId: string }) {
+  const reopen = useReopenDriverReport();
+  const [error, setError] = useState<string | null>(null);
+
+  return (
+    <View style={styles.rejectBox}>
+      <Button
+        mode="outlined"
+        icon="lock-open-outline"
+        onPress={async () => {
+          setError(null);
+          try {
+            await reopen.mutateAsync(reportId);
+          } catch (err) {
+            setError(err instanceof Error ? err.message : 'Не удалось открыть отчёт для правки');
+          }
+        }}
+        loading={reopen.isPending}
+        disabled={reopen.isPending}
+      >
+        Разрешить исправить
+      </Button>
+      {error && <HelperText type="error">{error}</HelperText>}
+    </View>
+  );
+}
+
+function ReviewActions({ report, onRejectingChange }: { report: DriverReportWithBalance; onRejectingChange: (active: boolean) => void }) {
   const approve = useApproveDriverReport();
   const reject = useRejectDriverReport();
   const [rejecting, setRejectingState] = useState(false);

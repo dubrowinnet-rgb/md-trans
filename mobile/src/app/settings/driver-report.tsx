@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { Image, Keyboard, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { addDays, format, startOfMonth } from 'date-fns';
@@ -81,8 +81,9 @@ function DriverReportContent({ employeeId }: { employeeId: string }) {
   const [odometerUrl, setOdometerUrl] = useState<string | null>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [cashText, setCashText] = useState('');
+  const [cashSectionOpen, setCashSectionOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const scrollRef = useRef<ScrollView>(null);
 
   const hydratedForRef = useRef<string | null>(null);
   useEffect(() => {
@@ -96,8 +97,10 @@ function DriverReportContent({ employeeId }: { employeeId: string }) {
     setFuelMethod(report?.fuel_payment_method ?? 'cash');
     setOdometerUrl(report?.odometer_photo_url ?? null);
     setCashText(report?.cash_handed_in != null ? String(report.cash_handed_in) : '');
+    // Сдача кассы — не каждый день (Правки 6, п.16): свёрнуто за кнопкой,
+    // кроме случая, когда в отчёте уже есть сумма — тогда сразу видна.
+    setCashSectionOpen(report?.cash_handed_in != null);
     setError(null);
-    setNotice(null);
     hydratedForRef.current = date;
   }, [date, dayOrdersQuery.isLoading, dayOrdersQuery.data, reportQuery.isLoading, reportQuery.data]);
 
@@ -134,13 +137,15 @@ function DriverReportContent({ employeeId }: { employeeId: string }) {
     }
   };
 
-  const save = async (submit: boolean) => {
+  // Кнопку «Сохранить черновик» убрали (Правки 6, п.18) — форма всегда
+  // отправляет отчёт целиком; submit=true в save_driver_report остаётся
+  // отдельным параметром базы, но вызывается отсюда только так.
+  const save = async () => {
     setError(null);
-    setNotice(null);
     try {
       await saveReport.mutateAsync({
         report_date: date,
-        submit,
+        submit: true,
         fuel_amount: fuelAmountText.trim() ? fuelAmount : null,
         fuel_payment_method: fuelAmountText.trim() ? fuelMethod : null,
         odometer_photo_url: odometerUrl,
@@ -150,12 +155,8 @@ function DriverReportContent({ employeeId }: { employeeId: string }) {
           .filter((e) => e.description.trim() && e.amount.trim())
           .map((e) => ({ description: e.description.trim(), amount: parseAmount(e.amount) })),
       });
-      if (submit) {
-        if (router.canGoBack()) router.back();
-        else router.replace('/settings/driver-feed');
-      } else {
-        setNotice('Черновик сохранён. Его видите только вы — отправьте, когда отчёт будет готов.');
-      }
+      if (router.canGoBack()) router.back();
+      else router.replace('/settings/driver-feed');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось сохранить отчёт');
     }
@@ -198,10 +199,10 @@ function DriverReportContent({ employeeId }: { employeeId: string }) {
               ? 'Отчёт согласован — изменить его нельзя.'
               : 'Прошло больше 24 часов после отправки — изменить отчёт нельзя.'}
           </HelperText>
-          <DriverReportCard report={report} />
+          <DriverReportCard report={report} runningBalance={report.runningBalance ?? undefined} />
         </ScrollView>
       ) : (
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <ScrollView ref={scrollRef} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           {report?.status === 'rejected' && (
             <View style={styles.rejectedBox}>
               <Text variant="labelMedium" style={styles.rejectedTitle}>
@@ -278,7 +279,10 @@ function DriverReportContent({ employeeId }: { employeeId: string }) {
           <TextInput mode="outlined" label="Сумма, ₽" keyboardType="numeric" value={fuelAmountText} onChangeText={setFuelAmountText} />
           <SegmentedButtons
             value={fuelMethod}
-            onValueChange={(value) => setFuelMethod(value as FuelPaymentMethod)}
+            onValueChange={(value) => {
+              setFuelMethod(value as FuelPaymentMethod);
+              Keyboard.dismiss();
+            }}
             buttons={[
               { value: 'cash', label: 'Наличные' },
               { value: 'cashless', label: 'Безнал' },
@@ -294,28 +298,31 @@ function DriverReportContent({ employeeId }: { employeeId: string }) {
 
           <Divider style={styles.divider} />
           <Text variant="labelLarge">Касса</Text>
-          <Text variant="bodySmall" style={styles.muted}>
-            {`Наличные по заказам ${rub(cashCollected)} − расходы ${rub(expensesTotal)} − топливо наличными ${rub(fuelCash)} = к сдаче ${rub(expectedHandIn)}`}
-          </Text>
-          <TextInput mode="outlined" label="Сдано в кассу, ₽" keyboardType="numeric" value={cashText} onChangeText={setCashText} />
-
-          {error && <HelperText type="error">{error}</HelperText>}
-          {notice && <HelperText type="info">{notice}</HelperText>}
-
-          {!isSent ? (
-            <View style={styles.saveRow}>
-              <Button mode="outlined" onPress={() => save(false)} loading={saveReport.isPending} disabled={saveReport.isPending} style={styles.flex}>
-                Сохранить черновик
-              </Button>
-              <Button mode="contained" onPress={() => save(true)} loading={saveReport.isPending} disabled={saveReport.isPending} style={styles.flex}>
-                Отправить
-              </Button>
-            </View>
+          {cashSectionOpen ? (
+            <>
+              <Text variant="bodySmall" style={styles.muted}>
+                {`Наличные по заказам ${rub(cashCollected)} − расходы ${rub(expensesTotal)} − топливо наличными ${rub(fuelCash)} = к сдаче ${rub(expectedHandIn)}`}
+              </Text>
+              <TextInput
+                mode="outlined"
+                label="Сдано в кассу, ₽"
+                keyboardType="numeric"
+                value={cashText}
+                onChangeText={setCashText}
+                onFocus={() => setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100)}
+              />
+            </>
           ) : (
-            <Button mode="contained" style={styles.saveSingle} onPress={() => save(true)} loading={saveReport.isPending} disabled={saveReport.isPending}>
-              {report?.status === 'rejected' ? 'Отправить исправленный отчёт' : 'Сохранить исправление'}
+            <Button mode="outlined" icon="cash-register" onPress={() => setCashSectionOpen(true)}>
+              Сдать кассу
             </Button>
           )}
+
+          {error && <HelperText type="error">{error}</HelperText>}
+
+          <Button mode="contained" style={styles.saveSingle} onPress={() => save()} loading={saveReport.isPending} disabled={saveReport.isPending}>
+            {report?.status === 'rejected' ? 'Отправить исправленный отчёт' : isSent ? 'Сохранить исправление' : 'Отправить'}
+          </Button>
         </ScrollView>
       )}
     </KeyboardAvoidingView>
@@ -385,11 +392,6 @@ const styles = StyleSheet.create({
   },
   rejectedTitle: {
     color: '#b91c1c',
-  },
-  saveRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 8,
   },
   saveSingle: {
     marginTop: 8,

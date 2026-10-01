@@ -3,7 +3,6 @@ import { keepPreviousData, useMutation, useQueries, useQuery, useQueryClient, ty
 import { addDays } from 'date-fns';
 import { supabase } from '../lib/supabase';
 import { selectAll } from '../lib/selectAll';
-import { sendPushNotifications } from '../lib/pushNotifications';
 import type { CrewStatus, Database, EmployeeRole, OrderStatus, StopType } from '../types/database';
 
 type OrderRow = Database['public']['Tables']['orders']['Row'];
@@ -211,19 +210,10 @@ export function useCreateOrder() {
       if (error) throw error;
       const orderId = data as string;
 
-      if (input.crew.length > 0) {
-        const { data: crewEmployees } = await supabase
-          .from('employees')
-          .select('expo_push_token')
-          .in(
-            'id',
-            input.crew.map((c) => c.employee_id)
-          );
-        const tokens = (crewEmployees ?? [])
-          .map((e) => e.expo_push_token)
-          .filter((t): t is string => Boolean(t));
-        await sendPushNotifications(tokens, 'Новый заказ', 'Вам назначен новый заказ', { orderId });
-      }
+      // Пуш назначенной бригаде теперь шлёт сам триггер notify_order_assigned
+      // (миграция 0029, срабатывает на вставку в order_crew внутри create_order) —
+      // одинаково для мобильного и веб-кабинета, свой вызов здесь убрали,
+      // чтобы не слать дважды (Правки 6, п.5).
 
       // Автоматическая отправка смс клиенту через sms.ru отменена
       // 2026-09-26 (решение Максима — гейтвей не нужен, диспетчер сам
@@ -346,16 +336,11 @@ export function useUpdateOrderCrew() {
       const { error: vehicleError } = await supabase.from('orders').update({ vehicle_id: vehicleId }).eq('id', orderId);
       if (vehicleError) throw vehicleError;
 
-      if (toAdd.length > 0) {
-        const { data: addedEmployees } = await supabase
-          .from('employees')
-          .select('expo_push_token')
-          .in('id', toAdd.map((c) => c.employee_id));
-        const tokens = (addedEmployees ?? [])
-          .map((e) => e.expo_push_token)
-          .filter((t): t is string => Boolean(t));
-        await sendPushNotifications(tokens, 'Изменение экипажа', 'Вас назначили на заказ', { orderId });
-      }
+      // Пуш добавленным (в т.ч. при замене) теперь шлёт сам триггер
+      // notify_order_assigned (миграция 0029) на вставку в order_crew —
+      // одинаково для мобильного и веб-кабинета. Раньше это слал только
+      // мобильный клиент отсюда, из веб-кабинета пуш не уходил вовсе
+      // (Правки 6, п.5) — свой вызов здесь убрали, чтобы не слать дважды.
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['orders'] });
@@ -401,5 +386,10 @@ export function useOrder(orderId: string | undefined) {
       if (error) throw error;
       return data as unknown as OrderWithDetails;
     },
+    // Правки 6, п.2: правка с другого устройства (диспетчер) должна дойти,
+    // даже пока экран заказа уже открыт — раньше тут был только Realtime
+    // (useRealtimeSync), без подстраховки на случай обрыва сокета, как и у
+    // остальных живых экранов (список заказов, уведомления — тот же интервал).
+    refetchInterval: 60_000,
   });
 }

@@ -26,7 +26,10 @@ export type NotificationKind =
   | 'report_approved'
   | 'report_rejected'
   | 'support_reply'
-  | 'order_assigned';
+  | 'order_assigned'
+  | 'order_confirmed'
+  | 'report_submitted'
+  | 'report_reopened';
 export type OrderStatus = 'new' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled';
 export type StopType = 'pickup' | 'dropoff';
 export type CrewStatus = 'notified' | 'read' | 'confirmed';
@@ -607,6 +610,16 @@ export interface Database {
       driver_reports_pending: {
         Args: Record<string, never>;
         Returns: { employee_id: string; pending: number }[];
+      };
+      // Миграция 0029: остаток у водителя (лента + карточка отчёта) и
+      // возврат подтверждённого отчёта на доработку.
+      driver_report_running_balance: {
+        Args: { p_employee_id: string; p_as_of_date?: string | null };
+        Returns: number;
+      };
+      reopen_driver_report: {
+        Args: { p_report_id: string };
+        Returns: undefined;
       };
     };
     Enums: Record<string, never>;

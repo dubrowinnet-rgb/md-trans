@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { format } from 'date-fns';
+import { addDays, format } from 'date-fns';
 import { supabase } from '../lib/supabase';
 import { sendPushNotifications } from '../lib/pushNotifications';
 import { shrinkPhoto } from '../lib/shrinkPhoto';
@@ -95,12 +95,29 @@ export function canAuthorEditReport(report: Pick<DriverReport, 'status' | 'submi
   return deadline != null && now < deadline;
 }
 
+// Остаток у водителя нарастающим итогом (Правки 6, п.19) — не расхождение
+// одного дня, а сумма "к сдаче − сдано" по всем отправленным/согласованным
+// отчётам до указанной даты включительно. Считает функция в базе
+// (миграция 0029, driver_report_running_balance) в обход RLS: водителю
+// видно только 2 последних месяца (см. ниже), а остаток должен быть верным
+// и за более старую историю.
+async function fetchRunningBalanceAsOf(employeeId: string, asOfDate: string): Promise<number> {
+  const { data, error } = await supabase.rpc('driver_report_running_balance', {
+    p_employee_id: employeeId,
+    p_as_of_date: asOfDate,
+  });
+  if (error) throw error;
+  return Number(data ?? 0);
+}
+
+export type DriverReportWithBalance = DriverReport & { runningBalance: number | null };
+
 // Отчёт водителя за один день — форма «Написать / исправить отчёт».
 export function useDriverReport(employeeId: string | undefined, reportDate: string) {
   return useQuery({
     queryKey: ['driver-report', employeeId, reportDate],
     enabled: Boolean(employeeId),
-    queryFn: async () => {
+    queryFn: async (): Promise<DriverReportWithBalance | null> => {
       const { data, error } = await supabase
         .from('driver_reports')
         .select(REPORT_SELECT)
@@ -108,7 +125,10 @@ export function useDriverReport(employeeId: string | undefined, reportDate: stri
         .eq('report_date', reportDate)
         .maybeSingle();
       if (error) throw error;
-      return data ? withTotals(data as unknown as DriverReport) : null;
+      if (!data) return null;
+      const report = withTotals(data as unknown as DriverReport);
+      const runningBalance = report.status === 'draft' ? null : await fetchRunningBalanceAsOf(employeeId as string, reportDate);
+      return { ...report, runningBalance };
     },
   });
 }
@@ -124,7 +144,7 @@ export function useDriverReportFeed(employeeId: string | undefined, month?: { st
   return useQuery({
     queryKey: ['driver-report-feed', employeeId, month?.start ?? null, month?.end ?? null],
     enabled: Boolean(employeeId),
-    queryFn: async () => {
+    queryFn: async (): Promise<DriverReportWithBalance[]> => {
       let query = supabase
         .from('driver_reports')
         .select(REPORT_SELECT)
@@ -133,7 +153,22 @@ export function useDriverReportFeed(employeeId: string | undefined, month?: { st
       if (month) query = query.gte('report_date', month.start).lt('report_date', month.end);
       const { data, error } = await query;
       if (error) throw error;
-      return (data ?? []).map((r) => withTotals(r as unknown as DriverReport));
+      const reports = (data ?? []).map((r) => withTotals(r as unknown as DriverReport));
+      if (reports.length === 0) return [];
+
+      // Один запрос за "остатком на начало" вместо одного на каждый отчёт:
+      // дальше идём по уже загруженным отчётам сами (та же формула, что и
+      // в самой функции базы — submitted/confirmed, остальное не меняет
+      // остаток).
+      const dayBefore = format(addDays(new Date(`${reports[0].report_date}T00:00:00`), -1), 'yyyy-MM-dd');
+      let running = await fetchRunningBalanceAsOf(employeeId as string, dayBefore);
+
+      return reports.map((r) => {
+        if (r.status === 'submitted' || r.status === 'confirmed') {
+          running += r.expectedHandIn - (r.cash_handed_in ?? 0);
+        }
+        return { ...r, runningBalance: r.status === 'draft' ? null : running };
+      });
     },
   });
 }
@@ -268,6 +303,21 @@ export function useRejectDriverReport() {
         `Отчёт за ${day} не согласован. Откройте «Мои отчёты» и исправьте.`,
         { kind: 'driver-report', reportId: report.id }
       );
+    },
+    onSuccess: () => invalidateReports(queryClient),
+  });
+}
+
+// Открыть согласованный отчёт для исправления (Правки 6, п.25) — водитель
+// ошибся, а отчёт уже согласован; проверяющий разрешает одно исправление,
+// отчёт возвращается на проверку (save_driver_report отработает как обычно
+// для статуса 'submitted').
+export function useReopenDriverReport() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (reportId: string) => {
+      const { error } = await supabase.rpc('reopen_driver_report', { p_report_id: reportId });
+      if (error) throw error;
     },
     onSuccess: () => invalidateReports(queryClient),
   });

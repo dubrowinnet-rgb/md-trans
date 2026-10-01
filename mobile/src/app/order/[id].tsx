@@ -35,6 +35,7 @@ import {
   canViewOrderAmount,
 } from '../../lib/permissions';
 import { DateTimeField } from '../../components/form/DateTimeField';
+import { FadeHighlight } from '../../components/common/FadeHighlight';
 import { CrewDialog } from '../../components/orders/CrewDialog';
 import { yandexMapsRouteAppUrl, yandexMapsRouteUrl, yandexNaviRouteAppUrl } from '../../lib/yandexMaps';
 import { geocodeAddress } from '../../lib/yandexGeocode';
@@ -105,6 +106,32 @@ export default function OrderScreen() {
 
   const orderQuery = useOrder(id);
   const order = orderQuery.data;
+
+  // Подсветка изменившихся полей (Правки 6, п.3) — сравниваем с прошлым
+  // снимком заказа при каждом обновлении с сервера (опрос/Realtime,
+  // useOrder) и на 5 секунд подсвечиваем именно те поля, которые
+  // поменялись, а не всю карточку. Первая загрузка — не изменение,
+  // снимок просто запоминаем. Тот же набор полей, что уже отслеживает
+  // уведомления сервер (notify_order_changed, миграция 0028).
+  const prevOrderSnapshotRef = useRef<typeof order>(undefined);
+  const [changedFields, setChangedFields] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    if (!order) return;
+    const prev = prevOrderSnapshotRef.current;
+    prevOrderSnapshotRef.current = order;
+    if (!prev || prev.id !== order.id) return;
+    const next = new Set<string>();
+    if (prev.scheduled_start !== order.scheduled_start || prev.scheduled_end !== order.scheduled_end) next.add('time');
+    if (prev.actual_price !== order.actual_price) next.add('price');
+    if (prev.cargo_description !== order.cargo_description) next.add('cargo');
+    if (prev.comment !== order.comment) next.add('comment');
+    if (prev.vehicle_id !== order.vehicle_id) next.add('vehicle');
+    if (next.size === 0) return;
+    setChangedFields(next);
+    const timer = setTimeout(() => setChangedFields(new Set()), 5000);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [order]);
 
   const updateStatus = useUpdateOrderStatus();
   const markRead = useMarkCrewRead();
@@ -247,9 +274,11 @@ export default function OrderScreen() {
           />
         )}
       </View>
-      <Text variant="bodyMedium" style={styles.when}>
-        {formatDayLabel(start)}, {formatTime(start)}–{formatTime(end)}
-      </Text>
+      <FadeHighlight active={changedFields.has('time')}>
+        <Text variant="bodyMedium" style={styles.when}>
+          {formatDayLabel(start)}, {formatTime(start)}–{formatTime(end)}
+        </Text>
+      </FadeHighlight>
 
       {showFullStatusUI ? (
         <Chip
@@ -404,9 +433,11 @@ export default function OrderScreen() {
               descriptionStyle={styles.compactDescription}
             />
             {crew.isDriver && order.vehicles && (
-              <Text variant="bodySmall" style={styles.vehiclePlate}>
-                {order.vehicles.plate}
-              </Text>
+              <FadeHighlight active={changedFields.has('vehicle')}>
+                <Text variant="bodySmall" style={styles.vehiclePlate}>
+                  {order.vehicles.plate}
+                </Text>
+              </FadeHighlight>
             )}
           </View>
         ))}
@@ -438,39 +469,45 @@ export default function OrderScreen() {
             descriptionStyle={styles.compactDescription}
           />
         ))}
-        <List.Item
-          title={order.cargo_description || '—'}
-          titleNumberOfLines={4}
-          description="Груз"
-          style={styles.compactItem}
-          containerStyle={styles.compactRow}
-          titleStyle={styles.compactTitle}
-          descriptionStyle={styles.compactDescription}
-        />
+        <FadeHighlight active={changedFields.has('cargo')}>
+          <List.Item
+            title={order.cargo_description || '—'}
+            titleNumberOfLines={4}
+            description="Груз"
+            style={styles.compactItem}
+            containerStyle={styles.compactRow}
+            titleStyle={styles.compactTitle}
+            descriptionStyle={styles.compactDescription}
+          />
+        </FadeHighlight>
         {/* Сумму редактирующим (canEditSchedulePriceNow) уже показывает поле
             выше, в «Изменить время и сумму» — второй раз здесь только для
             тех, кто это поле не видит (например, грузчик), иначе одно и то
             же число дублировалось бы на экране. */}
         {showAmount && !canEditSchedulePriceNow && (
-          <List.Item
-            title={order.actual_price != null ? `${order.actual_price} ₽` : '—'}
-            description="Сумма"
-            style={styles.compactItem}
-            containerStyle={styles.compactRow}
-            titleStyle={styles.compactTitle}
-            descriptionStyle={styles.compactDescription}
-          />
+          <FadeHighlight active={changedFields.has('price')}>
+            <List.Item
+              title={order.actual_price != null ? `${order.actual_price} ₽` : '—'}
+              description="Сумма"
+              style={styles.compactItem}
+              containerStyle={styles.compactRow}
+              titleStyle={styles.compactTitle}
+              descriptionStyle={styles.compactDescription}
+            />
+          </FadeHighlight>
         )}
         {order.comment ? (
-          <List.Item
-            title={order.comment}
-            titleNumberOfLines={6}
-            description="Комментарий"
-            style={styles.compactItem}
-            containerStyle={styles.compactRow}
-            titleStyle={styles.compactTitle}
-            descriptionStyle={styles.compactDescription}
-          />
+          <FadeHighlight active={changedFields.has('comment')}>
+            <List.Item
+              title={order.comment}
+              titleNumberOfLines={6}
+              description="Комментарий"
+              style={styles.compactItem}
+              containerStyle={styles.compactRow}
+              titleStyle={styles.compactTitle}
+              descriptionStyle={styles.compactDescription}
+            />
+          </FadeHighlight>
         ) : null}
       </List.Section>
 

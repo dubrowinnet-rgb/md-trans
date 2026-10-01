@@ -3,41 +3,27 @@ import { KeyboardAvoidingView, Platform, StyleSheet } from 'react-native';
 import { Button, HelperText, Text, TextInput } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
-import { loginInputToE164, loginInputToEmail } from '../lib/accountLogin';
+import { loginInputToE164 } from '../lib/accountLogin';
 
-// Вход по телефону и паролю (доработки 3, п.4 — логин сотрудникам больше не
-// нужен). «Войти по логину или email» ниже — свёрнутый запасной вариант:
-// нужен только аккаунту, которому ещё ни разу не синхронизировали телефон
-// на auth.users (см. providers/SessionProvider.tsx), обычно это только
-// самые старые учётки, заведённые до этой доработки. Специально не убираем
-// совсем — иначе такой аккаунт разом потеряет способ войти.
+// Вход только по телефону и паролю (Правки 6, п.1 — Максим явно попросил
+// убрать переключение на логин/email, единственный способ входа). Старый
+// запасной вариант «Войти по логину или email» убран: у аккаунтов, которым
+// телефон ещё не синхронизирован на auth.users, он синхронизируется через
+// Профиль (self-service, см. app/settings/profile.tsx и update-account) —
+// администратора и владельца Максим попросил завести на конкретные номера
+// до этой доработки, см. память проекта.
 export default function LoginScreen() {
   const [phone, setPhone] = useState('');
-  const [login, setLogin] = useState('');
   const [password, setPassword] = useState('');
-  const [useLoginFallback, setUseLoginFallback] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const canSubmit =
-    (useLoginFallback ? login.trim().length > 0 : phone.trim().length > 0) &&
-    password.length > 0 &&
-    !submitting;
+  const canSubmit = phone.trim().length > 0 && password.length > 0 && !submitting;
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
     setSubmitting(true);
     setError(null);
-
-    if (useLoginFallback) {
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: loginInputToEmail(login),
-        password,
-      });
-      if (signInError) setError(signInError.message);
-      setSubmitting(false);
-      return;
-    }
 
     const e164 = loginInputToE164(phone);
     if (!e164) {
@@ -59,29 +45,16 @@ export default function LoginScreen() {
         <Text variant="headlineSmall" style={styles.title}>
           Вход
         </Text>
-        {useLoginFallback ? (
-          <TextInput
-            mode="outlined"
-            label="Логин или email"
-            accessibilityLabel="Логин или email"
-            value={login}
-            onChangeText={setLogin}
-            autoCapitalize="none"
-            autoComplete="username"
-            disabled={submitting}
-          />
-        ) : (
-          <TextInput
-            mode="outlined"
-            label="Телефон"
-            accessibilityLabel="Телефон"
-            value={phone}
-            onChangeText={setPhone}
-            keyboardType="phone-pad"
-            autoComplete="tel"
-            disabled={submitting}
-          />
-        )}
+        <TextInput
+          mode="outlined"
+          label="Телефон"
+          accessibilityLabel="Телефон"
+          value={phone}
+          onChangeText={setPhone}
+          keyboardType="phone-pad"
+          autoComplete="tel"
+          disabled={submitting}
+        />
         <TextInput
           mode="outlined"
           label="Пароль"
@@ -98,9 +71,6 @@ export default function LoginScreen() {
         </HelperText>
         <Button mode="contained" onPress={handleSubmit} loading={submitting} disabled={!canSubmit}>
           Войти
-        </Button>
-        <Button compact onPress={() => setUseLoginFallback((v) => !v)} disabled={submitting}>
-          {useLoginFallback ? 'Войти по телефону' : 'Войти по логину или email'}
         </Button>
       </KeyboardAvoidingView>
     </SafeAreaView>

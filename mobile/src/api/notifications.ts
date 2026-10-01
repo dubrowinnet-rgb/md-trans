@@ -52,7 +52,7 @@ export function useUnreadNotificationsCount() {
   return data?.filter((n) => !n.read_at).length ?? 0;
 }
 
-const REPORT_KINDS: NotificationKind[] = ['report_approved', 'report_rejected'];
+const REPORT_KINDS: NotificationKind[] = ['report_approved', 'report_rejected', 'report_reopened'];
 const SUPPORT_KINDS: NotificationKind[] = ['support_reply'];
 
 // Цифры по разделам бокового меню (Максим, 01.10, «Правки 5», п.9: «мои
