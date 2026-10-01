@@ -27,6 +27,7 @@ import { useDebouncedValue, useMediaQuery } from '@mantine/hooks';
 import { TimeField } from '@/components/common/TimeField';
 import { notifications } from '@mantine/notifications';
 import { errorMessage } from '@/lib/errors';
+import { formatDurationHours } from '@/lib/duration';
 import { IconPlus, IconUserPlus, IconX } from '@tabler/icons-react';
 import {
   orderToInput,
@@ -365,7 +366,7 @@ export function OrderFormModal({
                     <Box w={4} h={18} style={{ background: s?.color, borderRadius: 2 }} />
                     <Text size="sm">{option.label}</Text>
                     <Text size="xs" c="dimmed">
-                      {s?.base_duration_minutes ? `${s.base_duration_minutes / 60} ч · ` : ''}
+                      {s?.base_duration_minutes ? `${formatDurationHours(s.base_duration_minutes)} · ` : ''}
                       {Number(s?.base_price ?? 0)} ₽
                     </Text>
                   </Group>

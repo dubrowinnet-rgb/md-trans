@@ -242,3 +242,34 @@ export function useSetAccountActive() {
     },
   });
 }
+
+// Пункт 4 «правок 4» (01.10): убрать уже уволенного сотрудника из списка
+// «Команда» насовсем — отдельное действие от «Уволить» выше. Нужна своя
+// Edge Function (supabase/functions/hide-account, ожидается от mobile —
+// бэкенд/миграции не наша зона, см. web-cabinet-state) и колонка-флаг у
+// employees; до тех пор кнопка в AccountModal есть, но будет ошибаться —
+// Максиму сказано явно, тот же приём, что и с deactivate-account раньше.
+export function useHideAccount() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { data, error } = await supabase.functions.invoke<{ employee: Account; error?: string }>(
+        'hide-account',
+        { body: { id } }
+      );
+      if (error) {
+        if (error instanceof FunctionsHttpError) {
+          const body = await error.context.json().catch(() => null);
+          throw new Error(body?.error || error.message);
+        }
+        throw new Error(error.message);
+      }
+      if (data && 'error' in data && data.error) throw new Error(data.error);
+      return data!.employee;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+    },
+  });
+}

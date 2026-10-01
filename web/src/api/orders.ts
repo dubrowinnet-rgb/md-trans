@@ -27,7 +27,7 @@ export interface OrderWithDetails extends OrderRow {
 const ORDER_SELECT =
   '*, clients(id, name, phone, discount_percent), order_stops(*), order_crew(*, employees(id, name, role)), order_services(qty, services(id, name, color)), vehicles(id, name, plate)';
 
-function invalidateOrders(queryClient: ReturnType<typeof useQueryClient>) {
+export function invalidateOrders(queryClient: ReturnType<typeof useQueryClient>) {
   queryClient.invalidateQueries({ queryKey: ['orders'] });
   queryClient.invalidateQueries({ queryKey: ['busy-employees'] });
   queryClient.invalidateQueries({ queryKey: ['client-orders'] });

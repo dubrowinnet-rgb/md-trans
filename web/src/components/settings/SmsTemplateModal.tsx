@@ -34,7 +34,8 @@ export function SmsTemplateModal({ template, onClose }: { template: SmsTemplate;
           data-autofocus
         />
         <Text size="xs" c="dimmed">
-          Подставляются автоматически: [Name] [Day] [Date] [Time] [Cost] [Address]
+          Переменные: [Name] — имя клиента, [Day] — день недели, [Date] — дата, [Time] — время,
+          [Cost] — стоимость, [Address] — адрес погрузки
         </Text>
         {error && <Alert color="red">{error}</Alert>}
         <Group justify="flex-end">

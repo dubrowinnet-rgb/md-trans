@@ -29,6 +29,7 @@ import {
   ROLE_DEFAULT_PERMISSIONS,
   useAllAccounts,
   useCreateAccount,
+  useHideAccount,
   useSetAccountActive,
   useUpdateAccount,
   useUpdateAccountProfile,
@@ -128,6 +129,7 @@ export function AccountModal({ account, onClose }: { account: Account | null; on
   const updateProfile = useUpdateAccountProfile();
   const updateEmployeeRates = useUpdateEmployeeRates();
   const setAccountActive = useSetAccountActive();
+  const hideAccount = useHideAccount();
   const saving = createAccount.isPending || updateAccount.isPending || updateProfile.isPending || updateEmployeeRates.isPending;
   const isSuspended = account?.account_status === 'suspended';
   // Расчёт за текущий месяц по уже сохранённым ставкам (не по
@@ -277,6 +279,34 @@ export function AccountModal({ account, onClose }: { account: Account | null; on
           onClose();
         } catch (err) {
           notifications.show({ message: errorMessage(err, 'Не удалось изменить доступ'), color: 'red' });
+        }
+      },
+    });
+  };
+
+  // Отдельно от «Уволить»: там про доступ в приложение, здесь — про
+  // видимость в самом списке «Команда» (история никуда не девается).
+  // Доступно только для уже уволенных — сначала «Уволить», потом по
+  // желанию «Удалить из списка».
+  const removeFromList = () => {
+    modals.openConfirmModal({
+      title: 'Удалить из списка',
+      children: (
+        <Text size="sm">
+          {account?.name} исчезнет из списка «Команда». Прошлые заказы, отчёты и начисления останутся как есть — это
+          не полное удаление, историю всегда можно будет найти при необходимости.
+        </Text>
+      ),
+      labels: { confirm: 'Удалить из списка', cancel: 'Отмена' },
+      confirmProps: { color: 'red' },
+      onConfirm: async () => {
+        if (!account) return;
+        try {
+          await hideAccount.mutateAsync(account.id);
+          notifications.show({ message: 'Сотрудник удалён из списка', color: 'green' });
+          onClose();
+        } catch (err) {
+          notifications.show({ message: errorMessage(err, 'Не удалось удалить из списка'), color: 'red' });
         }
       },
     });
@@ -461,14 +491,21 @@ export function AccountModal({ account, onClose }: { account: Account | null; on
         {error && <Alert color="red">{error}</Alert>}
         <Group justify="space-between">
           {account && !isSelf ? (
-            <Button
-              variant="subtle"
-              color={isSuspended ? 'blue' : 'red'}
-              onClick={toggleActive}
-              loading={setAccountActive.isPending}
-            >
-              {isSuspended ? 'Восстановить доступ' : 'Уволить'}
-            </Button>
+            <Group gap="xs">
+              <Button
+                variant="subtle"
+                color={isSuspended ? 'blue' : 'red'}
+                onClick={toggleActive}
+                loading={setAccountActive.isPending}
+              >
+                {isSuspended ? 'Восстановить доступ' : 'Уволить'}
+              </Button>
+              {isSuspended && (
+                <Button variant="subtle" color="gray" onClick={removeFromList} loading={hideAccount.isPending}>
+                  Удалить из списка
+                </Button>
+              )}
+            </Group>
           ) : (
             <span />
           )}

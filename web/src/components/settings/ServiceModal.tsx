@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Alert, Button, ColorInput, Group, Modal, NumberInput, Stack, TextInput, Title } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { errorMessage } from '@/lib/errors';
+import { hoursInputToMinutes, minutesToHoursInput } from '@/lib/duration';
 import { useCreateService, useUpdateService, type Service } from '@/api/services';
 
 const DEFAULT_COLOR = '#8E24AA';
@@ -16,7 +17,7 @@ const SWATCHES = ['#8E24AA', '#1976D2', '#43A047', '#FB8C00', '#E53935', '#00897
 export function ServiceModal({ service, onClose }: { service: Service | null; onClose: () => void }) {
   const [name, setName] = useState(service?.name ?? '');
   const [category, setCategory] = useState(service?.category ?? '');
-  const [duration, setDuration] = useState<number | string>(service?.base_duration_minutes ?? '');
+  const [duration, setDuration] = useState<number | string>(minutesToHoursInput(service?.base_duration_minutes ?? null));
   const [price, setPrice] = useState<number | string>(service?.base_price ?? '');
   const [color, setColor] = useState(service?.color ?? DEFAULT_COLOR);
   const [error, setError] = useState<string | null>(null);
@@ -30,7 +31,7 @@ export function ServiceModal({ service, onClose }: { service: Service | null; on
     const input = {
       name: name.trim(),
       category: category.trim() || null,
-      base_duration_minutes: duration === '' ? null : Number(duration),
+      base_duration_minutes: hoursInputToMinutes(duration),
       base_price: price === '' ? null : Number(price),
       color,
     };
@@ -53,7 +54,7 @@ export function ServiceModal({ service, onClose }: { service: Service | null; on
         <TextInput label="Название *" value={name} onChange={(e) => setName(e.currentTarget.value)} data-autofocus />
         <TextInput label="Категория" value={category} onChange={(e) => setCategory(e.currentTarget.value)} />
         <Group grow>
-          <NumberInput label="Длительность, мин" min={0} step={15} value={duration} onChange={setDuration} />
+          <NumberInput label="Длительность, ч" min={0} step={0.5} value={duration} onChange={setDuration} />
           <NumberInput label="Стоимость по умолчанию" suffix=" ₽" min={0} value={price} onChange={setPrice} />
         </Group>
         <ColorInput label="Цвет плашки" value={color} onChange={setColor} swatches={SWATCHES} format="hex" />

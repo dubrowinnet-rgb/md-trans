@@ -41,6 +41,7 @@ import { isServiceOwner } from '@/lib/ownerAccess';
 import { ACCOUNT_ROLE_LABELS } from '@/lib/labels';
 import { OrderUIProvider } from '@/components/orders/OrderUIProvider';
 import { NotificationBell } from '@/components/common/NotificationBell';
+import { useRealtimeSync } from '@/hooks/useRealtimeSync';
 
 const NAV = [
   { href: '/calendar/', label: 'Календарь', icon: IconCalendarWeek, adminOnly: false },
@@ -62,6 +63,11 @@ export default function CabinetLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const { session, employee, isLoading } = useSession();
+  // Живые обновления заказов/бригад/отчётов (правки 4, п.5) — без него
+  // чужие правки видны только после ручного обновления страницы. Вызов
+  // безусловный (иначе нарушаются Rules of Hooks у ранних return ниже) —
+  // сам хук молчит, пока companyId/employee ещё не загружены.
+  useRealtimeSync();
   const [navOpened, { toggle: toggleNav, close: closeNav }] = useDisclosure();
   // На телефоне меню слева не помещается — прячем за бургер в верхней
   // полоске (AppShell.Header), которая на десктопе не занимает места

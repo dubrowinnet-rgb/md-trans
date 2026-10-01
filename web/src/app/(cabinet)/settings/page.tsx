@@ -9,6 +9,7 @@ import { useReminderRules, useDeleteReminderRule } from '@/api/reminders';
 import { useSession } from '@/providers/SessionProvider';
 import { ACCOUNT_STATUS_COLORS, ACCOUNT_STATUS_LABELS } from '@/lib/labels';
 import { errorMessage } from '@/lib/errors';
+import { formatDurationHours } from '@/lib/duration';
 import { formatPhone } from '@/lib/phone';
 import { notifications } from '@mantine/notifications';
 import { PageHeader } from '@/components/common/PageHeader';
@@ -100,9 +101,7 @@ export default function SettingsPage() {
                       </Group>
                     </Table.Td>
                     <Table.Td>{s.category || '—'}</Table.Td>
-                    <Table.Td ta="right">
-                      {s.base_duration_minutes ? `${s.base_duration_minutes} мин` : '—'}
-                    </Table.Td>
+                    <Table.Td ta="right">{formatDurationHours(s.base_duration_minutes)}</Table.Td>
                     <Table.Td ta="right">{s.base_price ? `${s.base_price} ₽` : '—'}</Table.Td>
                     <Table.Td ta="right">
                       <Button
@@ -135,7 +134,8 @@ export default function SettingsPage() {
 
         <Tabs.Panel value="sms">
           <Text size="xs" c="dimmed" mb="sm">
-            Подставляются автоматически: [Name] [Day] [Date] [Time] [Cost] [Address]
+            Переменные: [Name] — имя клиента, [Day] — день недели, [Date] — дата, [Time] — время,
+            [Cost] — стоимость, [Address] — адрес погрузки
           </Text>
           {smsTemplatesQuery.isError && <Alert color="red">{smsTemplatesQuery.error.message}</Alert>}
           {smsTemplatesQuery.isLoading && <Loader />}
