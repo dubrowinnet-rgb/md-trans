@@ -18,9 +18,10 @@ import {
   Text,
   TextInput,
 } from '@mantine/core';
-import { IconBuildingStore, IconHeadset, IconPlus, IconSearch } from '@tabler/icons-react';
+import { IconBuildingStore, IconHeadset, IconMessages, IconPlus, IconSearch } from '@tabler/icons-react';
 import { useCompanies } from '@/api/companies';
 import { useAllTickets, useUpdateTicketStatus, type TicketStatus } from '@/api/supportTickets';
+import { useAllEmployeeTickets, useSetEmployeeTicketStatus } from '@/api/employeeSupport';
 import { useSession } from '@/providers/SessionProvider';
 import { isServiceOwner } from '@/lib/ownerAccess';
 import { ACCOUNT_STATUS_COLORS, ACCOUNT_STATUS_LABELS, TICKET_STATUS_COLORS, TICKET_STATUS_LABELS } from '@/lib/labels';
@@ -28,13 +29,15 @@ import { dayjs } from '@/lib/dates';
 import { PageHeader } from '@/components/common/PageHeader';
 import { CompanyFormModal } from '@/components/owner/CompanyFormModal';
 import { TicketThread } from '@/components/support/TicketThread';
+import { EmployeeTicketThread } from '@/components/support/EmployeeTicketThread';
 
 const TICKET_STATUSES: TicketStatus[] = ['open', 'in_progress', 'resolved'];
 
-// Компаний у сервиса может быть тысяча и больше — таблицу и очередь
+// Компаний у сервиса может быть тысяча и больше — таблицу и очереди
 // обращений рисуем страницами.
 const COMPANIES_PAGE = 50;
 const TICKETS_PAGE = 30;
+const EMPLOYEE_TICKETS_PAGE = 30;
 
 // Кабинет владельца сервиса (Максим Дубровин) — список подключённых
 // компаний (клиентов сервиса) и очередь обращений в поддержку по всем
@@ -45,10 +48,13 @@ export default function OwnerPage() {
   const companiesQuery = useCompanies();
   const ticketsQuery = useAllTickets();
   const updateStatus = useUpdateTicketStatus();
+  const employeeTicketsQuery = useAllEmployeeTickets();
+  const updateEmployeeTicketStatus = useSetEmployeeTicketStatus();
   const [addingCompany, setAddingCompany] = useState(false);
   const [companySearch, setCompanySearch] = useState('');
   const [companyPage, setCompanyPage] = useState(1);
   const [ticketPage, setTicketPage] = useState(1);
+  const [employeeTicketPage, setEmployeeTicketPage] = useState(1);
 
   const filteredCompanies = useMemo(() => {
     const q = companySearch.trim().toLowerCase();
@@ -73,6 +79,15 @@ export default function OwnerPage() {
   const currentTicketPage = Math.min(ticketPage, ticketPages);
   const pageTickets = tickets.slice((currentTicketPage - 1) * TICKETS_PAGE, currentTicketPage * TICKETS_PAGE);
 
+  const employeeTickets = employeeTicketsQuery.data ?? [];
+  const openEmployeeTickets = employeeTickets.filter((t) => t.status === 'open').length;
+  const employeeTicketPages = Math.max(1, Math.ceil(employeeTickets.length / EMPLOYEE_TICKETS_PAGE));
+  const currentEmployeeTicketPage = Math.min(employeeTicketPage, employeeTicketPages);
+  const pageEmployeeTickets = employeeTickets.slice(
+    (currentEmployeeTicketPage - 1) * EMPLOYEE_TICKETS_PAGE,
+    currentEmployeeTicketPage * EMPLOYEE_TICKETS_PAGE
+  );
+
   return (
     <Box p="lg">
       <PageHeader title="Кабинет владельца" subtitle="Компании сервиса и обращения в поддержку" />
@@ -86,6 +101,14 @@ export default function OwnerPage() {
             {openTickets > 0 && (
               <Badge ml={6} size="xs" color="red" circle={openTickets < 10}>
                 {openTickets}
+              </Badge>
+            )}
+          </Tabs.Tab>
+          <Tabs.Tab value="employee-tickets" leftSection={<IconMessages size={16} />}>
+            Обращения сотрудников
+            {openEmployeeTickets > 0 && (
+              <Badge ml={6} size="xs" color="red" circle={openEmployeeTickets < 10}>
+                {openEmployeeTickets}
               </Badge>
             )}
           </Tabs.Tab>
@@ -211,6 +234,55 @@ export default function OwnerPage() {
           {ticketPages > 1 && (
             <Group justify="center" mt="md">
               <Pagination value={currentTicketPage} onChange={setTicketPage} total={ticketPages} />
+            </Group>
+          )}
+        </Tabs.Panel>
+
+        <Tabs.Panel value="employee-tickets">
+          {employeeTicketsQuery.isLoading && <Loader />}
+          {employeeTicketsQuery.isError && <Alert color="red">Не удалось загрузить обращения</Alert>}
+          <Paper withBorder>
+            {employeeTickets.length === 0 ? (
+              <Text c="dimmed" ta="center" py="lg">
+                Обращений пока нет
+              </Text>
+            ) : (
+              <Accordion>
+                {pageEmployeeTickets.map((t) => (
+                  <Accordion.Item key={t.id} value={t.id}>
+                    <Accordion.Control>
+                      <Group justify="space-between" wrap="nowrap" pr="sm">
+                        <Stack gap={0}>
+                          <Text size="sm" fw={500}>
+                            {t.subject}
+                          </Text>
+                          <Text size="xs" c="dimmed">
+                            {t.companyName} · {t.employeeName} · {dayjs(t.updated_at).format('D MMMM YYYY, HH:mm')}
+                          </Text>
+                        </Stack>
+                        <Badge color={TICKET_STATUS_COLORS[t.status]}>{TICKET_STATUS_LABELS[t.status]}</Badge>
+                      </Group>
+                    </Accordion.Control>
+                    <Accordion.Panel>
+                      <Stack gap="sm">
+                        <Select
+                          label="Статус обращения"
+                          data={TICKET_STATUSES.map((s) => ({ value: s, label: TICKET_STATUS_LABELS[s] }))}
+                          value={t.status}
+                          onChange={(v) => v && updateEmployeeTicketStatus.mutate({ id: t.id, status: v as TicketStatus })}
+                          w={220}
+                        />
+                        {employee && <EmployeeTicketThread ticket={t} currentEmployeeId={employee.id} />}
+                      </Stack>
+                    </Accordion.Panel>
+                  </Accordion.Item>
+                ))}
+              </Accordion>
+            )}
+          </Paper>
+          {employeeTicketPages > 1 && (
+            <Group justify="center" mt="md">
+              <Pagination value={currentEmployeeTicketPage} onChange={setEmployeeTicketPage} total={employeeTicketPages} />
             </Group>
           )}
         </Tabs.Panel>

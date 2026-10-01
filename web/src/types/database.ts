@@ -395,6 +395,48 @@ export interface Database {
         Update: Partial<Database['public']['Tables']['support_ticket_messages']['Insert']>;
         Relationships: [];
       };
+      // Обращение сотрудника своей компании (миграция 0025) — отдельно от
+      // support_tickets (туда админ пишет владельцу сервиса). Миграция 0030
+      // дала роли owner то же сквозное право читать/отвечать по всем
+      // компаниям, что у админа/диспетчера — по своей.
+      employee_support_tickets: {
+        Row: {
+          id: string;
+          company_id: string;
+          employee_id: string;
+          subject: string;
+          status: TicketStatus;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          employee_id: string;
+          subject: string;
+          status?: TicketStatus;
+          updated_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['employee_support_tickets']['Insert']>;
+        Relationships: [];
+      };
+      employee_support_messages: {
+        Row: {
+          id: string;
+          ticket_id: string;
+          sender_id: string;
+          body: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          ticket_id: string;
+          sender_id: string;
+          body: string;
+        };
+        Update: Partial<Database['public']['Tables']['employee_support_messages']['Insert']>;
+        Relationships: [];
+      };
       driver_reports: {
         Row: {
           id: string;
