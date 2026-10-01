@@ -120,6 +120,8 @@ export function OrderDrawer({ orderId, onClose }: { orderId: string | null; onCl
       position="right"
       size={480}
       zIndex={300}
+      // См. комментарий в OrderFormModal — то же самое для карточки заказа.
+      removeScrollProps={{ allowPinchZoom: true }}
       title={<Title order={4} component="span">Заказ</Title>}
     >
       {orderQuery.isLoading && <Loader />}

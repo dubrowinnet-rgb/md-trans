@@ -51,8 +51,15 @@ export function OrderUIProvider({ children }: { children: ReactNode }) {
           preset={form.mode === 'new' ? form.preset : {}}
           onClose={() => setForm(null)}
           onSaved={(id) => {
+            // Правки 6, п.14: раньше после сохранения правки форма
+            // закрывалась, но карточка заказа (которая и была открыта до
+            // «Изменить») переоткрывалась на том же заказе — выглядело так,
+            // будто окно заказа не закрылось вообще. При создании нового
+            // заказа карточку всё же показываем — это не то, на что он
+            // жаловался, и удобно увидеть, что создалось.
+            const wasEdit = form?.mode === 'edit';
             setForm(null);
-            setViewOrderId(id);
+            setViewOrderId(wasEdit ? null : id);
           }}
         />
       )}

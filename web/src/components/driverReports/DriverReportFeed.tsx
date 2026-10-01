@@ -26,8 +26,9 @@ const STATUS_STRIPE: Record<DriverReportStatus, string> = {
   rejected: 'var(--mantine-color-red-6)',
 };
 
-// «1 отчёт», «3 отчёта», «12 отчётов».
-function pluralReports(n: number): string {
+// «1 отчёт», «3 отчёта», «12 отчётов» — используется и в колокольчике
+// (NotificationBell), поэтому экспортирована.
+export function pluralReports(n: number): string {
   const mod10 = n % 10;
   const mod100 = n % 100;
   if (mod10 === 1 && mod100 !== 11) return `${n} отчёт`;

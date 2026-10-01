@@ -1,15 +1,19 @@
 'use client';
 
+import Link from 'next/link';
 import { Indicator, Menu, ScrollArea, Text, UnstyledButton } from '@mantine/core';
-import { IconBell, IconCake, IconCreditCardOff } from '@tabler/icons-react';
+import { IconBell, IconCake, IconCreditCardOff, IconReportMoney } from '@tabler/icons-react';
 import { useAllAccounts } from '@/api/accounts';
+import { usePendingReportsCount } from '@/api/driverReports';
+import { pluralReports } from '@/components/driverReports/DriverReportFeed';
 import { dayjs } from '@/lib/dates';
 
 interface AdminNotification {
   id: string;
-  kind: 'birthday' | 'subscription';
+  kind: 'birthday' | 'subscription' | 'driver-report';
   text: string;
   daysLeft: number;
+  href?: string;
 }
 
 type NotifiableAccount = { id: string; name: string; birth_date: string | null; paid_until: string | null };
@@ -52,7 +56,20 @@ function buildNotifications(accounts: NotifiableAccount[]): AdminNotification[] 
 
 export function NotificationBell() {
   const accounts = useAllAccounts().data ?? [];
+  const pendingReports = usePendingReportsCount().data ?? 0;
   const items = buildNotifications(accounts);
+  // Правки 6, п.21: отчёты водителей, ждущие проверки — одной строкой на
+  // всех сразу (не по одному на каждый отчёт), сверху списка.
+  if (pendingReports > 0) {
+    const verb = pendingReports % 10 === 1 && pendingReports % 100 !== 11 ? 'ждёт' : 'ждут';
+    items.unshift({
+      id: 'driver-reports-pending',
+      kind: 'driver-report',
+      text: `${pluralReports(pendingReports)} ${verb} проверки`,
+      daysLeft: -1,
+      href: '/driver-reports/',
+    });
+  }
 
   return (
     <Menu position="bottom-end" withArrow width={320} shadow="md">
@@ -71,14 +88,26 @@ export function NotificationBell() {
           </Text>
         )}
         <ScrollArea.Autosize mah={320}>
-          {items.map((item) => (
-            <Menu.Item
-              key={item.id}
-              leftSection={item.kind === 'birthday' ? <IconCake size={16} /> : <IconCreditCardOff size={16} />}
-            >
-              <Text size="sm">{item.text}</Text>
-            </Menu.Item>
-          ))}
+          {items.map((item) => {
+            const icon =
+              item.kind === 'birthday' ? (
+                <IconCake size={16} />
+              ) : item.kind === 'driver-report' ? (
+                <IconReportMoney size={16} />
+              ) : (
+                <IconCreditCardOff size={16} />
+              );
+            const label = <Text size="sm">{item.text}</Text>;
+            return item.href ? (
+              <Menu.Item key={item.id} component={Link} href={item.href} leftSection={icon}>
+                {label}
+              </Menu.Item>
+            ) : (
+              <Menu.Item key={item.id} leftSection={icon}>
+                {label}
+              </Menu.Item>
+            );
+          })}
         </ScrollArea.Autosize>
       </Menu.Dropdown>
     </Menu>

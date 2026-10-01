@@ -185,7 +185,7 @@ export default function DriverReportsPage() {
                   <Table.Th>Статус</Table.Th>
                   <Table.Th ta="right">Должен сдать</Table.Th>
                   <Table.Th ta="right">Сдал</Table.Th>
-                  <Table.Th ta="right">Расхождение</Table.Th>
+                  <Table.Th ta="right">Остаток у водителя</Table.Th>
                 </Table.Tr>
               </Table.Thead>
               <Table.Tbody>
@@ -198,7 +198,7 @@ export default function DriverReportsPage() {
                     </Table.Td>
                     <Table.Td ta="right">{formatMoney(r.expectedHandIn)}</Table.Td>
                     <Table.Td ta="right">{formatMoney(r.cash_handed_in)}</Table.Td>
-                    <Table.Td ta="right" c={r.discrepancy === 0 ? undefined : 'red'}>
+                    <Table.Td ta="right" c="green">
                       {r.discrepancy > 0 ? '+' : ''}
                       {formatMoney(r.discrepancy)}
                     </Table.Td>
@@ -236,7 +236,7 @@ export default function DriverReportsPage() {
                   <Table.Th ta="right">Собрано нал.</Table.Th>
                   <Table.Th ta="right">Должен сдать</Table.Th>
                   <Table.Th ta="right">Сдал</Table.Th>
-                  <Table.Th ta="right">Расхождение</Table.Th>
+                  <Table.Th ta="right">Остаток у водителя</Table.Th>
                 </Table.Tr>
               </Table.Thead>
               <Table.Tbody>
@@ -255,7 +255,7 @@ export default function DriverReportsPage() {
                     <Table.Td ta="right">{formatMoney(row.cashCollected)}</Table.Td>
                     <Table.Td ta="right">{formatMoney(row.expectedHandIn)}</Table.Td>
                     <Table.Td ta="right">{formatMoney(row.handedIn)}</Table.Td>
-                    <Table.Td ta="right" c={row.discrepancy === 0 ? undefined : 'red'}>
+                    <Table.Td ta="right" c="green">
                       {row.discrepancy > 0 ? '+' : ''}
                       {formatMoney(row.discrepancy)}
                     </Table.Td>

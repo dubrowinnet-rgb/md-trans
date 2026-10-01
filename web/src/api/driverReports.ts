@@ -120,6 +120,29 @@ export function reportEditedAt(report: DriverReport): string | null {
   return report.edited_at;
 }
 
+// Бейдж в колокольчике шапки кабинета (правки 6, п.21): сколько отчётов
+// ждут проверки — не привязано к периоду, который выбран на странице
+// отчётов (и сама страница там может быть не открыта вовсе), поэтому
+// отдельный лёгкий запрос — только count, без строк. useRealtimeSync
+// инвалидирует этот ключ при любом изменении driver_reports.
+export function usePendingReportsCount() {
+  const companyId = useCompanyId();
+  return useQuery({
+    queryKey: ['driver-reports-pending-count', companyId],
+    queryFn: async (): Promise<number> => {
+      if (!companyId) return 0;
+      const { count, error } = await supabase
+        .from('driver_reports')
+        .select('id', { count: 'exact', head: true })
+        .eq('company_id', companyId)
+        .eq('status', 'submitted');
+      if (error) throw error;
+      return count ?? 0;
+    },
+    enabled: Boolean(companyId),
+  });
+}
+
 // Согласовать отчёт (он же подтверждение сданной кассы) — после этого он
 // окончательный: водитель не правит его даже в пределах 24 часов, и он
 // считается зафиксированным в финансовых отчётах (Максим). С 0019 прямой

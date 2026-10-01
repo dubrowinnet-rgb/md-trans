@@ -47,7 +47,12 @@ export function useRealtimeSync() {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'driver_reports', filter: `company_id=eq.${companyId}` },
-        () => queryClient.invalidateQueries({ queryKey: ['driver-reports'] })
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['driver-reports'] });
+          // Правки 6, п.21: отдельный ключ (счётчик в колокольчике) — не
+          // префикс ['driver-reports'], инвалидируется явно.
+          queryClient.invalidateQueries({ queryKey: ['driver-reports-pending-count'] });
+        }
       )
       .subscribe();
 

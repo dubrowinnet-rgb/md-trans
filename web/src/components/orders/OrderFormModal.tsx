@@ -299,6 +299,11 @@ export function OrderFormModal({
       size={1100}
       fullScreen={isMobile}
       zIndex={400}
+      // Правки 6, п.4: react-remove-scroll (блокировка фона под модалкой)
+      // по умолчанию глушит и pinch-to-zoom, не только скролл страницы —
+      // без этого на телефоне нельзя было сжать экран, чтобы увидеть
+      // форму заказа целиком.
+      removeScrollProps={{ allowPinchZoom: true }}
       title={<Title order={4} component="span">{order ? 'Изменить заказ' : 'Новый заказ'}</Title>}
     >
       <Grid gap="xl">

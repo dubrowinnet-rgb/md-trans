@@ -157,8 +157,8 @@ export function DriverReportCash({ report }: { report: DriverReport }) {
           <Table.Td ta="right">{formatMoney(report.cash_handed_in)}</Table.Td>
         </Table.Tr>
         <Table.Tr>
-          <Table.Td fw={600}>Расхождение</Table.Td>
-          <Table.Td ta="right" fw={600} c={report.discrepancy === 0 ? 'green' : 'red'}>
+          <Table.Td fw={600}>Остаток у водителя</Table.Td>
+          <Table.Td ta="right" fw={600} c="green">
             {report.discrepancy > 0 ? '+' : ''}
             {formatMoney(report.discrepancy)}
           </Table.Td>
