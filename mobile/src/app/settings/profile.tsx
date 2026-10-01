@@ -4,6 +4,7 @@ import { format } from 'date-fns';
 import { router } from 'expo-router';
 import { Appbar, Button, Divider, HelperText, Snackbar, Text, TextInput } from 'react-native-paper';
 import { useUpdateOwnProfile } from '../../api/accounts';
+import { isPhoneInputComplete, maskPhoneInput, PHONE_INPUT_EMPTY } from '../../lib/phone';
 import { useSession } from '../../providers/SessionProvider';
 import { ACCOUNT_ROLE_LABELS } from '../../theme';
 
@@ -19,7 +20,7 @@ import { ACCOUNT_ROLE_LABELS } from '../../theme';
 export default function ProfileSettingsScreen() {
   const { employee } = useSession();
   const updateProfile = useUpdateOwnProfile();
-  const [phone, setPhone] = useState(employee?.phone ?? '');
+  const [phone, setPhone] = useState(employee?.phone ?? PHONE_INPUT_EMPTY);
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [snackbar, setSnackbar] = useState<string | null>(null);
@@ -30,6 +31,13 @@ export default function ProfileSettingsScreen() {
 
   const handleSave = async () => {
     setError(null);
+    // Правки 6, п.1: маска не даёт очистить телефон совсем, но полдороги
+    // набранный номер отправить можно — не даём, иначе в профиле осталась
+    // бы такая обрезанная «половина номера».
+    if (!isPhoneInputComplete(phone)) {
+      setError('Укажите номер телефона целиком');
+      return;
+    }
     try {
       await updateProfile.mutateAsync({ id: employee.id, phone: phone.trim(), password });
       setPassword('');
@@ -58,7 +66,7 @@ export default function ProfileSettingsScreen() {
               label="Телефон"
               accessibilityLabel="Телефон"
               value={phone}
-              onChangeText={setPhone}
+              onChangeText={(text) => setPhone(maskPhoneInput(text))}
               keyboardType="phone-pad"
             />
             <HelperText type="info">По этому номеру вы входите в приложение</HelperText>

@@ -26,6 +26,7 @@ import {
 } from '../../api/accounts';
 import { useUpdateEmployeeRates } from '../../api/payroll';
 import { useVehicles } from '../../api/vehicles';
+import { isPhoneInputComplete, maskPhoneInput, PHONE_INPUT_EMPTY } from '../../lib/phone';
 import type { AccountRole, RateMode } from '../../types/database';
 import { ACCOUNT_ROLE_LABELS } from '../../theme';
 
@@ -149,7 +150,7 @@ export function AccountDialog({ account, onClose }: { account: Account | null; o
 
   const [name, setName] = useState(account?.name ?? '');
   const [lastName, setLastName] = useState(account?.last_name ?? '');
-  const [phone, setPhone] = useState(account?.phone ?? '');
+  const [phone, setPhone] = useState(account?.phone ?? PHONE_INPUT_EMPTY);
   const [password, setPassword] = useState('');
   const [birthDate, setBirthDate] = useState<Date | null>(parseDate(account?.birth_date ?? null));
   const [hireDate, setHireDate] = useState<Date | null>(parseDate(account?.hire_date ?? null));
@@ -214,7 +215,9 @@ export function AccountDialog({ account, onClose }: { account: Account | null; o
       setError('Укажите имя');
       return;
     }
-    if (!account && !phone.trim()) {
+    // Правки 6, п.1: вход теперь только по телефону — он обязателен и при
+    // создании, и при правке, а не только когда аккаунта ещё не было.
+    if (!isPhoneInputComplete(phone)) {
       setError('Укажите телефон — по нему сотрудник будет входить');
       return;
     }
@@ -341,7 +344,7 @@ export function AccountDialog({ account, onClose }: { account: Account | null; o
                   label={account ? 'Телефон' : 'Телефон — по нему сотрудник входит'}
                   accessibilityLabel="Телефон"
                   value={phone}
-                  onChangeText={setPhone}
+                  onChangeText={(text) => setPhone(maskPhoneInput(text))}
                   keyboardType="phone-pad"
                 />
                 <TextInput

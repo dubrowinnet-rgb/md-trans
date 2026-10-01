@@ -4,6 +4,7 @@ import { Button, HelperText, Text, TextInput } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
 import { loginInputToE164 } from '../lib/accountLogin';
+import { isPhoneInputComplete, maskPhoneInput, PHONE_INPUT_EMPTY } from '../lib/phone';
 
 // Вход только по телефону и паролю (Правки 6, п.1 — Максим явно попросил
 // убрать переключение на логин/email, единственный способ входа). Старый
@@ -13,12 +14,12 @@ import { loginInputToE164 } from '../lib/accountLogin';
 // администратора и владельца Максим попросил завести на конкретные номера
 // до этой доработки, см. память проекта.
 export default function LoginScreen() {
-  const [phone, setPhone] = useState('');
+  const [phone, setPhone] = useState(PHONE_INPUT_EMPTY);
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const canSubmit = phone.trim().length > 0 && password.length > 0 && !submitting;
+  const canSubmit = isPhoneInputComplete(phone) && password.length > 0 && !submitting;
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
@@ -50,7 +51,7 @@ export default function LoginScreen() {
           label="Телефон"
           accessibilityLabel="Телефон"
           value={phone}
-          onChangeText={setPhone}
+          onChangeText={(text) => setPhone(maskPhoneInput(text))}
           keyboardType="phone-pad"
           autoComplete="tel"
           disabled={submitting}
