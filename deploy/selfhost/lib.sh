@@ -347,7 +347,7 @@ deploy_web() {
 #     "android": { "version": "1.0.0 (3)", "url": "https://expo.dev/artifacts/eas/….apk", "sha256": "…" },
 #     "ios": { "mode": "adhoc", "url": "https://expo.dev/…", "registerUrl": "https://expo.dev/register-device/…", "version": "1.0.0 (3)" }
 #   }
-# APK скачивается на свой сервер (files/md-trans.apk) — сотрудники качают его
+# APK скачивается на свой сервер (files/myrzik.apk) — сотрудники качают его
 # с вашего домена. Для iPhone ссылки передаются как есть: ставит приложение
 # и регистрирует новый iPhone сам Expo. Страница читает files/install.json
 # (формат — web/src/lib/installInfo.ts в ветке кабинета).
@@ -369,18 +369,18 @@ publish_app_files() {
   apk_sha=$(jq -r '.android.sha256 // empty' "$release")
   published=$(config_get apk_published)
   if [ -n "$apk_url" ]; then
-    if [ "$published" = "$apk_version $apk_url" ] && [ -f "$files/md-trans.apk" ]; then
+    if [ "$published" = "$apk_version $apk_url" ] && [ -f "$files/myrzik.apk" ]; then
       android_mode=local
     else
       info "Скачиваю приложение для Android, версия ${apk_version:-без номера}"
-      if curl -fsSL --retry 3 --max-time 600 -o "$files/md-trans.apk.part" "$apk_url" \
-        && { [ -z "$apk_sha" ] || printf '%s  %s\n' "$apk_sha" "$files/md-trans.apk.part" | sha256sum -c --status; }; then
-        chmod 644 "$files/md-trans.apk.part"
-        mv -f "$files/md-trans.apk.part" "$files/md-trans.apk"
+      if curl -fsSL --retry 3 --max-time 600 -o "$files/myrzik.apk.part" "$apk_url" \
+        && { [ -z "$apk_sha" ] || printf '%s  %s\n' "$apk_sha" "$files/myrzik.apk.part" | sha256sum -c --status; }; then
+        chmod 644 "$files/myrzik.apk.part"
+        mv -f "$files/myrzik.apk.part" "$files/myrzik.apk"
         config_set apk_published "$apk_version $apk_url"
         android_mode=local
       else
-        rm -f "$files/md-trans.apk.part"
+        rm -f "$files/myrzik.apk.part"
         warn "Не удалось скачать APK — на странице установки будет прямая ссылка на сервер Expo. Следующая попытка — при следующей проверке."
         android_mode=remote
       fi
@@ -389,7 +389,7 @@ publish_app_files() {
 
   tmp="$files/install.json.tmp"
   jq --arg mode "$android_mode" --arg url "$apk_url" --arg version "$apk_version" '{
-      android: (if $mode == "local" then { url: "/files/md-trans.apk", version: $version }
+      android: (if $mode == "local" then { url: "/files/myrzik.apk", version: $version }
                 elif $mode == "remote" then { url: $url, version: $version }
                 else null end),
       ios: (.ios // null)

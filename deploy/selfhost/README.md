@@ -272,7 +272,7 @@ API) 95% экранов открываются за 0,1–0,3 с (без них 
 `deploy/app-release.json` (формат — в `publish_app_files`, `lib.sh`) и
 запушьте. `publish-app.sh` раз в час читает этот файл с GitHub (raw, код
 сервера не трогает), скачивает APK в
-`volumes/proxy/mdtrans/files/md-trans.apk` (проверяет `sha256`, если он
+`volumes/proxy/mdtrans/files/myrzik.apk` (проверяет `sha256`, если он
 указан) и пишет `files/install.json` в формате
 `web/src/lib/installInfo.ts`. Если скачать не удалось — на странице будет
 прямая ссылка на Expo, следующая попытка через час.
