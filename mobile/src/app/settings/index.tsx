@@ -56,6 +56,15 @@ export default function SettingsScreen() {
             onPress={() => router.push('/settings/driver-reports')}
           />
         )}
+        {canReviewReports && (
+          <List.Item
+            title="Обращения сотрудников"
+            description="Служба поддержки: ответить, сменить статус"
+            left={(props) => <List.Icon {...props} icon="headset" />}
+            right={(props) => <List.Icon {...props} icon="chevron-right" />}
+            onPress={() => router.push('/settings/employee-support-inbox')}
+          />
+        )}
         {isAdmin && (
           <>
             <List.Item

@@ -9,6 +9,7 @@ export interface AppNotification {
   body: string;
   order_id: string | null;
   driver_report_id: string | null;
+  support_ticket_id: string | null;
   read_at: string | null;
   created_at: string;
 }
@@ -26,7 +27,7 @@ export function useNotifications() {
     queryFn: async (): Promise<AppNotification[]> => {
       const { data, error } = await supabase
         .from('notifications')
-        .select('id, kind, title, body, order_id, driver_report_id, read_at, created_at')
+        .select('id, kind, title, body, order_id, driver_report_id, support_ticket_id, read_at, created_at')
         .order('created_at', { ascending: false })
         .limit(NOTIFICATIONS_LIMIT);
       if (error) throw error;

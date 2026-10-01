@@ -20,7 +20,12 @@ export type RateMode = 'combined' | 'split';
 // 'confirmed' — «согласован», 'rejected' — «не согласован» (миграция 0019).
 export type DriverReportStatus = 'draft' | 'submitted' | 'confirmed' | 'rejected';
 export type FuelPaymentMethod = 'cash' | 'cashless';
-export type NotificationKind = 'order_changed' | 'order_cancelled' | 'report_approved' | 'report_rejected';
+export type NotificationKind =
+  | 'order_changed'
+  | 'order_cancelled'
+  | 'report_approved'
+  | 'report_rejected'
+  | 'support_reply';
 export type OrderStatus = 'new' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled';
 export type StopType = 'pickup' | 'dropoff';
 export type CrewStatus = 'notified' | 'read' | 'confirmed';
@@ -168,6 +173,48 @@ export interface Database {
           body: string;
         };
         Update: Partial<Database['public']['Tables']['support_ticket_messages']['Insert']>;
+        Relationships: [];
+      };
+      // Обращения сотрудника (не админа) к своей компании — миграция 0025.
+      // Отдельно от support_tickets (обращения администратора к владельцу
+      // сервиса) — другой получатель и свои правила.
+      employee_support_tickets: {
+        Row: {
+          id: string;
+          company_id: string;
+          employee_id: string;
+          subject: string;
+          status: TicketStatus;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          employee_id: string;
+          subject: string;
+          status?: TicketStatus;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['employee_support_tickets']['Insert']>;
+        Relationships: [];
+      };
+      employee_support_messages: {
+        Row: {
+          id: string;
+          ticket_id: string;
+          sender_id: string;
+          body: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          ticket_id: string;
+          sender_id: string;
+          body: string;
+        };
+        Update: Partial<Database['public']['Tables']['employee_support_messages']['Insert']>;
         Relationships: [];
       };
       clients: {
@@ -403,6 +450,7 @@ export interface Database {
           body: string;
           order_id: string | null;
           driver_report_id: string | null;
+          support_ticket_id: string | null;
           read_at: string | null;
           created_at: string;
         };
@@ -415,6 +463,7 @@ export interface Database {
           body: string;
           order_id?: string | null;
           driver_report_id?: string | null;
+          support_ticket_id?: string | null;
           read_at?: string | null;
           created_at?: string;
         };

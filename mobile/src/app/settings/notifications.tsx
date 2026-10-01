@@ -11,11 +11,13 @@ const KIND_ICON: Record<NotificationKind, string> = {
   order_cancelled: 'calendar-remove-outline',
   report_approved: 'check-circle-outline',
   report_rejected: 'alert-circle-outline',
+  support_reply: 'headset',
 };
 
 function openNotification(item: AppNotification) {
   if (item.order_id) router.push(`/order/${item.order_id}`);
   else if (item.driver_report_id) router.push('/settings/driver-feed');
+  else if (item.support_ticket_id) router.push('/settings/employee-support');
 }
 
 // Лента уведомлений сотрудника (Максим, 30.09, «Правки 3», п.5) — изменения

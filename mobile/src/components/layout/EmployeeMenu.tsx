@@ -17,9 +17,9 @@ import { formatTime } from '../../utils/date';
 // календаря и тут — теперь только тут, см. (employee)/my-orders.tsx).
 // Бейдж на значке — непрочитанные уведомления (useUnreadNotificationsCount,
 // миграция 0024), тот же приём, что у колокольчика администратора
-// (NotificationBell). «Служба поддержки» для сотрудника (не админа) в
-// меню пока нет — под неё ещё нет канала связи, Максим подтвердил делать
-// сейчас только сжатие сетки и уведомления, без этого пункта.
+// (NotificationBell). «Служба поддержки» (Максим, 01.10, миграция 0025) —
+// обращения к админу/диспетчеру своей компании, не к владельцу сервиса
+// (см. employee-support.tsx).
 export function EmployeeMenu({
   employee,
   lastSyncedAt,
@@ -67,6 +67,7 @@ export function EmployeeMenu({
         />
       )}
       <Menu.Item leadingIcon="bell-outline" title="Уведомления" onPress={() => go('/settings/notifications')} />
+      <Menu.Item leadingIcon="headset" title="Служба поддержки" onPress={() => go('/settings/employee-support')} />
       <Menu.Item leadingIcon="cog-outline" title="Настройки" onPress={() => go('/settings')} />
       <Menu.Item leadingIcon="information-outline" title="О приложении" onPress={() => go('/settings/about')} />
       <Divider />
