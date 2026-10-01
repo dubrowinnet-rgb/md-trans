@@ -14,6 +14,7 @@ import { registerForPushNotifications } from '../lib/pushNotifications';
 import { useRealtimeSync } from '../hooks/useRealtimeSync';
 import { useBadgeSync } from '../hooks/useBadgeSync';
 import { useNotificationTapNavigation } from '../hooks/useNotificationTapNavigation';
+import { useForegroundUpdateCheck } from '../hooks/useForegroundUpdateCheck';
 import { theme } from '../theme';
 
 SplashScreen.preventAutoHideAsync();
@@ -51,6 +52,7 @@ function RootNavigator() {
   useRealtimeSync();
   useBadgeSync();
   useNotificationTapNavigation();
+  useForegroundUpdateCheck();
 
   useEffect(() => {
     if (!isLoading) SplashScreen.hideAsync();
