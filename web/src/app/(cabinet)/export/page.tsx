@@ -162,7 +162,7 @@ export default function ExportPage() {
 
   const columnPicker = <T,>(cols: ExportColumn<T>[], value: string[], onChange: (v: string[]) => void) => (
     <Checkbox.Group value={value} onChange={onChange}>
-      <SimpleGrid cols={2} spacing={6}>
+      <SimpleGrid cols={{ base: 1, sm: 2 }} spacing={6}>
         {cols.map((c) => (
           <Checkbox
             key={c.key}
@@ -183,9 +183,9 @@ export default function ExportPage() {
   )[];
 
   return (
-    <Box p="lg">
+    <Box p={{ base: 'sm', sm: 'lg' }}>
       <PageHeader title="Выгрузка базы" subtitle="Excel или CSV с нужными колонками" />
-      <SimpleGrid cols={2} spacing="lg" style={{ alignItems: 'start' }}>
+      <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="lg" style={{ alignItems: 'start' }}>
         <Paper withBorder p="md">
           <Stack>
             <div>

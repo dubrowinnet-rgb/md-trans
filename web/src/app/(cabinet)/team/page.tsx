@@ -31,14 +31,14 @@ export default function TeamPage() {
 
   if (employee?.role !== 'admin') {
     return (
-      <Box p="lg">
+      <Box p={{ base: 'sm', sm: 'lg' }}>
         <Alert>Раздел «Команда» доступен только администратору.</Alert>
       </Box>
     );
   }
 
   return (
-    <Box p="lg">
+    <Box p={{ base: 'sm', sm: 'lg' }}>
       <PageHeader title="Команда" subtitle="Телефоны, роли и права сотрудников">
         <Button variant="default" leftSection={<IconDeviceMobile size={16} />} onClick={() => setInstallOpen(true)}>
           Установка приложения
@@ -50,6 +50,7 @@ export default function TeamPage() {
       {accountsQuery.isError && <Alert color="red">{accountsQuery.error.message}</Alert>}
       {accountsQuery.isLoading && <Loader />}
       <Paper withBorder>
+        <Table.ScrollContainer minWidth={900}>
         <Table highlightOnHover striped>
           <Table.Thead>
             <Table.Tr>
@@ -117,6 +118,7 @@ export default function TeamPage() {
             })}
           </Table.Tbody>
         </Table>
+        </Table.ScrollContainer>
       </Paper>
       {editing && <AccountModal account={editing === 'new' ? null : editing} onClose={() => setEditing(null)} />}
       {installOpen && <InstallLinkModal onClose={() => setInstallOpen(false)} />}

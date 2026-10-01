@@ -285,7 +285,7 @@ export function AccountModal({ account, onClose }: { account: Account | null; on
   return (
     <Modal opened onClose={onClose} size="lg" title={<Title order={4} component="span">{account ? account.name : 'Новый аккаунт'}</Title>}>
       <Stack>
-        <SimpleGrid cols={2}>
+        <SimpleGrid cols={{ base: 1, xs: 2 }}>
           <TextInput label="Имя *" value={name} onChange={(e) => setName(e.currentTarget.value)} />
           <TextInput label="Фамилия" value={lastName} onChange={(e) => setLastName(e.currentTarget.value)} />
           <TextInput
@@ -304,7 +304,7 @@ export function AccountModal({ account, onClose }: { account: Account | null; on
         </SimpleGrid>
 
         <Divider label="Данные сотрудника" labelPosition="left" />
-        <SimpleGrid cols={3}>
+        <SimpleGrid cols={{ base: 1, xs: 3 }}>
           <div>
             <DatePickerInput
               label="Дата рождения"
@@ -341,7 +341,7 @@ export function AccountModal({ account, onClose }: { account: Account | null; on
         <Text size="xs" c="dimmed">
           Личный транспорт (необязательно) — если сотрудник иногда добирается на нём до заказа.
         </Text>
-        <SimpleGrid cols={2}>
+        <SimpleGrid cols={{ base: 1, xs: 2 }}>
           <TextInput
             label="Марка"
             value={personalVehicleMake}
@@ -407,7 +407,7 @@ export function AccountModal({ account, onClose }: { account: Account | null; on
               />
             )}
             {role === 'driver' && rateMode === 'split' ? (
-              <SimpleGrid cols={2}>
+              <SimpleGrid cols={{ base: 1, xs: 2 }}>
                 <NumberInput
                   label="За час вождения, ₽"
                   min={0}

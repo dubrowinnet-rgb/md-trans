@@ -87,7 +87,7 @@ export default function ClientsPage() {
   );
 
   return (
-    <Box p="lg">
+    <Box p={{ base: 'sm', sm: 'lg' }}>
       <PageHeader title="Клиенты" subtitle={query.data ? `В базе ${query.data.length} клиентов` : undefined}>
         <Button variant="default" component={Link} href="/export/" leftSection={<IconDatabaseExport size={16} />}>
           Выгрузить
@@ -146,6 +146,7 @@ export default function ClientsPage() {
         </Text>
       </Group>
       <Paper withBorder>
+        <Table.ScrollContainer minWidth={900}>
         <Table highlightOnHover striped>
           <Table.Thead>
             <Table.Tr>
@@ -199,6 +200,7 @@ export default function ClientsPage() {
             )}
           </Table.Tbody>
         </Table>
+        </Table.ScrollContainer>
       </Paper>
       {pages > 1 && (
         <Group justify="center" mt="md">

@@ -88,7 +88,7 @@ export function VehicleModal({ vehicle, onClose }: { vehicle: Vehicle | null; on
   return (
     <Modal opened onClose={onClose} size="lg" title={<Title order={4} component="span">{vehicle ? vehicle.name : 'Новая машина'}</Title>}>
       <Stack>
-        <SimpleGrid cols={2}>
+        <SimpleGrid cols={{ base: 1, xs: 2 }}>
           <TextInput label="Название *" placeholder="Газель" value={name} onChange={(e) => setName(e.currentTarget.value)} />
           <TextInput label="Гос номер *" placeholder="А123БВ777" value={plate} onChange={(e) => setPlate(e.currentTarget.value)} />
           <NumberInput label="Грузоподъёмность" suffix=" кг" min={0} thousandSeparator=" " value={capacity} onChange={setCapacity} />

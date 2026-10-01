@@ -97,7 +97,7 @@ export default function DriverReportsPage() {
 
   if (!isOfficeRole(employee)) {
     return (
-      <Box p="lg">
+      <Box p={{ base: 'sm', sm: 'lg' }}>
         <Alert>Отчёты водителей доступны администратору и диспетчеру.</Alert>
       </Box>
     );
@@ -114,7 +114,7 @@ export default function DriverReportsPage() {
   const tableRows = reports.slice((currentTablePage - 1) * TABLE_PAGE, currentTablePage * TABLE_PAGE);
 
   return (
-    <Box p="lg">
+    <Box p={{ base: 'sm', sm: 'lg' }}>
       <PageHeader title="Отчёты водителей" subtitle="Лента отчётов: заказы, касса, расходы, топливо и проверка">
         <SegmentedControl
           value={period}
@@ -176,6 +176,7 @@ export default function DriverReportsPage() {
         <Tabs.Panel value="reports">
           {reportsQuery.isLoading && <Loader mb="md" />}
           <Paper withBorder>
+            <Table.ScrollContainer minWidth={700}>
             <Table highlightOnHover striped>
               <Table.Thead>
                 <Table.Tr>
@@ -214,6 +215,7 @@ export default function DriverReportsPage() {
                 )}
               </Table.Tbody>
             </Table>
+            </Table.ScrollContainer>
           </Paper>
           {tablePages > 1 && (
             <Group justify="center" mt="md">
@@ -224,6 +226,7 @@ export default function DriverReportsPage() {
 
         <Tabs.Panel value="monthly">
           <Paper withBorder>
+            <Table.ScrollContainer minWidth={800}>
             <Table highlightOnHover striped>
               <Table.Thead>
                 <Table.Tr>
@@ -269,6 +272,7 @@ export default function DriverReportsPage() {
                 )}
               </Table.Tbody>
             </Table>
+            </Table.ScrollContainer>
           </Paper>
         </Tabs.Panel>
       </Tabs>

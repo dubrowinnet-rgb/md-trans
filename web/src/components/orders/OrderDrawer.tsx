@@ -300,7 +300,7 @@ function OrderDetails({
       </Stack>
 
       <Divider label="Детали" labelPosition="left" />
-      <SimpleGrid cols={2} spacing="sm">
+      <SimpleGrid cols={{ base: 1, xs: 2 }} spacing="sm">
         <Box>
           <Text size="xs" c="dimmed">
             Услуги

@@ -3,7 +3,8 @@
 import { useEffect, type ReactNode } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { AppShell, Avatar, Button, Center, Group, Loader, NavLink, Stack, Text, Title } from '@mantine/core';
+import { AppShell, Avatar, Burger, Button, Center, Group, Loader, NavLink, Stack, Text, Title } from '@mantine/core';
+import { useDisclosure, useMediaQuery } from '@mantine/hooks';
 import {
   IconBuildingStore,
   IconCalendarWeek,
@@ -45,12 +46,37 @@ export default function CabinetLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const { session, employee, isLoading } = useSession();
+  const [navOpened, { toggle: toggleNav, close: closeNav }] = useDisclosure();
+  // На телефоне меню слева не помещается — прячем за бургер в верхней
+  // полоске (AppShell.Header), которая на десктопе не занимает места
+  // (collapsed: !isMobile). undefined до первого замера — трактуем как
+  // «не телефон», чтобы desktop не мигал лишней полоской при заходе.
+  const isMobile = useMediaQuery('(max-width: 48em)') ?? false;
 
   const isOwner = isServiceOwner(employee);
 
   useEffect(() => {
     if (!isLoading && !session) router.replace('/login/');
   }, [isLoading, session, router]);
+
+  // Перешли по ссылке в меню на телефоне — само меню больше не нужно.
+  useEffect(() => {
+    closeNav();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]);
+
+  // На телефоне открытое меню — это полноэкранная панель (сворачивается
+  // крестиком слева сверху, он и так виден); Escape — такой же ожидаемый
+  // способ её закрыть, но сам по себе не работает, раз меню не является
+  // Mantine Modal/Drawer с этим встроенным.
+  useEffect(() => {
+    if (!navOpened) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeNav();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [navOpened, closeNav]);
 
   // Владелец сервиса не работает с заказами конкретной компании — уводим
   // его сразу в /owner/, минуя общий кабинет диспетчера (куда ведут /login/
@@ -90,7 +116,22 @@ export default function CabinetLayout({ children }: { children: ReactNode }) {
   const isAdmin = employee?.role === 'admin';
 
   return (
-    <AppShell navbar={{ width: 220, breakpoint: 0 }} padding={0}>
+    <AppShell
+      header={{ height: 52, collapsed: !isMobile }}
+      navbar={{ width: 220, breakpoint: 'sm', collapsed: { mobile: !navOpened, desktop: false } }}
+      padding={0}
+    >
+      <AppShell.Header>
+        <Group h="100%" px="sm" justify="space-between" wrap="nowrap">
+          <Group gap="xs" wrap="nowrap">
+            <Burger opened={navOpened} onClick={toggleNav} size="sm" />
+            <Title order={5} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {isOwner ? 'Кабинет владельца' : 'Кабинет диспетчера'}
+            </Title>
+          </Group>
+          {isAdmin && <NotificationBell />}
+        </Group>
+      </AppShell.Header>
       <AppShell.Navbar p="sm">
         <AppShell.Section>
           <Group justify="space-between" wrap="nowrap" px="xs" py="sm">

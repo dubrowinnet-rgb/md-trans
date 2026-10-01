@@ -18,7 +18,7 @@ export default function FleetPage() {
   const [editing, setEditing] = useState<Vehicle | 'new' | null>(null);
 
   return (
-    <Box p="lg">
+    <Box p={{ base: 'sm', sm: 'lg' }}>
       <PageHeader title="Автопарк" subtitle="Машины компании и закреплённые за ними водители">
         {canEdit && (
           <Button leftSection={<IconPlus size={16} />} onClick={() => setEditing('new')}>
@@ -29,6 +29,7 @@ export default function FleetPage() {
       {vehiclesQuery.isError && <Alert color="red">{vehiclesQuery.error.message}</Alert>}
       {vehiclesQuery.isLoading && <Loader />}
       <Paper withBorder>
+        <Table.ScrollContainer minWidth={800}>
         <Table highlightOnHover striped>
           <Table.Thead>
             <Table.Tr>
@@ -87,6 +88,7 @@ export default function FleetPage() {
             )}
           </Table.Tbody>
         </Table>
+        </Table.ScrollContainer>
       </Paper>
       <Text size="xs" c="dimmed" mt="sm">
         Машину по умолчанию водителю назначает администратор в разделе «Команда».

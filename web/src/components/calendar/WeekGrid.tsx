@@ -10,6 +10,12 @@ export const HOUR_HEIGHT = 56;
 const MIN_PX = HOUR_HEIGHT / 60;
 const SNAP_MIN = 15;
 const TIME_COL = 56;
+// Ниже этой ширины день на телефоне превращается в нечитаемую полоску —
+// вместо сжатия сетка целиком (шапка + часы, они скроллятся горизонтально
+// вместе, см. return) становится шире экрана, и по ней можно провести
+// пальцем в сторону, как в таблице.
+const MIN_DAY_WIDTH = 110;
+const DAY_COLUMNS = `repeat(7, minmax(${MIN_DAY_WIDTH}px, 1fr))`;
 
 function minutesOf(date: Date) {
   return date.getHours() * 60 + date.getMinutes();
@@ -92,9 +98,14 @@ export function WeekGrid({
   };
 
   return (
-    <Box style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+    // Внешний скролл — горизонтальный, общий для шапки дней и сетки часов
+    // (они едут в стороны вместе, т.к. оба — обычные блочные дети одного
+    // прокручиваемого контейнера). Вертикальный скролл остаётся на своём
+    // месте, внутри — на scrollRef, как было.
+    <Box style={{ height: '100%', overflowX: 'auto', overflowY: 'hidden' }}>
+      <Box style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, minWidth: TIME_COL + 7 * MIN_DAY_WIDTH }}>
       {/* Шапка дней */}
-      <Box style={{ display: 'grid', gridTemplateColumns: `${TIME_COL}px repeat(7, 1fr)`, borderBottom: '1px solid var(--mantine-color-gray-3)', paddingRight: 12 }}>
+      <Box style={{ display: 'grid', gridTemplateColumns: `${TIME_COL}px ${DAY_COLUMNS}`, borderBottom: '1px solid var(--mantine-color-gray-3)', paddingRight: 12 }}>
         <div />
         {days.map((day, i) => {
           const isToday = dayjs(day).isSame(now, 'day');
@@ -126,7 +137,7 @@ export function WeekGrid({
 
       {/* Сетка часов */}
       <Box ref={scrollRef} style={{ flex: 1, overflowY: 'scroll', minHeight: 0 }}>
-        <Box style={{ display: 'grid', gridTemplateColumns: `${TIME_COL}px repeat(7, 1fr)`, position: 'relative', height: 24 * HOUR_HEIGHT }}>
+        <Box style={{ display: 'grid', gridTemplateColumns: `${TIME_COL}px ${DAY_COLUMNS}`, position: 'relative', height: 24 * HOUR_HEIGHT }}>
           <Box style={{ position: 'relative' }}>
             {Array.from({ length: 24 }, (_, h) => (
               <Text key={h} size="xs" c="dimmed" style={{ position: 'absolute', top: h * HOUR_HEIGHT - 7, right: 8 }}>
@@ -303,6 +314,7 @@ export function WeekGrid({
             );
           })}
         </Box>
+      </Box>
       </Box>
     </Box>
   );

@@ -23,7 +23,7 @@ import {
   UnstyledButton,
 } from '@mantine/core';
 import { DatePickerInput } from '@mantine/dates';
-import { useDebouncedValue } from '@mantine/hooks';
+import { useDebouncedValue, useMediaQuery } from '@mantine/hooks';
 import { TimeField } from '@/components/common/TimeField';
 import { notifications } from '@mantine/notifications';
 import { errorMessage } from '@/lib/errors';
@@ -117,6 +117,7 @@ export function OrderFormModal({
   const [vehicleId, setVehicleId] = useState<string | null>(initial?.vehicle_id ?? null);
   const autoVehicleId = useRef<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const isMobile = useMediaQuery('(max-width: 48em)') ?? false;
 
   const { employee } = useSession();
   const showPhones = canViewClientPhone(employee);
@@ -295,11 +296,12 @@ export function OrderFormModal({
       opened
       onClose={onClose}
       size={1100}
+      fullScreen={isMobile}
       zIndex={400}
       title={<Title order={4} component="span">{order ? 'Изменить заказ' : 'Новый заказ'}</Title>}
     >
       <Grid gap="xl">
-        <Grid.Col span={7}>
+        <Grid.Col span={{ base: 12, sm: 7 }}>
           <Stack gap="sm">
             <Group grow align="flex-start">
               <DatePickerInput
@@ -457,7 +459,7 @@ export function OrderFormModal({
           </Stack>
         </Grid.Col>
 
-        <Grid.Col span={5}>
+        <Grid.Col span={{ base: 12, sm: 5 }}>
           <Stack gap="sm">
             <Text size="xs" c="dimmed">
               Точка у имени: зелёная — свободен, жёлтая — занят другим заказом, красная — выходной или вне часов

@@ -1,7 +1,8 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Alert, Box, Button, Group, Loader, NavLink, Paper, ScrollArea, Stack, Text } from '@mantine/core';
+import { ActionIcon, Alert, Box, Button, Drawer, Group, Loader, NavLink, Paper, ScrollArea, Stack, Text } from '@mantine/core';
+import { useDisclosure } from '@mantine/hooks';
 import { modals } from '@mantine/modals';
 import { notifications } from '@mantine/notifications';
 import { IconPlus, IconTruck, IconUser, IconUsers } from '@tabler/icons-react';
@@ -28,6 +29,7 @@ export default function CalendarPage() {
   const ui = useOrderUI();
   const moveOrder = useMoveOrder();
   const copyOrder = useCopyOrder();
+  const [filterOpened, { open: openFilter, close: closeFilter }] = useDisclosure();
 
   const orders = useMemo(() => {
     const all = ordersQuery.data ?? [];
@@ -76,60 +78,100 @@ export default function CalendarPage() {
     });
   };
 
+  // Общее содержимое левой панели — на десктопе постоянная колонка
+  // (Paper), на телефоне, где 230px постоянно отъедать нечем, та же
+  // разметка едет в выезжающий Drawer поверх остального экрана.
+  const sidebarContent = (
+    <>
+      {canManage && (
+        <Button
+          fullWidth
+          leftSection={<IconPlus size={16} />}
+          mb="md"
+          onClick={() => {
+            closeFilter();
+            ui.openNewOrder({ employeeId: preset });
+          }}
+        >
+          Новый заказ
+        </Button>
+      )}
+      <Text size="xs" c="dimmed" fw={600} tt="uppercase" mb={4}>
+        Сотрудники
+      </Text>
+      <ScrollArea style={{ flex: 1 }}>
+        <NavLink
+          label="Все заказы"
+          leftSection={<IconUsers size={16} />}
+          active={employeeFilter === ALL}
+          onClick={() => {
+            setEmployeeFilter(ALL);
+            closeFilter();
+          }}
+          style={{ borderRadius: 6 }}
+        />
+        {employees.map((e) => (
+          <NavLink
+            key={e.id}
+            label={e.name}
+            description={e.role === 'driver' ? 'Водитель' : 'Грузчик'}
+            leftSection={e.role === 'driver' ? <IconTruck size={16} /> : <IconUser size={16} />}
+            active={employeeFilter === e.id}
+            onClick={() => {
+              setEmployeeFilter(e.id);
+              closeFilter();
+            }}
+            style={{ borderRadius: 6 }}
+          />
+        ))}
+        {employees.length === 0 && (
+          <Text size="sm" c="dimmed" mt="xs">
+            Нет ни одного водителя или грузчика
+          </Text>
+        )}
+      </ScrollArea>
+      {canManage && (
+        <Text size="xs" c="dimmed" mt="sm">
+          Клик по пустому месту — новый заказ. Заказ можно перетащить мышкой на другой день или время.
+        </Text>
+      )}
+    </>
+  );
+
   return (
-    <Box style={{ display: 'flex', height: '100vh' }}>
+    // 100% (не 100vh) — чтобы точно попадать в высоту AppShell.Main:
+    // на телефоне у неё сверху отступ под шапку с бургером, 100vh здесь
+    // вылезал бы за экран ровно на высоту этой шапки.
+    <Box style={{ display: 'flex', height: '100%' }}>
       <Paper
         w={230}
         radius={0}
         p="sm"
+        visibleFrom="sm"
         style={{ borderRight: '1px solid var(--mantine-color-gray-3)', display: 'flex', flexDirection: 'column' }}
       >
-        {canManage && (
-          <Button fullWidth leftSection={<IconPlus size={16} />} mb="md" onClick={() => ui.openNewOrder({ employeeId: preset })}>
-            Новый заказ
-          </Button>
-        )}
-        <Text size="xs" c="dimmed" fw={600} tt="uppercase" mb={4}>
-          Сотрудники
-        </Text>
-        <ScrollArea style={{ flex: 1 }}>
-          <NavLink
-            label="Все заказы"
-            leftSection={<IconUsers size={16} />}
-            active={employeeFilter === ALL}
-            onClick={() => setEmployeeFilter(ALL)}
-            style={{ borderRadius: 6 }}
-          />
-          {employees.map((e) => (
-            <NavLink
-              key={e.id}
-              label={e.name}
-              description={e.role === 'driver' ? 'Водитель' : 'Грузчик'}
-              leftSection={e.role === 'driver' ? <IconTruck size={16} /> : <IconUser size={16} />}
-              active={employeeFilter === e.id}
-              onClick={() => setEmployeeFilter(e.id)}
-              style={{ borderRadius: 6 }}
-            />
-          ))}
-          {employees.length === 0 && (
-            <Text size="sm" c="dimmed" mt="xs">
-              Нет ни одного водителя или грузчика
-            </Text>
-          )}
-        </ScrollArea>
-        {canManage && (
-          <Text size="xs" c="dimmed" mt="sm">
-            Клик по пустому месту — новый заказ. Заказ можно перетащить мышкой на другой день или время.
-          </Text>
-        )}
+        {sidebarContent}
       </Paper>
+      <Drawer opened={filterOpened} onClose={closeFilter} title="Сотрудники" size="xs">
+        <Box style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>{sidebarContent}</Box>
+      </Drawer>
 
       <Box style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-        <Group justify="space-between" px="md" py="sm" style={{ borderBottom: '1px solid var(--mantine-color-gray-3)' }}>
-          <WeekHeader anchor={anchor} onChange={setAnchor} />
+        <Group justify="space-between" px="md" py="sm" wrap="wrap" style={{ borderBottom: '1px solid var(--mantine-color-gray-3)' }}>
+          <Group gap="xs" wrap="nowrap">
+            <ActionIcon hiddenFrom="sm" variant="default" size="lg" onClick={openFilter} aria-label="Сотрудники">
+              <IconUsers size={18} />
+            </ActionIcon>
+            <WeekHeader anchor={anchor} onChange={setAnchor} />
+            {canManage && (
+              <ActionIcon hiddenFrom="sm" size="lg" onClick={() => ui.openNewOrder({ employeeId: preset })} aria-label="Новый заказ">
+                <IconPlus size={18} />
+              </ActionIcon>
+            )}
+          </Group>
           <Group gap="xs">
             {ordersQuery.isFetching && <Loader size="xs" />}
-            <Text size="sm" c="dimmed">
+            <Text size="sm" c="dimmed" visibleFrom="sm">
               {dayjs(weekStart).format('D MMM')} – {dayjs(weekEnd).subtract(1, 'day').format('D MMM YYYY')}
             </Text>
           </Group>

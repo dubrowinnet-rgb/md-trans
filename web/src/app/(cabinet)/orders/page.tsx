@@ -73,7 +73,7 @@ export default function OrdersPage() {
   const pageRows = rows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   return (
-    <Box p="lg">
+    <Box p={{ base: 'sm', sm: 'lg' }}>
       <PageHeader title="Заказы" subtitle="Все заказы за выбранный период">
         {canManageOrders(employee) && (
           <Button leftSection={<IconPlus size={16} />} onClick={() => ui.openNewOrder()}>
@@ -141,6 +141,7 @@ export default function OrdersPage() {
         {query.isFetching && <Loader size="xs" />}
       </Group>
       <Paper withBorder>
+        <Table.ScrollContainer minWidth={900}>
         <Table highlightOnHover striped stickyHeader>
           <Table.Thead>
             <Table.Tr>
@@ -228,6 +229,7 @@ export default function OrdersPage() {
             )}
           </Table.Tbody>
         </Table>
+        </Table.ScrollContainer>
       </Paper>
       {pages > 1 && (
         <Group justify="center" mt="md">

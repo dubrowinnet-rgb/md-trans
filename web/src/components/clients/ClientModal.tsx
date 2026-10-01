@@ -116,7 +116,7 @@ export function ClientModal({ clientId, onClose }: { clientId: string; onClose: 
           )}
 
           {showStats && (
-            <SimpleGrid cols={showAmount ? 4 : 3}>
+            <SimpleGrid cols={{ base: 2, xs: showAmount ? 4 : 3 }}>
               <Stat label="Всего заказов" value={String(orders.length)} />
               <Stat label="Завершено" value={String(completed.length)} />
               {showAmount && <Stat label="Выручка" value={formatMoney(revenue)} />}

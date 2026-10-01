@@ -66,7 +66,7 @@ export default function StatsPage() {
 
   if (employee?.role !== 'admin') {
     return (
-      <Box p="lg">
+      <Box p={{ base: 'sm', sm: 'lg' }}>
         <Alert>Статистика доступна только администратору.</Alert>
       </Box>
     );
@@ -77,7 +77,7 @@ export default function StatsPage() {
   const maxRevenue = Math.max(0, ...(stats?.employees ?? []).map((e) => e.revenue));
 
   return (
-    <Box p="lg">
+    <Box p={{ base: 'sm', sm: 'lg' }}>
       <PageHeader title="Статистика" subtitle="Заказы считаются по дате начала; выручка — по завершённым">
         <SegmentedControl
           value={period}
@@ -105,7 +105,7 @@ export default function StatsPage() {
       {statsQuery.isLoading && <Loader />}
       {stats && (
         <>
-          <SimpleGrid cols={4} mb="lg">
+          <SimpleGrid cols={{ base: 2, sm: 4 }} mb="lg">
             <Tile label="Заказов" value={String(stats.totalOrders)} />
             <Tile label="Завершено" value={String(completed)} hint="уже прошли и не отменены" />
             <Tile label="Выручка" value={formatMoney(stats.totalRevenue)} />
@@ -116,7 +116,7 @@ export default function StatsPage() {
             />
           </SimpleGrid>
 
-          <SimpleGrid cols={2} spacing="lg" style={{ alignItems: 'start' }}>
+          <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="lg" style={{ alignItems: 'start' }}>
             <Paper withBorder p="md">
               <Text fw={600} mb="sm">
                 Заказы по статусам
