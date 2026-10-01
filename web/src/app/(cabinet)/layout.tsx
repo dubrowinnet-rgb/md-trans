@@ -1,9 +1,23 @@
 'use client';
 
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { AppShell, Avatar, Burger, Button, Center, Group, Loader, NavLink, Stack, Text, Title } from '@mantine/core';
+import {
+  ActionIcon,
+  AppShell,
+  Avatar,
+  Burger,
+  Button,
+  Center,
+  Group,
+  Loader,
+  NavLink,
+  Stack,
+  Text,
+  Title,
+  Tooltip,
+} from '@mantine/core';
 import { useDisclosure, useMediaQuery } from '@mantine/hooks';
 import {
   IconBuildingStore,
@@ -11,6 +25,8 @@ import {
   IconChartBar,
   IconDatabaseExport,
   IconHeadset,
+  IconLayoutSidebarLeftCollapse,
+  IconLayoutSidebarLeftExpand,
   IconListDetails,
   IconLogout,
   IconAddressBook,
@@ -52,6 +68,29 @@ export default function CabinetLayout({ children }: { children: ReactNode }) {
   // (collapsed: !isMobile). undefined до первого замера — трактуем как
   // «не телефон», чтобы desktop не мигал лишней полоской при заходе.
   const isMobile = useMediaQuery('(max-width: 48em)') ?? false;
+  // Сворачиваемое меню на компьютере (Максим, 01.10) — отдельно от мобильного
+  // бургера: тут ширина не 0/220, а 220/76 (только иконки). Запоминаем выбор
+  // в localStorage, читаем после монтирования, чтобы не спорить с SSR.
+  const [navCollapsed, setNavCollapsed] = useState(false);
+  useEffect(() => {
+    try {
+      setNavCollapsed(localStorage.getItem('cabinetNavCollapsed') === '1');
+    } catch {
+      // приватный режим браузера и т.п. — просто не запоминаем выбор
+    }
+  }, []);
+  const toggleNavCollapsed = () => {
+    setNavCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('cabinetNavCollapsed', next ? '1' : '0');
+      } catch {
+        // см. выше
+      }
+      return next;
+    });
+  };
+  const collapsed = navCollapsed && !isMobile;
 
   const isOwner = isServiceOwner(employee);
 
@@ -118,7 +157,7 @@ export default function CabinetLayout({ children }: { children: ReactNode }) {
   return (
     <AppShell
       header={{ height: 52, collapsed: !isMobile }}
-      navbar={{ width: 220, breakpoint: 'sm', collapsed: { mobile: !navOpened, desktop: false } }}
+      navbar={{ width: collapsed ? 76 : 220, breakpoint: 'sm', collapsed: { mobile: !navOpened, desktop: false } }}
       padding={0}
     >
       <AppShell.Header>
@@ -134,74 +173,114 @@ export default function CabinetLayout({ children }: { children: ReactNode }) {
       </AppShell.Header>
       <AppShell.Navbar p="sm">
         <AppShell.Section>
-          <Group justify="space-between" wrap="nowrap" px="xs" py="sm">
-            <Title order={5}>{isOwner ? 'Кабинет владельца' : 'Кабинет диспетчера'}</Title>
-            {isAdmin && <NotificationBell />}
+          <Group justify={collapsed ? 'center' : 'space-between'} wrap="nowrap" px="xs" py="sm">
+            {!collapsed && (
+              <Title order={5} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {isOwner ? 'Кабинет владельца' : 'Кабинет диспетчера'}
+              </Title>
+            )}
+            <Group gap={4} wrap="nowrap">
+              {isAdmin && !collapsed && <NotificationBell />}
+              <Tooltip label={collapsed ? 'Развернуть меню' : 'Свернуть меню'} position="right">
+                <ActionIcon
+                  variant="subtle"
+                  color="gray"
+                  visibleFrom="sm"
+                  onClick={toggleNavCollapsed}
+                  aria-label={collapsed ? 'Развернуть меню' : 'Свернуть меню'}
+                >
+                  {collapsed ? (
+                    <IconLayoutSidebarLeftExpand size={18} stroke={1.6} />
+                  ) : (
+                    <IconLayoutSidebarLeftCollapse size={18} stroke={1.6} />
+                  )}
+                </ActionIcon>
+              </Tooltip>
+            </Group>
           </Group>
+          {isAdmin && collapsed && (
+            <Group justify="center" pb="xs">
+              <NotificationBell />
+            </Group>
+          )}
         </AppShell.Section>
         <AppShell.Section grow>
           {isOwner ? (
             // Владелец сервиса не привязан к компании — ему не нужны
             // операционные разделы (заказы, клиенты и т.д.), только его
             // собственный кабинет.
-            <NavLink
-              component={Link}
-              href="/owner/"
-              label="Кабинет владельца"
-              leftSection={<IconBuildingStore size={18} stroke={1.6} />}
-              active={pathname?.startsWith('/owner')}
-              variant="light"
-              style={{ borderRadius: 8 }}
-            />
+            <Tooltip label="Кабинет владельца" position="right" disabled={!collapsed}>
+              <NavLink
+                component={Link}
+                href="/owner/"
+                label={collapsed ? undefined : 'Кабинет владельца'}
+                leftSection={<IconBuildingStore size={18} stroke={1.6} />}
+                active={pathname?.startsWith('/owner')}
+                variant="light"
+                style={{ borderRadius: 8, justifyContent: collapsed ? 'center' : undefined }}
+              />
+            </Tooltip>
           ) : (
             NAV.filter((item) => !item.adminOnly || isAdmin).map((item) => (
-              <NavLink
-                key={item.href}
-                component={Link}
-                href={item.href}
-                label={item.label}
-                leftSection={<item.icon size={18} stroke={1.6} />}
-                active={pathname?.startsWith(item.href.replace(/\/$/, ''))}
-                variant="light"
-                style={{ borderRadius: 8 }}
-              />
+              <Tooltip key={item.href} label={item.label} position="right" disabled={!collapsed}>
+                <NavLink
+                  component={Link}
+                  href={item.href}
+                  label={collapsed ? undefined : item.label}
+                  leftSection={<item.icon size={18} stroke={1.6} />}
+                  active={pathname?.startsWith(item.href.replace(/\/$/, ''))}
+                  variant="light"
+                  style={{ borderRadius: 8, justifyContent: collapsed ? 'center' : undefined }}
+                />
+              </Tooltip>
             ))
           )}
         </AppShell.Section>
         <AppShell.Section>
-          <Group
-            gap="xs"
-            px="xs"
-            py="sm"
-            wrap="nowrap"
-            {...(isAdmin ? { component: Link, href: '/settings/' } : {})}
-            style={{
-              borderRadius: 8,
-              textDecoration: 'none',
-              color: 'inherit',
-              cursor: isAdmin ? 'pointer' : 'default',
-              background: isAdmin && pathname?.startsWith('/settings') ? 'var(--mantine-color-violet-1)' : undefined,
-            }}
-            title={isAdmin ? 'Настройки' : undefined}
+          <Tooltip
+            label={employee ? `${employee.name} · ${ACCOUNT_ROLE_LABELS[employee.role]}` : ''}
+            position="right"
+            disabled={!collapsed}
           >
-            <Avatar color="violet" radius="xl" size="sm">
-              {employee?.name.slice(0, 1)}
-            </Avatar>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <Text size="sm" truncate>
-                {employee?.name}
-              </Text>
-              <Text size="xs" c="dimmed">
-                {employee ? ACCOUNT_ROLE_LABELS[employee.role] : ''}
-              </Text>
-            </div>
-          </Group>
-          <NavLink
-            label="Выйти"
-            leftSection={<IconLogout size={18} stroke={1.6} />}
-            onClick={() => supabase.auth.signOut()}
-            style={{ borderRadius: 8 }}
-          />
+            <Group
+              gap="xs"
+              px="xs"
+              py="sm"
+              wrap="nowrap"
+              justify={collapsed ? 'center' : undefined}
+              {...(isAdmin ? { component: Link, href: '/settings/' } : {})}
+              style={{
+                borderRadius: 8,
+                textDecoration: 'none',
+                color: 'inherit',
+                cursor: isAdmin ? 'pointer' : 'default',
+                background: isAdmin && pathname?.startsWith('/settings') ? 'var(--mantine-color-violet-1)' : undefined,
+              }}
+              title={isAdmin && !collapsed ? 'Настройки' : undefined}
+            >
+              <Avatar color="violet" radius="xl" size="sm">
+                {employee?.name.slice(0, 1)}
+              </Avatar>
+              {!collapsed && (
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <Text size="sm" truncate>
+                    {employee?.name}
+                  </Text>
+                  <Text size="xs" c="dimmed">
+                    {employee ? ACCOUNT_ROLE_LABELS[employee.role] : ''}
+                  </Text>
+                </div>
+              )}
+            </Group>
+          </Tooltip>
+          <Tooltip label="Выйти" position="right" disabled={!collapsed}>
+            <NavLink
+              label={collapsed ? undefined : 'Выйти'}
+              leftSection={<IconLogout size={18} stroke={1.6} />}
+              onClick={() => supabase.auth.signOut()}
+              style={{ borderRadius: 8, justifyContent: collapsed ? 'center' : undefined }}
+            />
+          </Tooltip>
         </AppShell.Section>
       </AppShell.Navbar>
       <AppShell.Main h="100vh">

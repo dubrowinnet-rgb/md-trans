@@ -16,6 +16,9 @@ const theme = createTheme({
   primaryShade: 8,
   defaultRadius: 'md',
   fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+  // Чуть компактнее десктопный интерфейс (Максим, 01.10) — масштабирует
+  // разом все отступы, шрифты и размеры компонентов (всё в rem).
+  scale: 0.9,
 });
 
 export function Providers({ children }: { children: ReactNode }) {
