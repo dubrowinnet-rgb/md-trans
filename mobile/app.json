@@ -3,7 +3,7 @@
     "name": "Мурзик",
     "slug": "mdtrans",
     "owner": "mdtranss-team",
-    "version": "1.2.3",
+    "version": "1.3.3",
     "runtimeVersion": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -32,6 +32,7 @@
     },
     "plugins": [
       "expo-router",
+      "expo-font",
       [
         "expo-splash-screen",
         {
