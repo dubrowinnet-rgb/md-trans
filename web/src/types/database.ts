@@ -535,6 +535,10 @@ export interface Database {
         Args: { p_limit?: number };
         Returns: { address: string; uses: number }[];
       };
+      client_recent_addresses: {
+        Args: { p_client_id: string; p_limit?: number };
+        Returns: { address: string; uses: number }[];
+      };
       // Отчёты водителей (миграция 0019): прямой записи в driver_reports
       // больше нет — водитель пишет через save_driver_report (веб его не
       // вызывает), администратор/диспетчер только согласует или нет.
