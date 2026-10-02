@@ -11,6 +11,9 @@
 #   ANON_KEY             публичный ключ — тоже вшивается в сборку
 #   PROXY_DOMAIN         api.<домен> — на нём Caddy отдаёт API и Studio
 #   WEB_DOMAIN           <домен> кабинета; если пусто — PROXY_DOMAIN без «api.»
+#   YANDEX_SUGGEST_API_KEY  ключ Yandex Geosuggest для подсказок адреса в
+#                        форме заказа (необязателен — без него подсказки
+#                        Яндекса не показываются, свои адреса остаются)
 #
 # Что делает:
 #   1. Собирает web/ в контейнере Node (на сервере Node ставить не нужно).
@@ -56,6 +59,7 @@ API_URL=$(read_env SUPABASE_PUBLIC_URL)
 ANON_KEY=$(read_env ANON_KEY)
 PROXY_DOMAIN=$(read_env PROXY_DOMAIN)
 WEB_DOMAIN=$(read_env WEB_DOMAIN)
+YANDEX_SUGGEST_API_KEY=$(read_env YANDEX_SUGGEST_API_KEY)
 
 case "$API_URL" in
     https://?*) ;;
@@ -73,6 +77,7 @@ if [ -z "$WEB_DOMAIN" ]; then
     set_env WEB_DOMAIN "$WEB_DOMAIN"
 fi
 log "Web cabinet: https://$WEB_DOMAIN  (API: $API_URL)"
+[ -n "$YANDEX_SUGGEST_API_KEY" ] || log "YANDEX_SUGGEST_API_KEY is not set in $ENV_FILE — Yandex address suggestions stay off"
 
 # Сборке Next.js нужно около 1,5 ГБ памяти. На небольшом сервере, где рядом
 # уже работает Supabase, без подкачки её может убить нехватка памяти.
@@ -101,6 +106,7 @@ docker run --rm ${WEB_BUILD_DOCKER_OPTS:-} \
     -v "$WEB_SRC:/app" -w /app \
     -e NEXT_PUBLIC_SUPABASE_URL="$API_URL" \
     -e NEXT_PUBLIC_SUPABASE_ANON_KEY="$ANON_KEY" \
+    -e NEXT_PUBLIC_YANDEX_SUGGEST_API_KEY="$YANDEX_SUGGEST_API_KEY" \
     -e NEXT_TELEMETRY_DISABLED=1 \
     "$NODE_IMAGE" \
     sh -c 'npm ci --no-audit --no-fund --loglevel=error && npm run build' \

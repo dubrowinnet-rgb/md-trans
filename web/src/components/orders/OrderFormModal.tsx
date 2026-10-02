@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActionIcon,
   Alert,
-  Autocomplete,
   Box,
   Button,
   Checkbox,
@@ -43,7 +42,8 @@ import { useClient, useClientSearch, type Client } from '@/api/clients';
 import { useServices } from '@/api/services';
 import { useVehicles } from '@/api/vehicles';
 import { useScheduleDaysOn, type ScheduleDay } from '@/api/schedule';
-import { useFrequentAddresses } from '@/api/addresses';
+import { useClientRecentAddresses, useFrequentAddresses } from '@/api/addresses';
+import { AddressAutocomplete } from './AddressAutocomplete';
 import { combineDateTime, dayjs, toDateKey } from '@/lib/dates';
 import { formatPhone } from '@/lib/phone';
 import { useSession } from '@/providers/SessionProvider';
@@ -131,12 +131,13 @@ export function OrderFormModal({
   const drivers = employees.filter((e) => e.role === 'driver');
   const loaders = employees.filter((e) => e.role === 'loader');
   const services = useServices().data ?? [];
-  const frequentAddresses = useFrequentAddresses().data;
   const vehicles = useVehicles().data ?? [];
   // Запрос к базе — когда пауза в наборе 0,3 с, а не на каждую букву.
   const [debouncedClientSearch] = useDebouncedValue(clientSearch, 300);
   const clientsQuery = useClientSearch(debouncedClientSearch);
   const selectedClientQuery = useClient(clientId);
+  const companyAddresses = useFrequentAddresses().data ?? [];
+  const clientAddresses = useClientRecentAddresses(clientId).data ?? [];
   const createOrder = useCreateOrder();
   const updateOrder = useUpdateOrder();
   const saving = createOrder.isPending || updateOrder.isPending;
@@ -379,31 +380,31 @@ export function OrderFormModal({
               }}
             />
 
-            <Autocomplete
+            <AddressAutocomplete
               label="Адрес загрузки *"
-              data={frequentAddresses ?? []}
+              clientAddresses={clientAddresses}
+              companyAddresses={companyAddresses}
               value={pickup}
               onChange={setPickup}
-              comboboxProps={{ zIndex: 500 }}
             />
-            <Autocomplete
+            <AddressAutocomplete
               label="Адрес выгрузки *"
-              data={frequentAddresses ?? []}
+              clientAddresses={clientAddresses}
+              companyAddresses={companyAddresses}
               value={dropoff}
               onChange={setDropoff}
-              comboboxProps={{ zIndex: 500 }}
             />
             {extraStops.map((stop) => (
               <Group key={stop.key} gap="xs" wrap="nowrap" align="flex-end">
-                <Autocomplete
+                <AddressAutocomplete
                   style={{ flex: 1 }}
                   label={stop.type === 'pickup' ? 'Доп. точка загрузки' : 'Доп. точка выгрузки'}
-                  data={frequentAddresses ?? []}
+                  clientAddresses={clientAddresses}
+                  companyAddresses={companyAddresses}
                   value={stop.address}
                   onChange={(value) => {
                     setExtraStops((prev) => prev.map((s) => (s.key === stop.key ? { ...s, address: value } : s)));
                   }}
-                  comboboxProps={{ zIndex: 500 }}
                 />
                 <ActionIcon
                   variant="subtle"
