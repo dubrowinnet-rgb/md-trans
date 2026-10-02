@@ -3,7 +3,7 @@
     "name": "Мурзик",
     "slug": "mdtrans",
     "owner": "mdtranss-team",
-    "version": "1.2.2",
+    "version": "1.2.3",
     "runtimeVersion": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
