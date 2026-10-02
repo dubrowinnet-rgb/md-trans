@@ -42,9 +42,9 @@ export function InstallView() {
     <Container size="sm" py="xl">
       <Stack gap="lg">
         <Group wrap="nowrap" align="center">
-          <img src="/icon.svg" alt="" width={48} height={48} />
+          <img src="/icon.png" alt="" width={48} height={48} />
           <div>
-            <Title order={2}>Приложение «Грузоперевозки»</Title>
+            <Title order={2}>Приложение «Мурзик»</Title>
             <Text c="dimmed" size="sm">
               Для водителей, грузчиков и диспетчеров. Ставится файлом, без App Store и Google Play.
             </Text>

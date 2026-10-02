@@ -8,7 +8,7 @@ import './globals.css';
 import { Providers } from './providers';
 
 export const metadata: Metadata = {
-  title: 'Кабинет диспетчера',
+  title: 'Мурзик — кабинет диспетчера',
   description: 'Веб-кабинет диспетчера и администратора',
 };
 

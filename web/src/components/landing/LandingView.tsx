@@ -172,9 +172,9 @@ function Header({ cabinet }: { cabinet: CabinetLink }) {
     <Container size="lg" py="md">
       <Group justify="space-between" wrap="nowrap">
         <Group gap={10} wrap="nowrap">
-          <img src="/icon.svg" alt="" width={32} height={32} />
+          <img src="/icon.png" alt="" width={32} height={32} />
           <Text fw={700} size="lg">
-            Грузоперевозки
+            Мурзик
           </Text>
         </Group>
         <Group gap="sm" visibleFrom="xs">
@@ -532,7 +532,7 @@ function PushNotifications() {
           }}
         >
           <Group gap={8} wrap="nowrap" align="flex-start">
-            <img src="/icon.svg" alt="" width={20} height={20} style={{ flex: 'none', marginTop: 2 }} />
+            <img src="/icon.png" alt="" width={20} height={20} style={{ flex: 'none', marginTop: 2 }} />
             <Box style={{ flex: 1, minWidth: 0 }}>
               <Group justify="space-between" gap={4} wrap="nowrap">
                 <Text fz={12} fw={700} lh={1.3}>
@@ -651,7 +651,7 @@ function Footer() {
       <Divider mb="lg" />
       <Group justify="space-between" wrap="wrap" gap="md">
         <Text size="sm" c="dimmed">
-          © {new Date().getFullYear()} · Грузоперевозки
+          © {new Date().getFullYear()} · Мурзик
         </Text>
         <Group gap="lg">
           {links.map((l) => (
