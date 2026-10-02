@@ -27,6 +27,13 @@ export function formatDayLabel(date: Date) {
   return format(date, 'd MMM, EEEEEE', { locale: ru });
 }
 
+// Полная дата для компактных строк карточки заказа: «19 апреля 2026 г. (Вс)».
+export function formatFullDayLabel(date: Date) {
+  const base = format(date, "d MMMM yyyy 'г.'", { locale: ru });
+  const weekday = format(date, 'EEEEEE', { locale: ru });
+  return `${base} (${weekday.charAt(0).toUpperCase()}${weekday.slice(1)})`;
+}
+
 export function formatHeaderDate(date: Date) {
   return format(date, 'LLLL yyyy', { locale: ru });
 }

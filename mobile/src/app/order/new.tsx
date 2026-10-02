@@ -1,15 +1,24 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Keyboard, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
+import {
+  Keyboard,
+  KeyboardAvoidingView,
+  Linking,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  TextInput as RNTextInput,
+  View,
+} from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import {
   ActivityIndicator,
+  Avatar,
   Button,
   Chip,
   HelperText,
   IconButton,
   List,
   Searchbar,
-  Surface,
   Text,
   TextInput,
 } from 'react-native-paper';
@@ -22,13 +31,14 @@ import { useBusyEmployeeIds, useCreateOrder, useOrder, type CreateOrderStopInput
 import { useServices } from '../../api/services';
 import { useVehicles } from '../../api/vehicles';
 import { toDateKey, useScheduleDaysOn, type ScheduleDay } from '../../api/schedule';
-import { ServicePicker, formatServiceMeta } from '../../components/form/ServicePicker';
-import { DateTimeField } from '../../components/form/DateTimeField';
-import { FormSection } from '../../components/form/FormSection';
+import { ServicePicker } from '../../components/form/ServicePicker';
+import { CompactField, FieldLabel } from '../../components/form/CompactField';
+import { DateRow } from '../../components/form/DateRow';
+import { TimeRangeRow } from '../../components/form/TimeRangeRow';
 import { AddressField } from '../../components/form/AddressField';
 import { useSession } from '../../providers/SessionProvider';
 import { canCreateOrders, canViewClientPhone, canViewOrderAmount } from '../../lib/permissions';
-import { formatPhone } from '../../lib/phone';
+import { formatPhone, normalizePhone } from '../../lib/phone';
 import {
   evaluateAvailability,
   sortByAvailability,
@@ -61,6 +71,10 @@ function dotIcon(color: string) {
 
 // Создание заказа: клиент, точки маршрута (2 основные + дополнительные),
 // экипаж с проверкой занятости по времени, сумма вручную (разделы 4 и 9.1 ТЗ).
+// Компоновка — компактные строки с иконкой (образец, который 02.10 прислал
+// Максим) там, где поле сводится к одному значению; точки маршрута и подбор
+// экипажа — свой функционал, которого в образце нет, остаются как есть,
+// только под тем же стилем подписи раздела (FieldLabel).
 export default function NewOrderScreen() {
   const { start, employeeId, duplicateFrom } = useLocalSearchParams<{
     start?: string;
@@ -316,6 +330,9 @@ export default function NewOrderScreen() {
     );
   }
 
+  const clientPhoneDigits = normalizePhone(selectedClient?.phone);
+  const clientPhoneDial = clientPhoneDigits?.length === 10 ? `+7${clientPhoneDigits}` : selectedClient?.phone;
+
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView
@@ -325,34 +342,48 @@ export default function NewOrderScreen() {
         onScrollBeginDrag={Keyboard.dismiss}
       >
         {duplicateFrom && (
-          <HelperText type="info" visible>
+          <HelperText type="info" visible style={styles.padded}>
             {sourceOrderQuery.isLoading ? 'Загружаем исходный заказ…' : 'Копия заказа — проверьте дату и данные перед сохранением.'}
           </HelperText>
         )}
-        <FormSection title="Дата и время">
-          <DateTimeField label="Дата" value={date} mode="date" onChange={setDate} />
-          <View style={styles.row}>
-            <DateTimeField label="Начало" value={startTime} mode="time" onChange={setStartTime} />
-            <DateTimeField label="Окончание" value={endTime} mode="time" onChange={setEndTime} />
-          </View>
-          {!timeValid && <HelperText type="error">Окончание должно быть позже начала</HelperText>}
-        </FormSection>
 
-        <FormSection title="Клиент *">
+        <DateRow value={date} onChange={setDate} />
+        <TimeRangeRow start={startTime} end={endTime} onChangeStart={setStartTime} onChangeEnd={setEndTime} />
+        {!timeValid && <HelperText type="error" style={styles.padded}>Окончание должно быть позже начала</HelperText>}
+
+        <View style={styles.section}>
+          <FieldLabel>Клиент *</FieldLabel>
           {selectedClient ? (
-            <Surface style={styles.selected} elevation={1}>
-              <List.Item
-                title={selectedClient.name}
-                description={
-                  selectedClient.discount_percent
-                    ? `Скидка ${selectedClient.discount_percent}%`
-                    : (canViewContacts ? formatPhone(selectedClient.phone) || null : null) ?? undefined
-                }
-                right={() => <Button onPress={() => setSelectedClient(null)}>Изменить</Button>}
-              />
-            </Surface>
+            <View style={styles.clientRow}>
+              <Avatar.Text size={36} label={selectedClient.name.trim().charAt(0).toUpperCase() || '?'} />
+              <View style={styles.flex}>
+                <Text variant="bodyLarge" numberOfLines={1}>
+                  {selectedClient.name}
+                </Text>
+                {selectedClient.discount_percent ? (
+                  <Text variant="bodySmall" style={styles.discount}>
+                    Скидка {selectedClient.discount_percent}%
+                  </Text>
+                ) : canViewContacts && formatPhone(selectedClient.phone) ? (
+                  <Text variant="bodySmall" style={styles.muted}>
+                    {formatPhone(selectedClient.phone)}
+                  </Text>
+                ) : null}
+              </View>
+              {canViewContacts && selectedClient.phone && (
+                <IconButton
+                  icon="phone"
+                  mode="contained-tonal"
+                  accessibilityLabel={`Позвонить клиенту: ${formatPhone(selectedClient.phone)}`}
+                  onPress={() => Linking.openURL(`tel:${clientPhoneDial}`)}
+                />
+              )}
+              <Button compact onPress={() => setSelectedClient(null)}>
+                Изменить
+              </Button>
+            </View>
           ) : (
-            <>
+            <View style={styles.paddedBlock}>
               <Text variant="bodySmall" style={styles.muted}>
                 Заказ без клиента создать нельзя: выберите клиента или добавьте нового.
               </Text>
@@ -376,206 +407,220 @@ export default function NewOrderScreen() {
               <Button mode="outlined" icon="account-plus" onPress={newClient.start}>
                 Добавить клиента
               </Button>
-            </>
+            </View>
           )}
-        </FormSection>
+        </View>
 
         {newClient.open && <ClientDialog client={null} onClose={newClient.close} onSaved={setSelectedClient} />}
 
-        <FormSection title="Услуги">
-          {selectedServices.map((service) => (
-            <View key={service.id} style={styles.serviceRow}>
-              <View style={[styles.serviceBar, { backgroundColor: service.color }]} />
-              <View style={styles.flex}>
-                <Text variant="bodyLarge">{service.name}</Text>
-                <Text variant="bodySmall" style={styles.muted}>
-                  {formatServiceMeta(service)}
-                </Text>
-              </View>
-            </View>
-          ))}
-          <Button
-            mode="outlined"
-            icon={selectedServices.length ? 'pencil' : 'plus'}
-            onPress={() => setServicePickerOpen(true)}
-          >
-            {selectedServices.length ? 'Изменить услуги' : 'Выбрать услуги'}
-          </Button>
-          {servicePickerOpen && (
-            <ServicePicker
-              visible
-              services={services}
-              selectedIds={serviceIds}
-              loadError={servicesQuery.error?.message}
-              onDismiss={() => setServicePickerOpen(false)}
-              onSave={applyServices}
-            />
+        <CompactField label="Услуги" icon="clipboard-text-outline" onPress={() => setServicePickerOpen(true)}>
+          {selectedServices.length > 0 ? (
+            <Text variant="bodyLarge" numberOfLines={2}>
+              {selectedServices.map((s) => s.name).join(' + ')}
+            </Text>
+          ) : (
+            <Text variant="bodyLarge" style={styles.placeholder}>
+              Выбрать услуги
+            </Text>
           )}
-        </FormSection>
+        </CompactField>
+        {servicePickerOpen && (
+          <ServicePicker
+            visible
+            services={services}
+            selectedIds={serviceIds}
+            loadError={servicesQuery.error?.message}
+            onDismiss={() => setServicePickerOpen(false)}
+            onSave={applyServices}
+          />
+        )}
 
-        <FormSection title="Точки маршрута">
-          <AddressField
-            label="Адрес загрузки"
-            icon="package-up"
-            value={pickupAddress}
-            onChangeText={setPickupAddress}
-            recentAddresses={recentAddresses}
-          />
-          <AddressField
-            label="Адрес выгрузки"
-            icon="package-down"
-            value={dropoffAddress}
-            onChangeText={setDropoffAddress}
-            recentAddresses={recentAddresses}
-          />
-          {extraStops.map((stop) => (
-            <View key={stop.key} style={styles.row}>
-              <TextInput
-                mode="outlined"
-                dense
-                style={styles.flex}
-                label={stop.type === 'pickup' ? 'Доп. точка загрузки' : 'Доп. точка выгрузки'}
-                accessibilityLabel={stop.type === 'pickup' ? 'Доп. точка загрузки' : 'Доп. точка выгрузки'}
-                value={stop.address}
-                onChangeText={(text) =>
-                  setExtraStops((prev) => prev.map((s) => (s.key === stop.key ? { ...s, address: text } : s)))
-                }
-              />
-              <IconButton
-                icon="close"
-                accessibilityLabel="Удалить точку"
-                onPress={() => setExtraStops((prev) => prev.filter((s) => s.key !== stop.key))}
-              />
+        <View style={styles.section}>
+          <FieldLabel>Точки маршрута</FieldLabel>
+          <View style={styles.paddedBlock}>
+            <AddressField
+              label="Адрес загрузки"
+              icon="package-up"
+              value={pickupAddress}
+              onChangeText={setPickupAddress}
+              recentAddresses={recentAddresses}
+            />
+            <AddressField
+              label="Адрес выгрузки"
+              icon="package-down"
+              value={dropoffAddress}
+              onChangeText={setDropoffAddress}
+              recentAddresses={recentAddresses}
+            />
+            {extraStops.map((stop) => (
+              <View key={stop.key} style={styles.row}>
+                <TextInput
+                  mode="outlined"
+                  dense
+                  style={styles.flex}
+                  label={stop.type === 'pickup' ? 'Доп. точка загрузки' : 'Доп. точка выгрузки'}
+                  accessibilityLabel={stop.type === 'pickup' ? 'Доп. точка загрузки' : 'Доп. точка выгрузки'}
+                  value={stop.address}
+                  onChangeText={(text) =>
+                    setExtraStops((prev) => prev.map((s) => (s.key === stop.key ? { ...s, address: text } : s)))
+                  }
+                />
+                <IconButton
+                  icon="close"
+                  accessibilityLabel="Удалить точку"
+                  onPress={() => setExtraStops((prev) => prev.filter((s) => s.key !== stop.key))}
+                />
+              </View>
+            ))}
+            <View style={styles.row}>
+              <Button compact icon="plus" onPress={() => addExtraStop('pickup')}>
+                Точка загрузки
+              </Button>
+              <Button compact icon="plus" onPress={() => addExtraStop('dropoff')}>
+                Точка выгрузки
+              </Button>
             </View>
-          ))}
-          <View style={styles.row}>
-            <Button compact icon="plus" onPress={() => addExtraStop('pickup')}>
-              Точка загрузки
-            </Button>
-            <Button compact icon="plus" onPress={() => addExtraStop('dropoff')}>
-              Точка выгрузки
-            </Button>
           </View>
-        </FormSection>
+        </View>
 
-        <FormSection title="Детали груза">
-          <TextInput
-            mode="outlined"
-            multiline
+        <CompactField label="Детали груза" icon="package-variant-closed" multiline>
+          <RNTextInput
+            style={[styles.inlineText, styles.inlineMultiline]}
             placeholder="Например: диван, два шкафа, 20 коробок"
+            placeholderTextColor="#9ca3af"
+            multiline
             value={cargoDescription}
             onChangeText={setCargoDescription}
           />
-        </FormSection>
+        </CompactField>
 
-        <FormSection title="Водитель">
-          {(busyQuery.isLoading || scheduleOnQuery.isLoading) && <ActivityIndicator size="small" />}
-          {busyQuery.isError && (
-            <HelperText type="error">{`Ошибка проверки занятости: ${busyQuery.error.message}`}</HelperText>
-          )}
-          {drivers.length === 0 && <Text variant="bodySmall">Нет ни одного водителя</Text>}
-          <Text variant="bodySmall" style={styles.muted}>
-            Точка у имени: зелёная — свободен, жёлтая — другой заказ, красная — выходной или не по графику.
-            С красной точкой выбрать нельзя — с жёлтой водителя можно (сборный груз).
-          </Text>
-          <View style={styles.chips}>
-            {sortByAvailability(drivers, availability).map((driver) => {
-              const { tier, suffix } = availability.get(driver.id) ?? { tier: 'available' as const, suffix: '' };
-              return (
-                <Chip
-                  key={driver.id}
-                  icon={dotIcon(TIER_COLOR[tier])}
-                  selected={driverId === driver.id}
-                  showSelectedOverlay
-                  disabled={tier === 'dayoff' && driverId !== driver.id}
-                  onPress={() => selectDriver(driverId === driver.id ? null : driver.id)}
-                >
-                  {`${driver.name}${suffix}`}
-                </Chip>
-              );
-            })}
-          </View>
-          {driverId && (
-            <>
-              <Text variant="labelMedium" style={styles.subLabel}>
-                Машина
-              </Text>
-              {vehiclesQuery.data?.length === 0 ? (
-                <Text variant="bodySmall" style={styles.muted}>
-                  Автопарк пуст — добавьте машину на вкладке «Автопарк»
-                </Text>
-              ) : (
-                <View style={styles.chips}>
-                  {(vehiclesQuery.data ?? []).map((vehicle) => (
-                    <Chip
-                      key={vehicle.id}
-                      selected={vehicleId === vehicle.id}
-                      showSelectedOverlay
-                      onPress={() => setVehicleId(vehicleId === vehicle.id ? null : vehicle.id)}
-                    >
-                      {`${vehicle.name} · ${vehicle.plate}`}
-                    </Chip>
-                  ))}
-                </View>
-              )}
-            </>
-          )}
-        </FormSection>
-
-        {needsLoaders && (
-          <FormSection title="Грузчики">
-            {loaderCandidates.length === 0 && <Text variant="bodySmall">Нет ни одного грузчика</Text>}
+        <View style={styles.section}>
+          <FieldLabel>Водитель</FieldLabel>
+          <View style={styles.paddedBlock}>
+            {(busyQuery.isLoading || scheduleOnQuery.isLoading) && <ActivityIndicator size="small" />}
+            {busyQuery.isError && (
+              <HelperText type="error">{`Ошибка проверки занятости: ${busyQuery.error.message}`}</HelperText>
+            )}
+            {drivers.length === 0 && <Text variant="bodySmall">Нет ни одного водителя</Text>}
+            <Text variant="bodySmall" style={styles.muted}>
+              Точка у имени: зелёная — свободен, жёлтая — другой заказ, красная — выходной или не по графику.
+              С красной точкой выбрать нельзя — с жёлтой водителя можно (сборный груз).
+            </Text>
             <View style={styles.chips}>
-              {sortByAvailability(loaderCandidates, availability).map((person) => {
-                const { tier, suffix } = availability.get(person.id) ?? { tier: 'available' as const, suffix: '' };
-                const isDriver = person.id === driverId;
+              {sortByAvailability(drivers, availability).map((driver) => {
+                const { tier, suffix } = availability.get(driver.id) ?? { tier: 'available' as const, suffix: '' };
                 return (
                   <Chip
-                    key={person.id}
+                    key={driver.id}
                     icon={dotIcon(TIER_COLOR[tier])}
-                    selected={loaderIds.includes(person.id)}
+                    selected={driverId === driver.id}
                     showSelectedOverlay
-                    disabled={tier !== 'available' && !loaderIds.includes(person.id)}
-                    onPress={() => toggleLoader(person.id)}
+                    disabled={tier === 'dayoff' && driverId !== driver.id}
+                    onPress={() => selectDriver(driverId === driver.id ? null : driver.id)}
                   >
-                    {`${person.name}${isDriver ? ' (водитель)' : ''}${suffix}`}
+                    {`${driver.name}${suffix}`}
                   </Chip>
                 );
               })}
             </View>
-          </FormSection>
+            {driverId && (
+              <>
+                <Text variant="labelMedium" style={styles.subLabel}>
+                  Машина
+                </Text>
+                {vehiclesQuery.data?.length === 0 ? (
+                  <Text variant="bodySmall" style={styles.muted}>
+                    Автопарк пуст — добавьте машину на вкладке «Автопарк»
+                  </Text>
+                ) : (
+                  <View style={styles.chips}>
+                    {(vehiclesQuery.data ?? []).map((vehicle) => (
+                      <Chip
+                        key={vehicle.id}
+                        selected={vehicleId === vehicle.id}
+                        showSelectedOverlay
+                        onPress={() => setVehicleId(vehicleId === vehicle.id ? null : vehicle.id)}
+                      >
+                        {`${vehicle.name} · ${vehicle.plate}`}
+                      </Chip>
+                    ))}
+                  </View>
+                )}
+              </>
+            )}
+          </View>
+        </View>
+
+        {needsLoaders && (
+          <View style={styles.section}>
+            <FieldLabel>Грузчики</FieldLabel>
+            <View style={styles.paddedBlock}>
+              {loaderCandidates.length === 0 && <Text variant="bodySmall">Нет ни одного грузчика</Text>}
+              <View style={styles.chips}>
+                {sortByAvailability(loaderCandidates, availability).map((person) => {
+                  const { tier, suffix } = availability.get(person.id) ?? { tier: 'available' as const, suffix: '' };
+                  const isDriver = person.id === driverId;
+                  return (
+                    <Chip
+                      key={person.id}
+                      icon={dotIcon(TIER_COLOR[tier])}
+                      selected={loaderIds.includes(person.id)}
+                      showSelectedOverlay
+                      disabled={tier !== 'available' && !loaderIds.includes(person.id)}
+                      onPress={() => toggleLoader(person.id)}
+                    >
+                      {`${person.name}${isDriver ? ' (водитель)' : ''}${suffix}`}
+                    </Chip>
+                  );
+                })}
+              </View>
+            </View>
+          </View>
         )}
 
         {showAmount && (
-          <FormSection title="Сумма (вручную)">
-            <TextInput
-              mode="outlined"
-              placeholder="Например: 14500"
-              value={priceText}
-              onChangeText={setPriceText}
-              keyboardType="numeric"
-              right={<TextInput.Affix text="₽" />}
-            />
-            {selectedClient?.discount_percent ? (
-              <HelperText type="info">Скидка клиента {selectedClient.discount_percent}%</HelperText>
-            ) : null}
-          </FormSection>
+          <CompactField label="Доход" icon="cash" iconColor="#16a34a">
+            <View style={styles.inlineRow}>
+              <RNTextInput
+                style={styles.inlineText}
+                placeholder="Например: 14500"
+                placeholderTextColor="#9ca3af"
+                value={priceText}
+                onChangeText={setPriceText}
+                keyboardType="numeric"
+              />
+              {priceText.trim() ? (
+                <Text variant="bodyLarge" style={styles.muted}>
+                  ₽
+                </Text>
+              ) : null}
+            </View>
+          </CompactField>
         )}
 
-        <FormSection title="Комментарий">
-          <TextInput mode="outlined" multiline value={comment} onChangeText={setComment} />
-        </FormSection>
+        <CompactField label="Комментарий" icon="message-text-outline" multiline>
+          <RNTextInput
+            style={[styles.inlineText, styles.inlineMultiline]}
+            placeholder="Например: домофон не работает, перезвонить за 10 минут"
+            placeholderTextColor="#9ca3af"
+            multiline
+            value={comment}
+            onChangeText={setComment}
+          />
+        </CompactField>
 
-        {formError && <HelperText type="error">{formError}</HelperText>}
-        <Button
-          mode="contained"
-          onPress={handleSubmit}
-          loading={createOrder.isPending}
-          disabled={createOrder.isPending}
-          style={styles.submit}
-        >
-          Создать заказ
-        </Button>
+        <View style={styles.padded}>
+          {formError && <HelperText type="error">{formError}</HelperText>}
+          <Button
+            mode="contained"
+            onPress={handleSubmit}
+            loading={createOrder.isPending}
+            disabled={createOrder.isPending}
+            style={styles.submit}
+          >
+            Создать заказ
+          </Button>
+        </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -586,26 +631,53 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    padding: 16,
     paddingBottom: 40,
+  },
+  padded: {
+    paddingHorizontal: 16,
+  },
+  paddedBlock: {
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 12,
+    gap: 8,
+  },
+  section: {
+    backgroundColor: '#ffffff',
   },
   row: {
     flexDirection: 'row',
     gap: 12,
     alignItems: 'center',
   },
-  selected: {
-    borderRadius: 12,
-  },
-  serviceRow: {
+  clientRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    minHeight: 46,
   },
-  serviceBar: {
-    width: 4,
-    alignSelf: 'stretch',
-    borderRadius: 2,
+  discount: {
+    color: '#16a34a',
+  },
+  placeholder: {
+    opacity: 0.5,
+  },
+  inlineRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  inlineText: {
+    flex: 1,
+    fontSize: 16,
+    color: '#1f2937',
+    paddingVertical: 0,
+  },
+  inlineMultiline: {
+    minHeight: 22,
+    textAlignVertical: 'top',
   },
   muted: {
     opacity: 0.6,

@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { Keyboard, Linking, ScrollView, StyleSheet, View } from 'react-native';
+import { Keyboard, Linking, ScrollView, StyleSheet, TextInput as RNTextInput, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   ActivityIndicator,
+  Avatar,
   Button,
   Chip,
   Dialog,
@@ -14,7 +15,6 @@ import {
   List,
   Portal,
   Text,
-  TextInput,
 } from 'react-native-paper';
 import {
   ACTIVE_ORDER_STATUS,
@@ -34,7 +34,9 @@ import {
   canViewClientPhone,
   canViewOrderAmount,
 } from '../../lib/permissions';
-import { DateTimeField } from '../../components/form/DateTimeField';
+import { CompactField, FieldLabel } from '../../components/form/CompactField';
+import { DateRow } from '../../components/form/DateRow';
+import { TimeRangeRow } from '../../components/form/TimeRangeRow';
 import { FadeHighlight } from '../../components/common/FadeHighlight';
 import { CrewDialog } from '../../components/orders/CrewDialog';
 import { yandexMapsRouteAppUrl, yandexMapsRouteUrl, yandexNaviRouteAppUrl } from '../../lib/yandexMaps';
@@ -261,18 +263,33 @@ export default function OrderScreen() {
       keyboardShouldPersistTaps="handled"
       onScrollBeginDrag={Keyboard.dismiss}
     >
-      <View style={styles.titleRow}>
-        <Text variant="titleLarge" style={styles.flex}>
-          {order.clients?.name ?? 'Без клиента'}
-        </Text>
-        {clientPhoneDisplay && (
-          <IconButton
-            icon="phone"
-            mode="contained-tonal"
-            accessibilityLabel={`Позвонить клиенту: ${clientPhoneDisplay}`}
-            onPress={() => Linking.openURL(`tel:${clientPhoneDial}`)}
-          />
-        )}
+      <View style={styles.clientSection}>
+        <FieldLabel>Клиент</FieldLabel>
+        <View style={styles.clientRow}>
+          <Avatar.Text size={36} label={(order.clients?.name ?? '?').trim().charAt(0).toUpperCase() || '?'} />
+          <View style={styles.flex}>
+            <Text variant="bodyLarge" numberOfLines={1}>
+              {order.clients?.name ?? 'Без клиента'}
+            </Text>
+            {order.clients?.discount_percent ? (
+              <Text variant="bodySmall" style={styles.discount}>
+                Скидка {order.clients.discount_percent}%
+              </Text>
+            ) : clientPhoneDisplay ? (
+              <Text variant="bodySmall" style={styles.muted}>
+                {clientPhoneDisplay}
+              </Text>
+            ) : null}
+          </View>
+          {clientPhoneDisplay && (
+            <IconButton
+              icon="phone"
+              mode="contained-tonal"
+              accessibilityLabel={`Позвонить клиенту: ${clientPhoneDisplay}`}
+              onPress={() => Linking.openURL(`tel:${clientPhoneDial}`)}
+            />
+          )}
+        </View>
       </View>
       <FadeHighlight active={changedFields.has('time')}>
         <Text variant="bodyMedium" style={styles.when}>
@@ -325,10 +342,6 @@ export default function OrderScreen() {
         </HelperText>
       )}
 
-      {order.clients?.discount_percent ? (
-        <Text variant="bodySmall">Скидка клиента: {order.clients.discount_percent}%</Text>
-      ) : null}
-
       {/* Раньше этот блок показывался только бригаде (водителю на своём
           заказе) — у диспетчера/админа не было способа перенести заказ,
           хотя RLS это уже разрешала (миграция 0006, "orders update").
@@ -342,24 +355,30 @@ export default function OrderScreen() {
               Перенос заказа — просто измените дату или время ниже и сохраните.
             </Text>
           )}
-          <DateTimeField label="Дата" value={editDate} mode="date" onChange={setEditDate} />
-          <View style={styles.timeRow}>
-            <DateTimeField label="Начало" value={editStart} mode="time" onChange={setEditStart} />
-            <DateTimeField label="Окончание" value={editEnd} mode="time" onChange={setEditEnd} />
+          <View style={styles.bleed}>
+            <DateRow value={editDate} onChange={setEditDate} />
+            <TimeRangeRow start={editStart} end={editEnd} onChangeStart={setEditStart} onChangeEnd={setEditEnd} />
+            {showAmount && (
+              <CompactField label="Доход" icon="cash" iconColor="#16a34a">
+                <View style={styles.inlineRow}>
+                  <RNTextInput
+                    style={styles.inlineText}
+                    accessibilityLabel="Сумма заказа"
+                    placeholder="Например: 14500"
+                    placeholderTextColor="#9ca3af"
+                    value={editPriceText}
+                    onChangeText={setEditPriceText}
+                    keyboardType="numeric"
+                  />
+                  {editPriceText.trim() ? (
+                    <Text variant="bodyLarge" style={styles.muted}>
+                      ₽
+                    </Text>
+                  ) : null}
+                </View>
+              </CompactField>
+            )}
           </View>
-          {showAmount && (
-            <TextInput
-              mode="outlined"
-              dense
-              label="Сумма"
-              accessibilityLabel="Сумма заказа"
-              placeholder="Например: 14500"
-              value={editPriceText}
-              onChangeText={setEditPriceText}
-              keyboardType="numeric"
-              right={<TextInput.Affix text="₽" />}
-            />
-          )}
           {updateSchedulePrice.error && (
             <HelperText type="error">{updateSchedulePrice.error.message}</HelperText>
           )}
@@ -580,13 +599,42 @@ const styles = StyleSheet.create({
     padding: 12,
     paddingBottom: 88,
   },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
   flex: {
     flex: 1,
+  },
+  // Отступы экрана — padding:12 (content ниже), а компактные строки поля
+  // (CompactField, components/form/CompactField.tsx) сами дают 16 слева и
+  // справа — bleed гасит отступ экрана, чтобы плашка-подпись и строка со
+  // значением шли от истинного края, как в референсе Максима.
+  bleed: {
+    marginHorizontal: -12,
+  },
+  clientSection: {
+    marginHorizontal: -12,
+    marginBottom: 4,
+  },
+  clientRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    minHeight: 46,
+    backgroundColor: '#ffffff',
+  },
+  discount: {
+    color: '#16a34a',
+  },
+  inlineRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  inlineText: {
+    flex: 1,
+    fontSize: 16,
+    color: '#1f2937',
+    paddingVertical: 0,
   },
   doneFab: {
     position: 'absolute',
@@ -620,10 +668,6 @@ const styles = StyleSheet.create({
   },
   divider: {
     marginBottom: 2,
-  },
-  timeRow: {
-    flexDirection: 'row',
-    gap: 8,
   },
   route: {
     marginHorizontal: 16,
