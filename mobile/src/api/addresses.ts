@@ -15,3 +15,23 @@ export function useRecentAddresses() {
     staleTime: 5 * 60 * 1000,
   });
 }
+
+// Адреса ЭТОГО заказчика (Максим, 02.10) — повторяются по клиентам, поэтому
+// отдельная подсказка в приоритете над общими по компании (recent_addresses
+// выше): supabase/migrations/0031, client_recent_addresses. Выключен, пока
+// клиент не выбран.
+export function useClientRecentAddresses(clientId: string | null) {
+  return useQuery({
+    queryKey: ['recent-addresses', 'client', clientId],
+    enabled: Boolean(clientId),
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('client_recent_addresses', {
+        p_client_id: clientId as string,
+        p_limit: 8,
+      });
+      if (error) throw error;
+      return (data ?? []).map((row) => row.address);
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+}

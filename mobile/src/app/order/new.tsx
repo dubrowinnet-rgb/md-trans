@@ -14,7 +14,7 @@ import {
   TextInput,
 } from 'react-native-paper';
 import { useEmployees } from '../../api/employees';
-import { useRecentAddresses } from '../../api/addresses';
+import { useClientRecentAddresses, useRecentAddresses } from '../../api/addresses';
 import { useClients, type Client } from '../../api/clients';
 import { ClientDialog } from '../../components/clients/ClientDialog';
 import { useNewClientFromContacts } from '../../hooks/useNewClientFromContacts';
@@ -212,7 +212,11 @@ export default function NewOrderScreen() {
   );
   const createOrder = useCreateOrder();
   const recentAddressesQuery = useRecentAddresses();
-  const recentAddresses = recentAddressesQuery.data ?? [];
+  const clientRecentAddressesQuery = useClientRecentAddresses(selectedClient?.id ?? null);
+  // Адреса этого клиента — первыми (он их и повторяет), общие по компании —
+  // следом как добавка; AddressField сам убирает повторы (Set), порядок
+  // сохраняется.
+  const recentAddresses = [...(clientRecentAddressesQuery.data ?? []), ...(recentAddressesQuery.data ?? [])];
   const smsTemplatesQuery = useSmsTemplates();
 
   // Как в Bumpix: выбранные услуги задают длительность и подставляют сумму.

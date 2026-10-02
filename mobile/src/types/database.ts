@@ -571,6 +571,10 @@ export interface Database {
         Args: { p_limit?: number };
         Returns: { address: string; uses: number }[];
       };
+      client_recent_addresses: {
+        Args: { p_client_id: string; p_limit?: number };
+        Returns: { address: string; uses: number }[];
+      };
       save_driver_report: {
         Args: {
           p_report_date: string;
