@@ -44,9 +44,10 @@ import /etc/caddy/Caddyfile
 		X-Frame-Options "DENY"
 		Referrer-Policy "strict-origin-when-cross-origin"
 		Permissions-Policy "camera=(), microphone=(), geolocation=()"
-		# Кабинет ходит только на свой API; Next.js и Mantine вставляют
+		# Кабинет ходит на свой API и на Yandex Geosuggest (подсказки адреса,
+		# web/src/lib/yandexSuggest.ts); Next.js и Mantine вставляют
 		# встроенные скрипты и стили, поэтому 'unsafe-inline'.
-		Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://{$PROXY_DOMAIN}; font-src 'self' data:; connect-src 'self' https://{$PROXY_DOMAIN} wss://{$PROXY_DOMAIN}; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+		Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://{$PROXY_DOMAIN}; font-src 'self' data:; connect-src 'self' https://{$PROXY_DOMAIN} wss://{$PROXY_DOMAIN} https://suggest-maps.yandex.ru; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
 		-Server
 	}
 }
