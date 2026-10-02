@@ -11,8 +11,8 @@ import { useYandexAddressSuggest } from '@/api/addresses';
 const passThrough: OptionsFilter = ({ options }) => options;
 
 // Поле адреса в форме заказа. Подсказки по порядку, как в мобильном
-// приложении: адреса этого клиента, затем частые адреса компании, затем —
-// если среди своих ничего не совпало — живые подсказки Яндекса.
+// приложении: адреса этого клиента, затем частые адреса компании, затем
+// живые подсказки Яндекса (повторы своих адресов из них убираются).
 export function AddressAutocomplete({
   label,
   value,
@@ -32,10 +32,9 @@ export function AddressAutocomplete({
   const matches = (a: string) => a !== value && (!query || a.toLowerCase().includes(query));
   const ownClient = clientAddresses.filter(matches);
   const ownCompany = companyAddresses.filter((a) => matches(a) && !clientAddresses.includes(a));
-  const ownMatched = query.length > 0 && ownClient.length + ownCompany.length > 0;
 
   const [debounced] = useDebouncedValue(value, 400);
-  const yandex = useYandexAddressSuggest(debounced, !ownMatched).data ?? [];
+  const yandex = useYandexAddressSuggest(debounced).data ?? [];
 
   const data = useMemo(() => {
     const seen = new Set<string>();
@@ -48,11 +47,11 @@ export function AddressAutocomplete({
     const groups: ComboboxItemGroup<string>[] = [
       { group: 'Адреса этого клиента', items: take(ownClient).slice(0, 5) },
       { group: 'Частые адреса', items: take(ownCompany).slice(0, 5) },
-      { group: 'Яндекс', items: ownMatched ? [] : take(yandex) },
+      { group: 'Яндекс', items: take(yandex) },
     ];
     return groups.filter((g) => g.items.length > 0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value, clientAddresses, companyAddresses, yandex, ownMatched]);
+  }, [value, clientAddresses, companyAddresses, yandex]);
 
   return (
     <Autocomplete
