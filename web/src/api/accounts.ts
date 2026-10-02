@@ -1,0 +1,275 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { FunctionsHttpError } from '@supabase/supabase-js';
+import { supabase } from '@/lib/supabase';
+import { REFERENCE_STALE_TIME } from '@/lib/supabaseQuery';
+import { useCompanyId } from '@/providers/SessionProvider';
+import type { AccountRole, Database } from '@/types/database';
+
+export type Account = Database['public']['Tables']['employees']['Row'];
+
+export interface AccountPermissions {
+  can_manage_orders: boolean;
+  can_view_client_stats: boolean;
+  can_view_contacts_and_amounts: boolean;
+  can_manage_own_schedule: boolean;
+  can_edit_order_schedule_and_price: boolean;
+}
+
+// Права по умолчанию при создании аккаунта — те же, что в мобильном
+// приложении (mobile/src/components/accounts/AccountDialog.tsx). У
+// 'owner' в экране «Команда» этой записи не видно (заводится не отсюда —
+// см. lib/ownerAccess.ts), запись нужна только чтобы Record<AccountRole,...>
+// был исчерпывающим, как и в мобильной копии этого файла. Создать новый
+// заказ может только админ/диспетчер — это не галочка, а фиксированное
+// правило (доработки 3, п.5, can_create_orders() в БД).
+export const ROLE_DEFAULT_PERMISSIONS: Record<AccountRole, AccountPermissions> = {
+  owner: {
+    can_manage_orders: false,
+    can_view_client_stats: false,
+    can_view_contacts_and_amounts: false,
+    can_manage_own_schedule: false,
+    can_edit_order_schedule_and_price: false,
+  },
+  admin: {
+    can_manage_orders: true,
+    can_view_client_stats: true,
+    can_view_contacts_and_amounts: true,
+    can_manage_own_schedule: true,
+    can_edit_order_schedule_and_price: false,
+  },
+  dispatcher: {
+    can_manage_orders: true,
+    can_view_client_stats: true,
+    can_view_contacts_and_amounts: true,
+    can_manage_own_schedule: false,
+    can_edit_order_schedule_and_price: false,
+  },
+  driver: {
+    can_manage_orders: false,
+    can_view_client_stats: false,
+    can_view_contacts_and_amounts: true,
+    can_manage_own_schedule: false,
+    can_edit_order_schedule_and_price: false,
+  },
+  loader: {
+    can_manage_orders: false,
+    can_view_client_stats: false,
+    can_view_contacts_and_amounts: false,
+    can_manage_own_schedule: false,
+    can_edit_order_schedule_and_price: false,
+  },
+};
+
+// Все аккаунты (админы, диспетчеры, водители, грузчики) — для экрана
+// «Команда», который видит только администратор.
+export function useAllAccounts() {
+  const companyId = useCompanyId();
+  return useQuery({
+    queryKey: ['accounts', companyId],
+    staleTime: REFERENCE_STALE_TIME,
+    queryFn: async () => {
+      let query = supabase.from('employees').select('*');
+      if (companyId) query = query.eq('company_id', companyId);
+      const { data, error } = await query
+        .order('role', { ascending: true })
+        .order('name', { ascending: true });
+      if (error) throw error;
+      return data as Account[];
+    },
+  });
+}
+
+export interface CreateAccountInput {
+  password: string;
+  name: string;
+  last_name?: string | null;
+  phone: string;
+  birth_date?: string | null;
+  hire_date?: string | null;
+  address?: string | null;
+  personal_vehicle_make?: string | null;
+  personal_vehicle_plate?: string | null;
+  role: AccountRole;
+  permissions: AccountPermissions;
+  default_vehicle_id?: string | null;
+}
+
+// Заводит логин и пароль через Edge Function (supabase/functions/create-account)
+// — с anon-ключом из браузера нельзя создать пользователя с паролем
+// напрямую, для этого на сервере нужен service role key.
+export function useCreateAccount() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: CreateAccountInput) => {
+      const { data, error } = await supabase.functions.invoke<{ employee: Account; error?: string }>(
+        'create-account',
+        { body: input }
+      );
+      if (error) {
+        // supabase-js кладёт тело ответа функции (с нашим русским текстом
+        // ошибки) в error.context — error.message у FunctionsHttpError
+        // всегда общая английская фраза, без него сообщение будет
+        // нечитаемым для администратора.
+        if (error instanceof FunctionsHttpError) {
+          const body = await error.context.json().catch(() => null);
+          throw new Error(body?.error || error.message);
+        }
+        throw new Error(error.message);
+      }
+      if (data && 'error' in data && data.error) throw new Error(data.error);
+      return data!.employee;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+      queryClient.invalidateQueries({ queryKey: ['current-employee'] });
+    },
+  });
+}
+
+// Смена роли и прав уже существующего аккаунта — обычный UPDATE, его
+// разрешает RLS только администратору (миграция 0005). Ставки — НЕ здесь:
+// отдельная мутация в api/payroll.ts, намеренно изолированная, чтобы пока
+// не пришла миграция с колонками ставок, попытка их сохранить не ломала
+// сохранение роли/прав/машины заодно (один UPDATE — одна ошибка на все
+// поля сразу).
+export function useUpdateAccount() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      id,
+      role,
+      permissions,
+      default_vehicle_id,
+    }: {
+      id: string;
+      role: AccountRole;
+      permissions: AccountPermissions;
+      default_vehicle_id?: string | null;
+    }) => {
+      const { error } = await supabase
+        .from('employees')
+        .update({ role, ...permissions, ...(default_vehicle_id !== undefined ? { default_vehicle_id } : {}) })
+        .eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+      queryClient.invalidateQueries({ queryKey: ['current-employee'] });
+    },
+  });
+}
+
+export interface UpdateAccountProfileInput {
+  id: string;
+  password?: string;
+  name: string;
+  last_name?: string | null;
+  phone: string;
+  birth_date?: string | null;
+  hire_date?: string | null;
+  address?: string | null;
+  personal_vehicle_make?: string | null;
+  personal_vehicle_plate?: string | null;
+}
+
+// Логин, пароль и остальной профиль уже существующего сотрудника — тоже
+// через Edge Function (supabase/functions/update-account), по той же
+// причине, что и создание: сменить чужой email/пароль можно только через
+// Supabase Admin API, а он требует service role key.
+//
+// phone_warning: профиль и пароль сохранились, но новый телефон не
+// применился для входа (обычно конфликт — такой номер уже занят другим
+// сотрудником, частый случай после переноса из облака с задвоенными
+// номерами). Это не ошибка запроса — employee в ответе есть и сохранён
+// целиком, — но вызывающая сторона (AccountModal) должна это показать
+// администратору, а не молча считать сохранение полным успехом.
+export function useUpdateAccountProfile() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: UpdateAccountProfileInput) => {
+      const { data, error } = await supabase.functions.invoke<{
+        employee: Account;
+        phone_warning?: string;
+        error?: string;
+      }>('update-account', { body: input });
+      if (error) {
+        if (error instanceof FunctionsHttpError) {
+          const body = await error.context.json().catch(() => null);
+          throw new Error(body?.error || error.message);
+        }
+        throw new Error(error.message);
+      }
+      if (data && 'error' in data && data.error) throw new Error(data.error);
+      return { employee: data!.employee, phone_warning: data!.phone_warning ?? null };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+      queryClient.invalidateQueries({ queryKey: ['current-employee'] });
+    },
+  });
+}
+
+// Полностью удалить сотрудника нельзя — на него ссылаются его прошлые
+// заказы, отчёты и начисления (employees.id, without cascade delete), а
+// терять эту историю нельзя. Вместо этого — деактивация через Edge
+// Function (supabase/functions/deactivate-account, мобильный поток):
+// сотрудник теряет доступ в приложение и пропадает из выбора экипажа
+// (useEmployees), но сам, его заказы и отчёты остаются в базе как есть.
+export function useSetAccountActive() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, active }: { id: string; active: boolean }) => {
+      const { data, error } = await supabase.functions.invoke<{ employee: Account; error?: string }>(
+        'deactivate-account',
+        { body: { id, active } }
+      );
+      if (error) {
+        if (error instanceof FunctionsHttpError) {
+          const body = await error.context.json().catch(() => null);
+          throw new Error(body?.error || error.message);
+        }
+        throw new Error(error.message);
+      }
+      if (data && 'error' in data && data.error) throw new Error(data.error);
+      return data!.employee;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+    },
+  });
+}
+
+// Пункт 4 «правок 4» (01.10): убрать уже уволенного сотрудника из списка
+// «Команда» насовсем — отдельное действие от «Уволить» выше. Нужна своя
+// Edge Function (supabase/functions/hide-account, ожидается от mobile —
+// бэкенд/миграции не наша зона, см. web-cabinet-state) и колонка-флаг у
+// employees; до тех пор кнопка в AccountModal есть, но будет ошибаться —
+// Максиму сказано явно, тот же приём, что и с deactivate-account раньше.
+export function useHideAccount() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { data, error } = await supabase.functions.invoke<{ employee: Account; error?: string }>(
+        'hide-account',
+        { body: { id } }
+      );
+      if (error) {
+        if (error instanceof FunctionsHttpError) {
+          const body = await error.context.json().catch(() => null);
+          throw new Error(body?.error || error.message);
+        }
+        throw new Error(error.message);
+      }
+      if (data && 'error' in data && data.error) throw new Error(data.error);
+      return data!.employee;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+    },
+  });
+}

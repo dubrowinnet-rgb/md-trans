@@ -1,0 +1,21 @@
+# Веб-кабинет md-trans поверх официального docker-compose.caddy.yml Supabase.
+#
+# setup-web.sh копирует этот файл в папку проекта Supabase и подключает его
+# командой `sh run.sh config add mdtrans-web` — строго после caddy, потому что
+# он дополняет сервис caddy оттуда: второй сайт ({$WEB_DOMAIN}) и папку со
+# сборкой кабинета. Файлы из официального набора не меняются.
+
+services:
+  caddy:
+    environment:
+      WEB_DOMAIN: ${WEB_DOMAIN}
+    # Как в docker-compose.caddy.yml, только конфиг — наш, который сам
+    # подключает официальный (import /etc/caddy/Caddyfile).
+    command:
+      - /bin/sh
+      - -c
+      - |
+        PROXY_AUTH_PASSWORD=$$(caddy hash-password --plaintext "$$PROXY_AUTH_PASSWORD") && \
+        caddy run --config /srv/mdtrans/Caddyfile --adapter caddyfile
+    volumes:
+      - ./volumes/proxy/mdtrans:/srv/mdtrans:ro

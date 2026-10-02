@@ -1,0 +1,57 @@
+# Веб-кабинет на том же Caddy, что и API Supabase.
+#
+# Официальный Caddyfile Supabase (volumes/proxy/caddy/Caddyfile) отдаёт API
+# и Studio на {$PROXY_DOMAIN} (api.<домен>). Здесь он подключается как есть,
+# а рядом добавляется сайт кабинета на {$WEB_DOMAIN} (<домен>). Так обновления
+# Supabase (update.sh) не конфликтуют с нашими правками.
+import /etc/caddy/Caddyfile
+
+{$WEB_DOMAIN} {
+	# Готовая сборка лежит в releases/<время>, current — ссылка на последнюю
+	# (её переключает setup-web.sh, поэтому обновление без простоя).
+	root * /srv/mdtrans/www/current
+	encode zstd gzip
+
+	# Файлы приложения для телефонов (APK и т.п.) — отдельно от сборки
+	# кабинета, чтобы переживали его обновления.
+	handle_path /files/* {
+		root * /srv/mdtrans/files
+		@apk path *.apk
+		header @apk Content-Type application/vnd.android.package-archive
+		file_server
+	}
+
+	handle {
+		# Имена файлов в /_next/static/ меняются с каждой сборкой — их можно
+		# кэшировать навсегда. Страницы — нет, иначе после обновления браузер
+		# покажет старую версию.
+		@static path /_next/static/*
+		header @static Cache-Control "public, max-age=31536000, immutable"
+		@pages not path /_next/static/*
+		header @pages Cache-Control "no-cache"
+		file_server
+	}
+
+	handle_errors 404 {
+		root * /srv/mdtrans/www/current
+		rewrite * /404.html
+		file_server
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		# Кабинет ходит на свой API и на Yandex Geosuggest (подсказки адреса,
+		# web/src/lib/yandexSuggest.ts); Next.js и Mantine вставляют
+		# встроенные скрипты и стили, поэтому 'unsafe-inline'.
+		Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://{$PROXY_DOMAIN}; font-src 'self' data:; connect-src 'self' https://{$PROXY_DOMAIN} wss://{$PROXY_DOMAIN} https://suggest-maps.yandex.ru; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+		-Server
+	}
+}
+
+www.{$WEB_DOMAIN} {
+	redir https://{$WEB_DOMAIN}{uri} permanent
+}
