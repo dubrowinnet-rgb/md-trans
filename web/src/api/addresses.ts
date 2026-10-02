@@ -41,11 +41,11 @@ export function useClientRecentAddresses(clientId: string | null) {
 
 // Живые подсказки Яндекса (Geosuggest) по введённому тексту. Без ключа или
 // при коротком запросе не ходит в сеть вовсе.
-export function useYandexAddressSuggest(query: string, enabled: boolean) {
+export function useYandexAddressSuggest(query: string) {
   const text = query.trim();
   return useQuery({
     queryKey: ['yandex-suggest', text],
-    enabled: enabled && yandexSuggestEnabled() && text.length >= 3,
+    enabled: yandexSuggestEnabled() && text.length >= 3,
     queryFn: () => suggestAddresses(text),
     staleTime: 60 * 60 * 1000,
   });

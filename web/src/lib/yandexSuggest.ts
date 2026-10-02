@@ -26,7 +26,11 @@ export async function suggestAddresses(query: string): Promise<string[]> {
       `https://suggest-maps.yandex.ru/v1/suggest?apikey=${API_KEY}` +
       `&text=${encodeURIComponent(query)}&lang=ru_RU&results=5&print_address=1`;
     const response = await fetch(url);
-    if (!response.ok) return [];
+    if (!response.ok) {
+      // Видно в консоли браузера (F12) — 403 значит ключ не подходит.
+      console.warn('Yandex Geosuggest:', response.status, await response.text().catch(() => ''));
+      return [];
+    }
     const data = (await response.json()) as { results?: YandexSuggestResult[] };
     const addresses = (data.results ?? [])
       .map((r) => {
@@ -37,7 +41,8 @@ export async function suggestAddresses(query: string): Promise<string[]> {
       })
       .filter((a): a is string => Boolean(a));
     return [...new Set(addresses)];
-  } catch {
+  } catch (e) {
+    console.warn('Yandex Geosuggest недоступен:', e);
     return [];
   }
 }
