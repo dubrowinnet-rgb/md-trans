@@ -1,0 +1,133 @@
+import { useState } from 'react';
+import { ScrollView, StyleSheet, View } from 'react-native';
+import { format } from 'date-fns';
+import { router } from 'expo-router';
+import { Appbar, Button, Divider, HelperText, Snackbar, Text, TextInput } from 'react-native-paper';
+import { useUpdateOwnProfile } from '../../api/accounts';
+import { isPhoneInputComplete, maskPhoneInput, PHONE_INPUT_EMPTY } from '../../lib/phone';
+import { useSession } from '../../providers/SessionProvider';
+import { ACCOUNT_ROLE_LABELS } from '../../theme';
+
+// «Мой профиль» (доработки 1, п.2) — сотрудник сам меняет телефон/пароль.
+// Водитель/грузчик — исключение (Максим, 01.10, «Правки 5», п.4): номер и
+// пароль им задаёт диспетчер, поля только показываются текстом, без формы
+// (сервер всё равно отклонит попытку их сменить — см. update-account/index.ts
+// — но тогда сотрудник увидел бы ошибку уже после нажатия «Сохранить», это
+// понятнее сразу). Логина больше нет (доработки 3, п.4) — вход по телефону и
+// паролю, см. app/login.tsx. «Оплата профиля» — уже существующее
+// employees.paid_until (миграция 0001), просто раньше не было экрана, который
+// его показывает; «Продлить» — заглушка, как и просил Максим.
+export default function ProfileSettingsScreen() {
+  const { employee } = useSession();
+  const updateProfile = useUpdateOwnProfile();
+  const [phone, setPhone] = useState(employee?.phone ?? PHONE_INPUT_EMPTY);
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [snackbar, setSnackbar] = useState<string | null>(null);
+
+  if (!employee) return null;
+
+  const canEditLogin = employee.role !== 'driver' && employee.role !== 'loader';
+
+  const handleSave = async () => {
+    setError(null);
+    // Правки 6, п.1: маска не даёт очистить телефон совсем, но полдороги
+    // набранный номер отправить можно — не даём, иначе в профиле осталась
+    // бы такая обрезанная «половина номера».
+    if (!isPhoneInputComplete(phone)) {
+      setError('Укажите номер телефона целиком');
+      return;
+    }
+    try {
+      await updateProfile.mutateAsync({ id: employee.id, phone: phone.trim(), password });
+      setPassword('');
+      setSnackbar('Сохранено');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось сохранить');
+    }
+  };
+
+  return (
+    <View style={styles.container}>
+      <Appbar.Header>
+        <Appbar.BackAction onPress={() => router.back()} />
+        <Appbar.Content title="Мой профиль" />
+      </Appbar.Header>
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <Text variant="titleMedium">{[employee.name, employee.last_name].filter(Boolean).join(' ')}</Text>
+        <Text variant="bodyMedium" style={styles.role}>
+          {ACCOUNT_ROLE_LABELS[employee.role]}
+        </Text>
+
+        {canEditLogin ? (
+          <>
+            <TextInput
+              mode="outlined"
+              label="Телефон"
+              accessibilityLabel="Телефон"
+              value={phone}
+              onChangeText={(text) => setPhone(maskPhoneInput(text))}
+              keyboardType="phone-pad"
+            />
+            <HelperText type="info">По этому номеру вы входите в приложение</HelperText>
+            <TextInput
+              mode="outlined"
+              label="Новый пароль"
+              accessibilityLabel="Новый пароль"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              autoCapitalize="none"
+            />
+            <HelperText type="info">Оставьте пустым, чтобы не менять пароль</HelperText>
+            {error && <HelperText type="error">{error}</HelperText>}
+            <Button mode="contained" onPress={handleSave} loading={updateProfile.isPending} disabled={updateProfile.isPending}>
+              Сохранить
+            </Button>
+          </>
+        ) : (
+          <>
+            <TextInput mode="outlined" label="Телефон" value={employee.phone ?? '—'} editable={false} />
+            <HelperText type="info">
+              Номер и пароль для входа задаёт диспетчер — обратитесь к нему, чтобы их изменить
+            </HelperText>
+          </>
+        )}
+
+        <Divider style={styles.divider} />
+        <Text variant="labelLarge">Оплата профиля</Text>
+        <Text variant="bodyMedium" style={styles.paidUntil}>
+          {employee.paid_until
+            ? `Оплачено до ${format(new Date(employee.paid_until), 'dd.MM.yyyy')}`
+            : 'Дата оплаты не задана'}
+        </Text>
+        <Button mode="outlined" onPress={() => setSnackbar('Онлайн-оплата скоро появится')}>
+          Продлить
+        </Button>
+      </ScrollView>
+      <Snackbar visible={Boolean(snackbar)} onDismiss={() => setSnackbar(null)} duration={2500}>
+        {snackbar ?? ''}
+      </Snackbar>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  content: {
+    padding: 16,
+    gap: 4,
+  },
+  role: {
+    opacity: 0.7,
+    marginBottom: 12,
+  },
+  divider: {
+    marginVertical: 20,
+  },
+  paidUntil: {
+    marginBottom: 12,
+  },
+});

@@ -1,0 +1,37 @@
+# Caddy — HTTPS для API сервера «Грузоперевозок» на {$PROXY_DOMAIN}
+# (api.<домен>). Сертификат Let's Encrypt Caddy получает и продлевает сам.
+#
+# Заменяет официальный volumes/proxy/caddy/Caddyfile Supabase. Отличия от
+# официального: наружу открыты только API, которыми пользуются приложения и
+# веб-кабинет; панель Supabase Studio снаружи закрыта (вход — через
+# SSH-туннель, deploy/selfhost/README.md); внутренние функции закрыты.
+#
+# Веб-кабинет на <домен> добавляет свой Caddyfile из deploy/web — он
+# подключает этот файл через import /etc/caddy/Caddyfile.
+#
+# Файл кладут на сервер install.sh и update.sh — править его нужно в
+# репозитории, а не на сервере (иначе следующее обновление вернёт как было).
+
+{$PROXY_DOMAIN} {
+	# Ответы API — текст (JSON), и сжатие уменьшает их в разы: неделя
+	# календаря большой компании — 650 КБ без сжатия. По мобильной сети это
+	# заметная часть ожидания. Телефоны и браузеры распаковывают ответ сами,
+	# а фото Caddy повторно не сжимает — только текст.
+	encode zstd gzip
+
+	route {
+		# Эти функции вызывает только сама база (pg_cron и триггеры, миграция
+		# 0018) по внутреннему адресу, мимо Caddy. Открытыми они позволили бы
+		# кому угодно рассылать пуши сотрудникам. _shared — не функция, а
+		# общий код функций.
+		@internal_functions path /functions/v1/send-crew-reminders* /functions/v1/remind-driver-report* /functions/v1/notify-order-changed* /functions/v1/notify-owner-new-ticket* /functions/v1/_shared*
+		respond @internal_functions 404
+
+		@api path /auth/v1/* /rest/v1/* /storage/v1/* /functions/v1/* /realtime/v1/*
+		reverse_proxy @api api-gw:8000
+
+		respond 404
+	}
+
+	header -server
+}
